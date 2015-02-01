@@ -1,0 +1,131 @@
+/*
+ * Copyright 2014-2015, Björn Ståhl
+ * License: 3-Clause BSD, see COPYING file in arcan source repository.
+ * Reference: http://senseye.arcan-fe.com
+ * Description: Basic pattern matching / transfer statistics / block
+ * or sliding data transfers across the arcan shared memory interface.
+ */
+
+static const int rwstat_row_ch = 6;
+
+/*
+ * criterion for synch with parent based on incoming data
+ * tick() can always be used to force a synch with the current state.
+ * BLOCK and SLIDE are mutually exclusive,
+ * SIGNAL is a flag that is permitted at any time.
+ */
+enum rwstat_clock {
+	RW_CLK_BLOCK  = 0,
+	RW_CLK_SLIDE  = 1,
+	RW_CLK_NSLIDE = 2
+};
+
+/*
+ * different options for what should be packed into the alpha channel
+ */
+enum rwstat_alpha {
+	RW_ALPHA_FULL    = 0, /* 0xff, opaque                                 */
+	RW_ALPHA_ENTBASE = 1, /* entropy encoded, channel base determines wnd */
+ 	RW_ALPHA_PTN     = 2, /* 0xff or signal ID (use palette shader-size)  */
+};
+
+/*
+ * control which byte offset map to which coordinates
+ */
+enum rwstat_mapping {
+	MAP_WRAP    = 0, /* increment y, reset x after filled row          */
+	MAP_TUPLE   = 1, /* first, second bytes (X, Y) and pack third byte */
+	MAP_HILBERT = 2, /* use a hilbert space filling curve              */
+};
+
+/*
+ * control how each channel is mapped, changes to this
+ * table should be reflected in pack_sizes in rwstat.c
+ */
+enum rwstat_pack {
+	PACK_TIGHT    = 0, /* first byte R, second G, third B, fourth A */
+	PACK_TNOALPHA = 1, /* first byte R, second G, third B, - full a */
+	PACK_INTENS   = 2, /* full alpha, same byte in R, G, B - full a */
+	PACK_HINTENS  = 3, /* lookup byte against normalized histogram, *
+	                      same byte in R, G, B - full a             */
+};
+
+enum ptn_flags {
+	FLAG_EVENT = 1,
+	FLAG_STATE = 2
+};
+
+struct rwstat_ch {
+	void (*free)(struct rwstat_ch**);
+
+/*
+ * feed this function with data, will return number of bytes consumed
+ * (so can be used for short-write tests as well) and set *fs to number
+ * of frames synched (likely only 1 or 0).
+ */
+	size_t (*data)(struct rwstat_ch*, uint8_t* buf, size_t buf_sz, int* fs);
+
+/* get the number of bytes left until a full frame is filled given the
+ * current packing / mapping sizes */
+	size_t (*left)(struct rwstat_ch*);
+	size_t (*row_size)(struct rwstat_ch*);
+
+/* force a transfer step even though parts of buffer state may be incomplete */
+	void (*tick)(struct rwstat_ch*);
+
+/* define a new desired base size */
+	void (*resize)(struct rwstat_ch*, size_t);
+
+/* enqeue an event to propagate upwards */
+	void (*event)(struct rwstat_ch*, arcan_event*);
+
+/*
+ * Add a byte sequence to look for. Alpha indicates the value to write
+ * to the corresponding alpha channel in the output buffer, if  _TYPE
+ * alpha mode is set. Id is the value to use in the event that is queued
+ * when sequence is detected (along with offset).
+ *
+ * Stateful only affects _PTN alpha mode. If set, all subsequent bytes
+ * (until a new pattern is triggered) will have the specified alpha
+ * value set. If not set, only the bytes that triggered the pattern will
+ * have the slot alpha value.
+ */
+	bool (*add_pattern)(struct rwstat_ch*, uint8_t alpha, uint32_t id,
+		enum ptn_flags, void* buf, size_t sz);
+
+/* change the offset counter that is propagated in parent communication */
+	void (*wind_ofs)(struct rwstat_ch*, off_t val);
+
+/* switch how each byte value is mapped into color channels,
+ * using the enumerators defined above */
+	void (*switch_packing)(struct rwstat_ch*, enum rwstat_pack);
+	void (*switch_mapping)(struct rwstat_ch*, enum rwstat_mapping);
+	void (*switch_clock)(struct rwstat_ch*, enum rwstat_clock);
+	void (*switch_alpha)(struct rwstat_ch*, enum rwstat_alpha);
+
+	struct arcan_shmif_cont* (*context)(struct rwstat_ch*);
+	struct rwstat_ch_priv* priv;
+};
+
+/*
+ * create a new channel and assign the specified segment to it
+ * clock ticks is the responsibility of the callee
+ */
+struct rwstat_ch* rwstat_addch(enum rwstat_clock clock,
+	enum rwstat_mapping map, enum rwstat_pack pack, struct arcan_shmif_cont*);
+
+/*
+ * see if an incoming arcan- style event contains data that
+ * should be mapped to the rwstat, this is to re-use more of the
+ * same boiler plate code between sensors.
+ *
+ * returns true if the event was consumed (i.e. some action
+ * that modifies ch was taken).
+ */
+bool rwstat_consume_event(struct rwstat_ch*, struct arcan_event*);
+
+/*
+ * take an arg_arr packed struct and parse it to extract
+ * command-line specified patterns and map them into the rwstat channel.
+ */
+void rwstat_addpatterns(struct rwstat_ch*, struct arg_arr*);
