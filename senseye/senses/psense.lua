@@ -45,6 +45,18 @@ local dpack_sub = {
 	}
 };
 
+-- how many bytes in each pixel corresponds to a meaningful value
+local function pack_to_size(pmode)
+	if (pmode == 0 or pmode == 1) then
+		return 1;
+	elseif (pmode == 2) then
+		return 4;
+	elseif (pmode == 3) then
+		return 3;
+	end
+	return 1;
+end
+
 local alpha_sub = {
 	{
 		label = "Full (no data)",
@@ -163,6 +175,7 @@ local fsrv_ev = {
 	streaminfo = function(wnd, source, status)
 		local base = string.byte("0", 1);
 		wnd.pack_cur = string.byte(status.lang, 1) - base;
+		wnd.pack_sz  = pack_to_size(wnd.pack_cur);
 		wnd.map_cur  = string.byte(status.lang, 2) - base;
 		wnd.size_cur = string.byte(status.lang, 3) - base;
 	end,
@@ -204,5 +217,10 @@ return {
 	map = coord_map, -- translate from position in window to stream
 	dispatch_sub = disp, -- sensor specific keybindings
 	popup_sub = pop, -- sensor specific popup
-	init = function(wnd) wnd.ofs = 0; end -- hook to set members before data comes
+	init = function(wnd)
+		wnd.ofs = 0;
+		wnd.pack_sz = 3; -- default packing mode is 3
+		wnd.motion = lookup_motion;
+		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
+	end -- hook to set members before data comes
 };

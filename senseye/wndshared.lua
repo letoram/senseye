@@ -10,6 +10,7 @@
 --  defocus_window(wnd) hook to map to window manager
 --  setup_dispatch(tbl) add basic input dispatch to table
 --  window_shared(wnd)  add basic popups etc. to window
+--  lookup_motion(wnd)  add overlay that shows agecant hex values on motion
 --  merge_menu(m1, m2)  combine two popup menus into one
 --
 
@@ -237,6 +238,31 @@ function repos_window(wnd)
 	end
 end
 
+-- sample n pixels in a clamped square around around into overlay string,
+-- x, y is the primary value and should be highlighted as such
+-- then (clamped) +- sw, +- sh taking packing into account
+local function get_hexstr(tbl, w, h, x, y, sw, sh, pack)
+--		local r, g, b, a = tbl:get(x, y, 3);
+	return color_surface(32, 32, 255, 0, 0); -- placeholder for now
+end
+
+function lookup_motion(wnd, vid, x, y)
+	if (not wnd.wm.meta) then
+		return;
+	end
+	if (wnd.message_recv) then
+		image_access_storage(wnd.canvas, function(tbl, h, w)
+			local props = image_surface_resolve_properties(wnd.canvas);
+			local x, y = mouse_xy();
+			x = x - props.x;
+			y = y - props.y;
+		wnd.message_recv:message( get_hexstr(tbl, w, h, x, y,
+			4, 1, wnd.pack_sz ) );
+		end
+		);
+	end
+end
+
 --
 -- hooks and functions that act similarly between main and subwindows
 --
@@ -296,23 +322,12 @@ function window_shared(wnd)
 -- than multiplying with scale factor, offset and round
 	wnd.input = function(wnd, tbl)
 		if (wnd.ctrl_id) then
-			print("forward:", tbl.keysym);
 			target_input(wnd.ctrl_id, tbl);
 		end
 	end
 
 	wnd.click = function(wnd, tbl)
 		wnd:select();
-	end
-
-	wnd.motion = function(wnd, vid, x, y)
-		if (not wnd.wm.meta) then
-			return;
-		end
-
-		for i,v in ipairs(wnd.children) do
-
-		end
 	end
 
 	wnd.rclick = function(wnd, tbl)

@@ -36,7 +36,10 @@ for k,v in ipairs(rtbl.popup_sub) do
 	end
 end
 
+local old_init = rtbl.init;
+
 rtbl.init = function(wnd)
+	old_init(wnd);
 	wnd.parent.source_listener = {};
 
 -- unpickable overlay that estimated the position of the

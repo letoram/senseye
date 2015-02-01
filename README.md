@@ -1,3 +1,6 @@
+About
+=====
+
 Senseye is a dynamic visual binary analysis and debugging tool intended to
 assist in monitoring, analysing and grasping large data feeds e.g. static
 files, dynamic streams and live memory.
@@ -26,7 +29,6 @@ settings mentioned below). You also need cmake (2.8+) and gcc4.8+ or clang.
      -DDISABLE_FRAMESERVERS=ON -DCMAKE_C_COMPILER=clang ../arcan/src
     make -j 4
     cd ..
-
     mkdir build
     cd build
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
@@ -53,43 +55,50 @@ and then attach a sensor or two:
     ./fsense ../tests/test.bin
     cat ../tests/test.bin | ./psense 1> /dev/null
 
-The details of how the UI works can be seen in the
+The details of how the UI works can be seen in the 
 (Senseye Github Wiki)[https://github.com/letoram/senseye/wiki] and in the
 demo videos in the linked video channel on arcan-fe.com. Switching the default
 background (res/background.png) to something less dull is highly recommended ;-)
 
 Default Keybindings (META is set to RIGHT SHIFT):
 
-Data Windows:
+_Data Windows_
+
      F1 - Toggle Fullscreen
      F2 - Grow Window x2 (+Meta, Shrink)
      F3 - Zoom In (+Meta, Zoom Out)
      META + BACKSPACE - Destroy Window
      C - Cycle Active Shader
 
-Global:
+_Global_
+
      F7-F8 - Grow/Shrink Point Size (for pointcloud)
      TAB - Toggle Popup (+ arrow keys to navigate)
      ESCAPE - Drop Popup
      META + LClick + Drag - Move Window
 
-3D Window:
+_3D Window_
+
      w,a,s,d - Navigate
      Spacebar - Toggle autorotate
      LClick + Drag - Rotate model
      META + Button - Forward to parent window
 
-Psense/Fsense:
+_Psense/Fsense_
+
      Spacebar - Toggle Play/Pause
 
-Fsense:
+_Fsense_
+
      Left/Right - Step row (+Meta, block)
 
-Histogram Window:
+_Histogram Window_
+
     LClick - Set new parent highlight value
 
 Sensors
 =====
+
 The following sensors are currently included:
 
 _psense_ works as a step in a pipes and filters chain, where it grabs data
@@ -99,27 +108,25 @@ _fsense_ works on static data, i.e. whole files by first mmapping the entire
 file and sampling a preview buffer for overview / seeking purposes.
 
 _msense_ (linux only) works by parsing /proc/[pid]/maps for a specific pid
-(so you will need permissions to access and map memory belonging to another
-process) and providing a preview window that lists the maps and their
-metadata, then any number of map- specific windows.
+and allows you to navigate allocated pages and browse / sample their data.
 
 Repository
 =====
 
-(files that might be of interest):
+_files that might be of interest)_
+
     senseye\
         senseye.lua      - main script
         shaders.lua      - GLSL1.2 based shaders for mapping/displacement
         keybindings.lua  - default keybindings
         wndshared.lua    - navigation, default key bindings and navigation
-				histogram.lua    - basic per-frame statistics
+        histogram.lua    - basic per-frame statistics
         modelwnd.lua     - camera management, 3d mapping
-
     senses\
         code for the main sensors, primarily data acquisition
         (msense/fsense/psense.c) with some minor statistics and
         translation done in rwstat.c and event-loop management in senseye.c
-
-    res\ (mostly cherry-picked from the arcan codebase)
+    res\ 
+        (mostly cherry-picked from the arcan codebase)
         shared resources, fonts, support scripts etc. mainly
         cherry picked from the arcan repository.
