@@ -21,10 +21,7 @@
  *    classifier like capstone and we can get a quick overview of changes in
  *    +x pages, useful for those nasty JITs, polymorphs and unpackers.
  *
- * Current Issues:
- *
- *  - synch_copy is still incomplete, process control issues?
- *  - stepframe is still incomplete (depends on synch_copy)
+ *  - Better / real (optional) process control semantics
  */
 #define _LARGEFILE64_SOURCE
 
@@ -72,10 +69,13 @@ struct {
 	size_t sel_lim, sel_page;
 	uintptr_t sel_base;
 	size_t sel_size;
+	bool skip_inode;
 
 /* external connections */
 	struct senseye_cont* cont;
-} msense = {0};
+} msense = {
+ .skip_inode = true
+};
 
 static void update_preview(shmif_pixel ccol);
 void* data_loop(void*);
@@ -158,7 +158,9 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		else if (strcmp(ev->label, "LEFT") == 0){
 			msense.sel -= msense.sel_page;
 			if (msense.sel < 0)
-				msense.sel += msense.sel_lim;
+				msense.sel = msense.sel_lim - 1;
+			if (msense.sel < 0)
+				msense.sel = 0;
 			refresh = true;
 		}
 		else if (strcmp(ev->label, "RIGHT") == 0){
@@ -179,25 +181,27 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 }
 
-static void synch_copy(struct rwstat_ch* ch, int fd, uint8_t* buf, size_t nb)
+static size_t synch_copy(struct rwstat_ch* ch, int fd, uint8_t* buf, size_t nb)
 {
 	ch->switch_clock(ch, RW_CLK_BLOCK);
 	pthread_mutex_lock(&msense.plock);
 
 	ssize_t nr = read(fd, buf, nb);
-	if (-1 == nr){
-		fprintf(stderr, "Couldn't read from page offset, code: %d\n", errno);
+	if (-1 == nr)
 		nr = 0;
-	}
 
 	if (nr != nb)
 		memset(buf + nr, '\0', nb - nr);
 
+#ifdef PTRACE_PRCTL
 	ptrace(PTRACE_CONT, msense.pid, NULL, NULL);
+#endif
+
 	pthread_mutex_unlock(&msense.plock);
 
 	int ign;
 	ch->data(ch, buf, nb, &ign);
+	return nr;
 }
 
 void* data_loop(void* th_data)
@@ -219,7 +223,8 @@ void* data_loop(void* th_data)
 
 	ch->event(ch, &ev);
 
-	synch_copy(ch, pch->fd, buf, buf_sz);
+	off64_t cofs = lseek64(pch->fd, 0, SEEK_CUR);
+	goto seek0;
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
 		if (rwstat_consume_event(ch, &ev)){
@@ -239,14 +244,36 @@ void* data_loop(void* th_data)
 		break;
 
 		case TARGET_COMMAND_STEPFRAME:{
+			ssize_t nc;
 			if (ev.tgt.ioevs[0].iv == 0){
-				off64_t ofs = lseek64(pch->fd, 0, SEEK_CUR);
-				if (-1 == ofs)
+seek0:
+				nc = synch_copy(ch, pch->fd, buf, buf_sz);
+				if (0 == nc)
+					fprintf(stderr, "Couldn't read from ofset (%llu)\n",
+						(unsigned long long) cofs);
+
+				if (-1 == lseek64(pch->fd, -nc, SEEK_CUR)){
+					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
 					goto error;
-			 	synch_copy(ch, pch->fd, buf, buf_sz);
-				lseek64(pch->fd, ofs, SEEK_SET);
+				}
+				cofs = lseek64(pch->fd, 0, SEEK_CUR);
 			}
-/* 0, refresh current position, 1/-1 step row, 2/-2 step block size */
+			else if (ev.tgt.ioevs[0].iv == 1){
+				if (cofs + buf_sz > pch->size){
+					lseek64(pch->fd, pch->size - buf_sz >pch->base ?
+						pch->base : pch->base + pch->size - buf_sz, SEEK_SET);
+				}
+				else
+					lseek64(pch->fd, buf_sz, SEEK_CUR);
+				goto seek0;
+			}
+			else if (ev.tgt.ioevs[0].iv == -1){
+				if (cofs - buf_sz > pch->base)
+					lseek64(pch->fd, cofs - buf_sz, SEEK_SET);
+				else
+					lseek64(pch->fd, pch->base, SEEK_SET);
+				goto seek0;
+			}
 		}
 		default:
 		break;
@@ -277,73 +304,90 @@ static void update_preview(shmif_pixel ccol)
 /* clear window */
 	struct arcan_shmif_cont* c = msense.cont->context(msense.cont);
 	draw_box(c, 0, 0, c->addr->w, c->addr->h, RGBA(0x00, 0x00, 0x00, 0xff));
+
+	int col = 1;
+	draw_text(c, "r ", col*(fontw+1), 0, RGBA(0xff, 0x55, 0x55, 0xff)); col += 2;
+	draw_text(c, "w ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0x55, 0xff)); col += 2;
+	draw_text(c, "x ", col*(fontw+1), 0, RGBA(0x55, 0x55, 0xff, 0xff)); col += 2;
+	draw_text(c, "rw ", col*(fontw+1), 0, RGBA(0xff, 0xff, 0x55, 0xff));col += 3;
+	draw_text(c, "rx ", col*(fontw+1), 0, RGBA(0xff, 0x55, 0xff, 0xff));col += 3;
+  draw_text(c, "wx ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0xff, 0xff));col += 3;
+	draw_text(c, "rwx", col*(fontw+1), 0, RGBA(0xff, 0xff, 0xff, 0xff));
+
 	FILE* fpek = get_map_descr(msense.pid);
 	if (!fpek){
 		fprintf(stderr, "couldn't open proc/pid/maps for reading.\n");
 		exit(EXIT_FAILURE);
 	}
 
-/* get number of entries */
+	struct page {
+		long long addr, endaddr, offset, inode;
+		char perm[6];
+ 		char device[16];
+	};
+
+/* populate list of entries, first get limit */
 	size_t count;
 	for (count = 0; !feof(fpek); count++)
 		while(fgetc(fpek) != '\n' && !feof(fpek))
 			;
 	fseek(fpek, 0, SEEK_SET);
 
-/* clamp */
-	if (msense.sel >= count)
-		msense.sel = count - 1;
+/* then fill VLA of page struct with the interesting ones,
+ * need to be careful about TOCTU overflow */
+	struct page pcache[count];
+	memset(pcache, '\0', sizeof(struct page) * count);
 
-	msense.sel_lim = count - 1;
-	size_t nl = c->addr->h / (fonth + 1);
-	msense.sel_page = nl;
+	size_t ofs = 0;
+	while(!feof(fpek) && ofs < count){
+		int ret = fscanf(fpek, "%llx-%llx %5s %llx %5s %llx",
+			&pcache[ofs].addr, &pcache[ofs].endaddr, pcache[ofs].perm,
+			&pcache[ofs].offset, pcache[ofs].device, &pcache[ofs].inode);
 
-	int page = 0;
- 	if (msense.sel > 0)
-		page = msense.sel / nl;
-
-	size_t sc = page * nl;
-
-/* if we don't fit, skip to page, note TOCTU here */
-	while(sc && !feof(fpek)){
-		while(fgetc(fpek) != '\n'){
-			if (feof(fpek))
-				break;
-		}
-		sc--;
-	}
-
-	int y = 0;
-	int cc = msense.sel % nl;
-
-/* each step requires reprocessing the proc entry, expensive
- * but provides a somewhat more accurate view (inotify etc. doesn't
- * do anything on proc, so other option to work with a cache would
- * be to take advantage of ptrace. */
-	while(!feof(fpek) && y < c->addr->h){
-		long long addr, endaddr, offset, inode = 0;
-		char perm[6], device[16];
-		int ret = fscanf(fpek, "%llx-%llx %6s %llx %16s %llx",
-			&addr, &endaddr, perm, &offset, device, &inode);
 		if (0 == ret){
 				while (fgetc(fpek) != '\n' && !feof(fpek))
 					;
 			continue;
 		}
 
-		if (-1 == ret || ret == EOF)
-		break;
+		if (!msense.skip_inode || (msense.skip_inode && pcache[ofs].inode == 0))
+			ofs++;
+	}
+	if (0 == ofs)
+		return;
 
-		uint8_t r = perm[0] == 'r' ? 0xff : 0x55;
-		uint8_t g = perm[1] == 'w' ? 0xff : 0x55;
-		uint8_t b = perm[2] == 'x' ? 0xff : 0x55;
+	count = ofs-1;
 
-		draw_box(c, fontw, y, c->addr->w, y + fonth, RGBA( (perm[0] == 'r') & 0xff,
-			(perm[1] == 'w') & 0xff, (perm[2] == 'x') & 0xff, 0xff));
+/* clamp */
+	if (msense.sel >= count)
+		msense.sel = count - 1;
+
+	msense.sel_lim = count;
+	size_t nl = (c->addr->h - fonth - 1) / (fonth + 1);
+	msense.sel_page = nl;
+
+	int page = 0;
+ 	if (msense.sel > 0)
+		page = msense.sel / nl;
+
+	ofs = page * nl;
+
+	int y = fonth + 1;
+	int cc = msense.sel % nl;
+
+/* each step requires reprocessing the proc entry, expensive
+ * but provides a somewhat more accurate view (inotify etc. doesn't
+ * do anything on proc, so other option to work with a cache would
+ * be to take advantage of ptrace. */
+
+	while (y < c->addr->h && ofs < count){
+		uint8_t r = pcache[ofs].perm[0] == 'r' ? 0xff : 0x55;
+		uint8_t g = pcache[ofs].perm[1] == 'w' ? 0xff : 0x55;
+		uint8_t b = pcache[ofs].perm[2] == 'x' ? 0xff : 0x55;
 
 		if (cc == 0){
-			msense.sel_base = addr + offset;
-			msense.sel_size = endaddr - addr;
+			msense.sel_base = pcache[ofs].addr + pcache[ofs].offset;
+			msense.sel_size = pcache[ofs].endaddr - pcache[ofs].addr;
 			cc--;
 		}
 		else if (cc > 0)
@@ -352,13 +396,15 @@ static void update_preview(shmif_pixel ccol)
 /* draw addr + text in fitting color */
 		char wbuf[256];
 		shmif_pixel col = RGBA(r, g, b, 0xff);
-		snprintf(wbuf, 256, "%llx(%dk)", addr, (int)((endaddr - addr) / 1024));
-		draw_text(c, wbuf, fontw + 1, y, col);
+		snprintf(wbuf, 256, "%llx(%dk)", pcache[ofs].addr,
+			(int)((pcache[ofs].endaddr - pcache[ofs].addr) / 1024));
 
+		draw_text(c, wbuf, fontw + 1, y, col);
 		y += fonth + 1;
+		ofs++;
 	}
 
-	draw_box(c, 0, (msense.sel % nl) * (fonth+1), fontw, fonth, ccol);
+	draw_box(c, 0, ((msense.sel % nl)+1) * (fonth+1), fontw, fonth, ccol);
 	fclose(fpek);
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 }
@@ -392,6 +438,7 @@ int main(int argc, char* argv[])
 	if (!arcan_shmif_resize(cont.context(&cont), desw, 512))
 		return EXIT_FAILURE;
 
+#ifdef PTRACE_PRCTL
 	if (-1 == ptrace(PTRACE_ATTACH, msense.pid, NULL, NULL)){
 		fprintf(stderr, "ptrace(%d) failed, page "
 			"inspection disabled\n", (int)msense.pid);
@@ -400,10 +447,13 @@ int main(int argc, char* argv[])
 	else{
 		msense.ptrace = true;
 		waitpid(msense.pid, NULL, 0);
-		pthread_mutex_init(&msense.plock, NULL);
 	}
+#else
+	msense.ptrace = true;
+#endif
 
 	msense.cont = &cont;
+	pthread_mutex_init(&msense.plock, NULL);
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;

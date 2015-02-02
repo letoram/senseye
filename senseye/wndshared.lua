@@ -243,21 +243,25 @@ end
 -- then (clamped) +- sw, +- sh taking packing into account
 local function get_hexstr(tbl, w, h, x, y, sw, sh, pack)
 --		local r, g, b, a = tbl:get(x, y, 3);
-	return color_surface(32, 32, 255, 0, 0); -- placeholder for now
 end
 
 function lookup_motion(wnd, vid, x, y)
 	if (not wnd.wm.meta) then
 		return;
 	end
+
+-- by default, this is just the window itself (disabled when translation
+-- is toggled) but
 	if (wnd.message_recv) then
-		image_access_storage(wnd.canvas, function(tbl, h, w)
+		image_access_storage(wnd.canvas, function(tbl, w, h)
 			local props = image_surface_resolve_properties(wnd.canvas);
 			local x, y = mouse_xy();
 			x = x - props.x;
 			y = y - props.y;
-		wnd.message_recv:message( get_hexstr(tbl, w, h, x, y,
-			4, 1, wnd.pack_sz ) );
+--			wnd.message_recv:set_message( get_hexstr(tbl,
+--				w, h, x, y, wnd.message_recv.msg_w * 2,
+--				wnd.message_recv.msg_h, wnd.pack_sz )
+--			);
 		end
 		);
 	end
@@ -279,6 +283,11 @@ function window_shared(wnd)
 		end
 		destroy(wnd);
 	end
+
+-- used for hex-lookup etc. can be overridden by a message recv. window
+	wnd.message_recv = wnd;
+	wnd.msg_w = 4;
+	wnd.msg_h = 1;
 
 	wnd.zoom_ofs = {0, 0};
 	wnd.zoom_range = 1.0;
@@ -459,8 +468,10 @@ controlwnd_menu = {
 local subwnd_toggle = function(wnd)
 	if (wnd.motion == translate_2d) then
 		wnd.motion = function() end;
+		wnd.message_recv = wnd;
 	else
 		wnd.motion = translate_2d;
+		wnd.message_recv = nil;
 	end
 end
 
