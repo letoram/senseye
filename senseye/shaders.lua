@@ -51,8 +51,8 @@ shaders_2dview = {
 			{
 				vec4 col = texture2D(map_tu0, texco);
 				float intens = (col.r + col.g + col.b) / 3.0;
-				if (highlight_range.x < 0.0 || intens <= highlight_range.x ||
-					intens >= highlight_range.y)
+				if (highlight_range.x < 0.0 || intens < highlight_range.x ||
+					intens > highlight_range.y)
 					gl_FragColor = vec4(0.5 * intens, 0.5 * intens, 0.5 * intens, 1.0);
 				else
 					gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);

@@ -164,6 +164,11 @@ end
 local function activate_link(wnd)
 	wnd.zoom_link = function(wnd, parent, txcos)
 		image_set_txcos(wnd.scalebuf, txcos);
+
+-- nasty little workaround, quickest way for actually flagging
+-- all involved buffers as dirty..
+		local tmp = fill_surface(1, 1, 255, 255, 255);
+		expire_image(tmp, 1);
 	end
 
 	setup_scaletarget(wnd, wnd.parent.canvas);

@@ -222,5 +222,6 @@ return {
 		wnd.pack_sz = 3; -- default packing mode is 3
 		wnd.motion = lookup_motion;
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
+		wnd.dynamic_zoom = true;
 	end -- hook to set members before data comes
 };

@@ -495,6 +495,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		press = compsurf_wnd_press,
 		release = compsurf_wnd_release,
 		drag = compsurf_wnd_drag,
+		drop = compsurf_wnd_drop,
 		over = compsurf_wnd_over,
 		out = compsurf_wnd_out,
 		motion = compsurf_wnd_motion,
@@ -512,7 +513,7 @@ local function compsurf_add_window(ctx, surf, opts)
 	resize_image(wnd.canvas, wnd.width, wnd.height);
 	show_image({wnd.canvas, wnd.anchor});
 
-	mouse_addlistener(wnd, {"click", "rclick", "drag",
+	mouse_addlistener(wnd, {"click", "rclick", "drag", "drop",
 		"dblclick", "over", "press", "release",
 		"hover", "motion"}
 	);

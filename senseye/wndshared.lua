@@ -22,6 +22,8 @@ local function wnd_reset(wnd)
 	wnd.zoom_range = 1.0;
 	wnd.zoom_ofs[1] = 0.0;
 	wnd.zoom_ofs[2] = 0.0;
+	wnd.zoom_ofs[3] = 1.0;
+	wnd.zoom_ofs[4] = 1.0;
 	wnd:update_zoom();
 end
 
@@ -190,9 +192,10 @@ end
 
 local function update_zoom(wnd)
 	local s1 = wnd.zoom_ofs[1];
-	local s2 = (1.0 / wnd.zoom_range) + wnd.zoom_ofs[1];
-	local t1 =  wnd.zoom_ofs[2];
-	local t2 = (1.0 / wnd.zoom_range) + wnd.zoom_ofs[2];
+	local t1 = wnd.zoom_ofs[2];
+	local s2 = wnd.zoom_ofs[3] + wnd.zoom_ofs[1];
+	local t2 = wnd.zoom_ofs[4] + wnd.zoom_ofs[2];
+
 	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
 	image_set_txcos(wnd.canvas, txcos);
 	if (wnd.zoomh == nil) then
@@ -268,6 +271,38 @@ function lookup_motion(wnd, vid, x, y)
 end
 
 --
+-- sort out position and dimensions for a canvas clipped dynamic selection
+--
+local function get_positions(dz, maxw, maxh)
+	local p1, p2, w, h;
+
+	if (dz[1] < dz[3]) then
+		p1 = dz[1];
+		w = dz[3] - dz[1];
+	else
+		p1 = dz[3];
+		w = dz[1] - dz[3];
+	end
+
+	if (dz[2] < dz[4]) then
+		p2 = dz[2];
+		h = dz[4] - dz[2];
+	else
+		p2 = dz[4];
+		h = dz[2] - dz[4];
+	end
+
+	p1 = p1 <= 0 and 0 or p1;
+	p2 = p2 <= 0 and 0 or p2;
+	w = p1+w > maxw and maxw - p1 or w;
+	h = p2+h > maxh and maxh - p2 or h;
+	w = w <= 0 and 1 or w;
+	h = h <= 0 and 1 or h;
+
+	return p1, p2, w, h;
+end
+
+--
 -- hooks and functions that act similarly between main and subwindows
 --
 function window_shared(wnd)
@@ -289,7 +324,7 @@ function window_shared(wnd)
 	wnd.msg_w = 4;
 	wnd.msg_h = 1;
 
-	wnd.zoom_ofs = {0, 0};
+	wnd.zoom_ofs = {0, 0, 1.0, 1.0};
 	wnd.zoom_range = 1.0;
 	image_texfilter(wnd.canvas, FILTER_NONE);
 
@@ -318,6 +353,48 @@ function window_shared(wnd)
 			wnd.zoom_ofs[2] = nt;
 
 			wnd:update_zoom();
+		elseif wnd.dynamic_zoom then
+			if (wnd.dz) then
+				wnd.dz[3] = wnd.dz[3] + x;
+				wnd.dz[4] = wnd.dz[4] + y;
+				local x, y, w, h = get_positions(wnd.dz, wnd.width, wnd.height);
+				move_image(wnd.dzv, x, y);
+				resize_image(wnd.dzv, w, h);
+			else
+				local props = image_surface_resolve_properties(wnd.canvas);
+				local mx, my = mouse_xy();
+				mx = mx - props.x;
+				my = my - props.y;
+				wnd.dz = {mx, my, mx+1, my+1};
+				wnd.dzv = color_surface(1, 1, 255, 255, 255);
+				link_image(wnd.dzv, wnd.canvas);
+				image_inherit_order(wnd.dzv, true);
+				order_image(wnd.dzv, 1);
+				blend_image(wnd.dzv, 0.8);
+				move_image(wnd.dzv, wnd.dz[1], wnd.dz[2]);
+			end
+		end
+	end
+
+	wnd.drop = function(wnd, vid, x, y)
+		if (wnd.dynamic_zoom and wnd.dz) then
+			if (wnd.zoom_ofs[1] > 0) then
+				wnd.zoom_ofs[1] = 0.0;
+				wnd.zoom_ofs[2] = 0.0;
+				wnd.zoom_ofs[3] = 1.0;
+				wnd.zoom_ofs[4] = 1.0;
+				wnd:update_zoom();
+			else
+				local x, y, w, h = get_positions(wnd.dz, wnd.width, wnd.height);
+				wnd.zoom_ofs[1] = x / wnd.width;
+				wnd.zoom_ofs[2] = y / wnd.height;
+				wnd.zoom_ofs[3] = w / wnd.width;
+				wnd.zoom_ofs[4] = h / wnd.height;
+				wnd:update_zoom();
+			end
+
+			delete_image(wnd.dzv);
+			wnd.dz = nil;
 		end
 	end
 
@@ -353,12 +430,21 @@ function window_shared(wnd)
 			return;
 		end
 
+-- switch between custom zoom region and uniform
+		if (w.zoom_range == 1.0 and (w.zoom_ofs[1] ~= 0.0 or
+			w.zoom_ofs[2] ~= 0.0 or w.zoom_ofs[3] ~= 1.0 or
+			w.zoom_ofs[4] ~= 1.0)) then
+			wnd_reset(wnd);
+		end
+
 		if (not wm.meta) then
 			wm.selected.zoom_range = wm.selected.zoom_range * 2.0;
 		else
 			w.zoom_range = w.zoom_range / 2.0;
 			w.zoom_range = w.zoom_range < 1.0 and 1.0 or w.zoom_range;
 		end
+		w.zoom_ofs[3] = (1.0 / wnd.zoom_range);
+		w.zoom_ofs[4] = (1.0 / wnd.zoom_range);
 		w:update_zoom();
 	end
 
