@@ -5,7 +5,9 @@ Senseye is a dynamic visual binary analysis and debugging tool intended to
 assist in monitoring, analysing and grasping large data feeds e.g. static
 files, dynamic streams and live memory.
 
-Senseye uses Arcan ( https://github.com/letoram/arcan ) as a display server
+For a bit more of what that entails, please take a look at the [Senseye Github Wiki](https://github.com/letoram/senseye/wiki).
+
+Senseye uses [Arcan](https://github.com/letoram/arcan) as display server
 and graphics engine to provide the user interface, representations and
 other data transformations.
 
@@ -55,10 +57,7 @@ and then attach a sensor or two:
     ./fsense ../tests/test.bin
     cat ../tests/test.bin | ./psense 1> /dev/null
 
-The details of how the UI works can be seen in the 
-(Senseye Github Wiki)[https://github.com/letoram/senseye/wiki] and in the
-demo videos in the linked video channel on arcan-fe.com. Switching the default
-background (res/background.png) to something less dull is highly recommended ;-)
+Replacing the default background (res/background.png) to something less dull is highly recommended ;-)
 
 Default Keybindings (META is set to RIGHT SHIFT):
 
@@ -72,7 +71,7 @@ _Data Windows_
 
 _Global_
 
-     F7-F8 - Grow/Shrink Point Size (for pointcloud)
+     F7-F8 - Grow/Shrink Point Size (for pointclouds)
      TAB - Toggle Popup (+ arrow keys to navigate)
      ESCAPE - Drop Popup
      META + LClick + Drag - Move Window
@@ -91,6 +90,14 @@ _Psense/Fsense_
 _Fsense_
 
      Left/Right - Step row (+Meta, block)
+
+_Msense_
+
+     Main Window: Arrow keys - move cursor up/down
+                  Enter key - try to sample and load the selected area
+                  
+     Data Window: r - refresh at current position
+                  Left/Right - Step page forward/backward
 
 _Histogram Window_
 
