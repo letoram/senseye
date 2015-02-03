@@ -10,6 +10,7 @@
 --
 connection_path = "senseye";
 wndcnt = 0;
+pending_lim = 4;
 
 --
 -- global, used in all menus and messages
@@ -96,6 +97,7 @@ local function add_subwindow(parent, id)
 	local wnd = wm:add_window(id, {});
 	window_shared(wnd);
 	wnd.ctrl_id = id;
+	wnd.pending = 0;
 	wnd.source_listener = {};
 	wnd.highlight = shader_update_range;
 	wnd:set_parent(parent, ANCHOR_UR);
@@ -104,6 +106,24 @@ local function add_subwindow(parent, id)
 	wnd.shader_group = shaders_2dview;
 	wnd.shind = 1;
 	return wnd;
+end
+
+--
+-- safeguard against pileups, the stepframe_target can have a steep
+-- cost for each sensor and when events accumulate it might block
+-- more important ones (switching clocking modes etc.) so make these
+-- requests synchronous with delivery.
+--
+local defstep = stepframe_target;
+function stepframe_target(src, id)
+	local wnd = wm:find(src);
+	if (wnd.pending == nil) then
+		defstep(src, id);
+		return;
+	elseif (wnd.pending < pending_lim) then
+		defstep(src, id);
+		wnd.pending = wnd.pending + 1;
+	end
 end
 
 --
@@ -153,6 +173,10 @@ end
 --
 function subid_handle(source, status)
 	local wnd = wm:find(source);
+
+	if (wnd.pending > 0 and status.kind == "framestatus") then
+		wnd.pending = wnd.pending - 1;
+	end
 
 	if (wnd.source_listener) then
 		local done = false;
