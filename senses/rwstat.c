@@ -21,6 +21,7 @@ struct pattern {
 	uint8_t* buf;
 	size_t buf_sz;
 	size_t buf_pos;
+	int evc;
 	uint8_t alpha;
 	uint32_t id;
 	enum ptn_flags flags;
@@ -67,7 +68,6 @@ struct rwstat_ch_priv {
 /* alpha buffer matches base * base and is sampled
  * by the packing function based on the amode of the ch */
 	uint8_t* alpha;
-	uint8_t ptn_val;
 
 /* output segment */
 	struct arcan_shmif_cont* cont;
@@ -218,11 +218,64 @@ static void update_entalpha(struct rwstat_ch_priv* chp, size_t bsz)
 }
 
 /*
- * Take current buffer (whatever state it is in),
- * map into output and synch. Many permutations of packing schemes
- * (which dictate buffer sizes), mapping functions (which dictate
- * pattern and cache behavior) and alpha mapping (which adds type
- * details)
+ * Use the current set of patterns to populate the alpha buffer
+ * that is then sampled when building the final output.
+ */
+static void update_ptnalpha(struct rwstat_ch_priv* chp)
+{
+	uint8_t av = 0xff;
+	if (chp->n_patterns == 0){
+		memset(chp->alpha, av, chp->base * chp->base);
+		return;
+	}
+
+/* reset patterns */
+	for (size_t i = 0; i < chp->n_patterns; i++){
+		chp->patterns[i].buf_pos = 0;
+		chp->patterns[i].evc = 0;
+	}
+
+/* If ptn-match ever becomes a performance choke,
+ * here is a good spot for adding parallelization. */
+	for (size_t i = 0; i < chp->buf_sz; i++){
+		chp->alpha[i] = av;
+
+		for (size_t j = 0; j < chp->n_patterns; j++){
+			struct pattern* ptn = &chp->patterns[j];
+			if (ptn->buf[ptn->buf_pos] == chp->buf[i])
+			 	if (++(ptn->buf_pos) == ptn->buf_sz){
+					chp->patterns[j].buf_pos = 0;
+					memset(&chp->alpha[i - ptn->buf_sz], ptn->alpha, ptn->buf_sz);
+					if ((ptn->flags & FLAG_STATE))
+						av = ptn->alpha;
+					if ((ptn->flags & FLAG_EVENT))
+						ptn->evc++;
+				}
+			}
+
+	}
+
+
+/* Check matched patterns and fire an event with the matching
+ * identifier, and the number of times each event was matched
+ * in the buffer window. Abuse the CURSORINPUT event for this */
+	for (size_t i = 0; i < chp->n_patterns; i++)
+		if (chp->patterns[i].evc){
+			arcan_event ev = {
+				.category = EVENT_EXTERNAL,
+				.ext.kind = EVENT_EXTERNAL_CURSORINPUT,
+				.ext.cursor.id = chp->patterns[i].id,
+				.ext.cursor.x = chp->patterns[i].evc
+			};
+			arcan_shmif_enqueue(chp->cont, &ev);
+			chp->patterns[i].evc = 0;
+		}
+}
+
+/*
+ * Build the output buffer and push/synch to an external recipient,
+ * taking mapping function, alpha population functions, and timing-
+ * related metadata.
  */
 static void ch_step(struct rwstat_ch* ch)
 {
@@ -242,10 +295,9 @@ static void ch_step(struct rwstat_ch* ch)
 	ch->event(ch, &outev);
 
 /*
- * notify about the packing mode active for this frame,
- * this is needed for the parent to be able to determine what byte
- * offset resides at which local coordinate (where possible),
- * lets abuse the event used for video decoding stream detection
+ * Notify about the packing mode active for this frame. This is
+ * needed for the parent to be able to determine what each byte
+ * corresponds to.
  */
 	if (chp->status_dirty){
 		outev.ext.kind = EVENT_EXTERNAL_STREAMINFO;
@@ -258,14 +310,15 @@ static void ch_step(struct rwstat_ch* ch)
 		ch->event(ch, &outev);
 	}
 
-/* histogram needs to be generated if we are sliding */
-	if ( 1 == (chp->clock & (RW_CLK_SLIDE | RW_CLK_NSLIDE)) )
+	if ( 1 == (chp->clock & (RW_CLK_SLIDE)) )
 		rebuild_hgram(chp);
 
 	if (chp->pack == PACK_HINTENS)
 		hnorm(chp->hgram);
 	if (chp->amode == RW_ALPHA_ENTBASE)
 		update_entalpha(chp, chp->base);
+	else if (chp->amode == RW_ALPHA_PTN)
+		update_ptnalpha(chp);
 
 	for (size_t i = 0; i < chp->buf_sz; i+= chp->pack_sz)
 		pack_bytes(chp, &chp->buf[i], i / chp->pack_sz);
@@ -279,10 +332,6 @@ static void ch_step(struct rwstat_ch* ch)
 		for (size_t i = 0; i < ntw; i++)
 			chp->cont->vidp[i] = val;
 	}
-
-/* FIXME: sweep patterns for entire data-buffer */
-	if (chp->amode == RW_ALPHA_PTN)
-		memset(chp->alpha, chp->ptn_val, chp->base * chp->base);
 }
 
 static void ch_event(struct rwstat_ch* ch, arcan_event* ev)
@@ -298,22 +347,11 @@ static size_t ch_data(struct rwstat_ch* ch,
 
 /* larger write chunks are equivalent to a block slide,
  * so use the CLK_BLOCK mode for those */
-	if (ch->priv->clock == RW_CLK_SLIDE || ch->priv->clock == RW_CLK_NSLIDE){
+	if (ch->priv->clock == RW_CLK_SLIDE){
 		if (buf_sz < chp->buf_sz){
 			ntw = buf_sz;
-
-			if (ch->priv->clock == RW_CLK_SLIDE){
-				chp->buf_ofs = chp->buf_sz - ntw;
-				memmove(chp->buf, chp->buf + ntw, chp->buf_ofs);
-			}
-			else{
-				memmove(chp->buf + ntw, chp->buf, chp->buf_sz - ntw);
-				memcpy(chp->buf, buf, buf_sz);
-				chp->buf_ofs = 0;
-				*step = 1;
-				ch_step(ch);
-				return ntw;
-			}
+			chp->buf_ofs = chp->buf_sz - ntw;
+			memmove(chp->buf, chp->buf + ntw, chp->buf_ofs);
 		}
 		else
 			ntw = chp->buf_sz;
@@ -446,8 +484,8 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 static void ch_alpha(struct rwstat_ch* ch, enum rwstat_alpha amode)
 {
 	ch->priv->amode = amode;
-	memset(ch->priv->alpha, 0xff, ch->priv->base * ch->priv->base);
-	ch->priv->ptn_val = 0xff;
+	if (0 == amode)
+		memset(ch->priv->alpha, 0xff, ch->priv->base * ch->priv->base);
 }
 
 static void ch_reclock(struct rwstat_ch* ch, enum rwstat_clock clock)
@@ -509,17 +547,8 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 	ch_map(ch, ch->priv->map);
 }
 
-/*
- * for anything but the no-op case, we have to reset
- * the pattern matching state.
- */
 static void ch_wind(struct rwstat_ch* ch, off_t ofs)
 {
-	if (ofs != ch->priv->cnt_total){
-		for (size_t j = 0; j < ch->priv->n_patterns; j++)
-			ch->priv->patterns[j].buf_pos = 0;
-	}
-
 	ch->priv->cnt_total = ofs;
 }
 
@@ -587,6 +616,11 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
  *  - reset-counter (after detected pattern, wait n bytes)
  *  - injection point / trigger (in-place replace data)
  *  - enable / disable other pattern on activation
+ *
+ * The big caveat is that these are constrained and reset to each
+ * synched buffer transfer, as the number of edge conditions when
+ * taking seeking/stepping/clock modes etc. into account is a bit
+ * too much.
  */
 void rwstat_addpatterns(struct rwstat_ch* ch, struct arg_arr* arg)
 {
@@ -619,7 +653,6 @@ void rwstat_addpatterns(struct rwstat_ch* ch, struct arg_arr* arg)
 		}
 
 /* pass 2, setup */
-
 		free(work);
 		work = strdup(val);
 		tv = strtok(work, ",");
@@ -636,7 +669,7 @@ void rwstat_addpatterns(struct rwstat_ch* ch, struct arg_arr* arg)
 			return;
 
 /* extract meta from opt, i.e. id, alpha, state */
-		ch_pattern(ch, ind, ind, FLAG_STATE, bptn, count);
+		ch_pattern(ch, ind, ind, 0, bptn, count);
 		ind++;
 	}
 }
@@ -657,7 +690,6 @@ struct rwstat_ch* rwstat_addch(
 	res->priv->cont = c;
 	res->data = ch_data;
 	res->priv->clock = mode;
-	res->priv->ptn_val = 0xff;
 	res->switch_packing = ch_pack;
 	res->switch_mapping = ch_map;
 	res->switch_clock = ch_reclock;

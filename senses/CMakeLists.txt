@@ -49,7 +49,6 @@ SET(LIBRARIES
 
 SET(SHMIF_SOURCES
 	${ARCAN_SOURCE_DIR}/platform/posix/warning.c
-	${ARCAN_SOURCE_DIR}/platform/posix/sem.c
 	${ARCAN_SOURCE_DIR}/platform/posix/fdpassing.c
 	${ARCAN_SOURCE_DIR}/shmif/arcan_shmif_control.c
 	${ARCAN_SOURCE_DIR}/shmif/arcan_shmif_interop.c
@@ -58,9 +57,11 @@ SET(SHMIF_SOURCES
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	LIST(APPEND SHMIF_SOURCES
 		${ARCAN_SOURCE_DIR}/platform/darwin/time.c
+		${ARCAN_SOURCE_DIR}/platform/darwin/sem.c
 	)
 else()
 	LIST(APPEND SHMIF_SOURCES
+		${ARCAN_SOURCE_DIR}/platform/posix/sem.c
 		${ARCAN_SOURCE_DIR}/platform/posix/time.c
 	)
 	LIST(APPEND LIBRARIES

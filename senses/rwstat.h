@@ -9,15 +9,11 @@
 static const int rwstat_row_ch = 6;
 
 /*
- * criterion for synch with parent based on incoming data
- * tick() can always be used to force a synch with the current state.
- * BLOCK and SLIDE are mutually exclusive,
- * SIGNAL is a flag that is permitted at any time.
+ * Determines when a channel should build and synchronize output
  */
 enum rwstat_clock {
-	RW_CLK_BLOCK  = 0,
-	RW_CLK_SLIDE  = 1,
-	RW_CLK_NSLIDE = 2
+	RW_CLK_BLOCK  = 0, /* Full block by block (base-squared) */
+	RW_CLK_SLIDE  = 1  /* On every new write- flush          */
 };
 
 /*
@@ -26,7 +22,7 @@ enum rwstat_clock {
 enum rwstat_alpha {
 	RW_ALPHA_FULL    = 0, /* 0xff, opaque                                 */
 	RW_ALPHA_ENTBASE = 1, /* entropy encoded, channel base determines wnd */
- 	RW_ALPHA_PTN     = 2, /* 0xff or signal ID (use palette shader-size)  */
+ 	RW_ALPHA_PTN     = 2, /* 0xff or signal ID (defined by each pattern)  */
 };
 
 /*
@@ -47,12 +43,12 @@ enum rwstat_pack {
 	PACK_TNOALPHA = 1, /* first byte R, second G, third B, - full a */
 	PACK_INTENS   = 2, /* full alpha, same byte in R, G, B - full a */
 	PACK_HINTENS  = 3, /* lookup byte against normalized histogram, *
-	                      same byte in R, G, B - full a             */
+	                    * same byte in R, G, B - full a             */
 };
 
 enum ptn_flags {
-	FLAG_EVENT = 1,
-	FLAG_STATE = 2
+	FLAG_EVENT = 1, /* if set, event will be fired when detected during synch */
+	FLAG_STATE = 2  /* if set, alpha value will be used until next state- ptn */
 };
 
 struct rwstat_ch {
@@ -108,24 +104,26 @@ struct rwstat_ch {
 };
 
 /*
- * create a new channel and assign the specified segment to it
- * clock ticks is the responsibility of the callee
+ * Create a new channel and assign the specified segment to it.
  */
 struct rwstat_ch* rwstat_addch(enum rwstat_clock clock,
-	enum rwstat_mapping map, enum rwstat_pack pack, struct arcan_shmif_cont*);
+	enum rwstat_mapping map, enum rwstat_pack pack,
+	struct arcan_shmif_cont*
+);
 
 /*
- * see if an incoming arcan- style event contains data that
- * should be mapped to the rwstat, this is to re-use more of the
- * same boiler plate code between sensors.
+ * See if an incoming arcan- style event contains data that
+ * should be mapped to the rwstat. This is to re-se more of
+ * the same boiler plate code between sensors.
  *
- * returns true if the event was consumed (i.e. some action
- * that modifies ch was taken).
+ * Returns true if the event was consumed (i.e. some action
+ * that modifies ch was taken), otherwise false.
  */
 bool rwstat_consume_event(struct rwstat_ch*, struct arcan_event*);
 
 /*
  * take an arg_arr packed struct and parse it to extract
- * command-line specified patterns and map them into the rwstat channel.
+ * command-line specified patterns and map them into the
+ * rwstat channel.
  */
 void rwstat_addpatterns(struct rwstat_ch*, struct arg_arr*);
