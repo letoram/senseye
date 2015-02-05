@@ -117,6 +117,10 @@ end
 local defstep = stepframe_target;
 function stepframe_target(src, id)
 	local wnd = wm:find(src);
+	if (wnd == nil) then
+		return defstep(src, id);
+	end
+
 	if (wnd.pending == nil) then
 		defstep(src, id);
 		return;
@@ -201,7 +205,6 @@ function subid_handle(source, status)
 		convert_type(wnd, type_handlers[status.message], subwnd_menu);
 	else
 	end
-
 end
 
 --
@@ -226,8 +229,8 @@ function default_wh(source, status)
 		local subwnd = add_subwindow(wnd, id);
 		subwnd.ctrl_id = id;
 		local prop = image_surface_properties(id);
-		subwnd:resize(prop.width, prop.height);
-
+		subwnd:resize(status.width, status.height);
+		subwnd:select();
 		target_updatehandler(id, subid_handle);
 
 	elseif (status.kind == "ident") then
@@ -260,7 +263,8 @@ function new_connection(source, status)
 	end
 
 	target_updatehandler(source, default_wh);
-	add_window(source);
+	local wnd = add_window(source);
+	wnd:select();
 	default_wh(source, status);
 end
 

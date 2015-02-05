@@ -112,19 +112,42 @@ local function compsurf_wnd_deselect(wnd)
 	end
 end
 
+local function forward_children(wm, wnd)
+	if (wnd.children) then
+		for k,v in ipairs(wnd.children) do
+			local ind = wnd_ind(wm, v);
+			table.remove(wm.windows, ind);
+			table.insert(wm.windows, v);
+			if (v.children) then
+				forward_children(wm, v);
+			end
+		end
+	end
+end
+
 local function compsurf_wnd_select(wnd)
 	if (wnd.wm.selected == wnd) then
 		return
 	end
 
-	if (wnd.wm.selected) then
-		broadcast(wnd.wm.handlers.deselect, wnd.wm.selected, wnd);
-		order_image(wnd.wm.selected.canvas, wnd.wm.selected.deselorder);
+	local wm = wnd.wm;
+
+	if (wm.selected) then
+		broadcast(wm.handlers.deselect, wm.selected, wnd);
+		order_image(wm.selected.anchor, wm.selected.deselorder);
 	end
 
-	wnd.wm.selected = wnd;
-	order_image(wnd.canvas, wnd.selorder);
-	broadcast(wnd.wm.handlers.select, wnd);
+	wm.selected = wnd;
+	broadcast(wm.handlers.select, wnd);
+
+	local ind = wnd_ind(wm, wnd);
+	table.remove(wm.windows, ind);
+	table.insert(wm.windows, wnd);
+
+	forward_children(wm, wnd);
+	for i, v in ipairs(wnd.wm.windows) do
+		order_image(v.anchor, 1 + i * 10);
+	end
 end
 
 local function compsurf_wnd_destroy(wnd, cascade)
@@ -390,11 +413,10 @@ local function compsurf_wnd_border(wnd, width, r, g, b)
 
 	image_shader(wnd.border, get_border_shader(width));
 	resize_image(wnd.border, wnd.width + width * 2, wnd.height + width * 2);
-	move_image(wnd.canvas, width, width);
 	show_image(wnd.border);
 	link_image(wnd.border, wnd.anchor);
-	image_inherit_order(wnd.border, 1);
-	order_image(wnd.border, 1);
+	move_image(wnd.border, -1 * width, -1 * width);
+	image_inherit_order(wnd.border, true);
 end
 
 local function compsurf_wnd_parent(ctx, wnd, relative)
@@ -636,7 +658,7 @@ function compsurf_create(width, height, opts)
 		def_ww = opts.def_ww ~= nil and opts.def_ww or math.floor(width * 0.3),
 		def_wh = opts.def_wh ~= nil and opts.def_wh or math.floor(height * 0.3),
 		name = opts.name ~= nil and opts.name or ("compsurf_" .. tostring(seq)),
-		selorder = opts.selorder ~= nil and opts.selorder or 3,
+		selorder = opts.selorder ~= nil and opts.selorder or 10,
 		deselorder = opts.selorder ~= nil and opts.deselorder or 1,
 
 -- user directed window functions
@@ -667,12 +689,6 @@ function compsurf_create(width, height, opts)
 			destroy = {},
 		},
 	};
-
-	if (opts) then
-		if (opts.borders) then
-			restbl.have_borders = true;
-		end
-	end
 
 	image_mask_set(restbl.canvas, MASK_UNPICKABLE);
 	show_image(restbl.canvas);

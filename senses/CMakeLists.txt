@@ -59,6 +59,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		${ARCAN_SOURCE_DIR}/platform/darwin/time.c
 		${ARCAN_SOURCE_DIR}/platform/darwin/sem.c
 	)
+	add_definitions(-DARCAN_SHMIF_OVERCOMMIT)
 else()
 	LIST(APPEND SHMIF_SOURCES
 		${ARCAN_SOURCE_DIR}/platform/posix/sem.c
