@@ -43,7 +43,6 @@ local rtbl = {
 	dispatch_sub = disp,
 	popup_sub = {},
 	init = function(wnd)
-		print("msense_main init");
 	end
 };
 
