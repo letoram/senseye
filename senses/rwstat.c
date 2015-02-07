@@ -43,6 +43,8 @@ struct rwstat_ch_priv {
 /* mapping etc. has changed but we havn't told our parent */
 	bool status_dirty;
 
+/* scaling factors used for some mapping modes */
+	float sf_x, sf_y;
 	uint8_t pack_sz;
 	uint16_t* cmap;
 
@@ -170,8 +172,8 @@ static inline void pack_bytes(
 
 	case MAP_TUPLE:
 		lofs += 2;
-		x = buf[0];
-		y = buf[1];
+		x = (float)buf[0] * chp->sf_x;
+		y = (float)buf[1] * chp->sf_y;
 	break;
 
 	case MAP_HILBERT:
@@ -542,6 +544,8 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 	memset(ch->priv->buf, '\0', ch->priv->buf_sz);
 	memset(ch->priv->alpha, 0xff, bsqr);
 	ch->priv->base = base;
+	ch->priv->sf_x = (float) (base-1) / 255.0f;
+	ch->priv->sf_y = (float) (base-1) / 255.0f;
 
 /* will setup / rebuild LUTs etc. */
 	ch_map(ch, ch->priv->map);
@@ -707,7 +711,6 @@ struct rwstat_ch* rwstat_addch(
 	res->priv->map = map;
 	res->priv->pack = pack;
 	res->priv->amode = RW_ALPHA_ENTBASE;
-
 	res->resize(res, c->addr->w);
 	res->priv->status_dirty = true;
 

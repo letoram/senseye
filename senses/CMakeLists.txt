@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
 # minimum version.
 #
 option(ENABLE_ASAN "Build with Address-Sanitizer, (gcc >= 4.8, clang >= 3.1)" OFF)
+option(ENABLE_CAPSTONE "Build Msense with support for capstone disassembly" OFF)
 
 if (ENABLE_ASAN)
 	if (ASAN_TYPE)

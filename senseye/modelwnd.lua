@@ -47,6 +47,10 @@ local function modelwnd(wnd, model, shader)
 -- grab the shared window handlers, but replace / extend
 	window_shared(nw);
 
+	nw.fullscreen_input = function(wnd, iotbl)
+		print("fullscreen input");
+	end
+
 	nw.tick = function(wnd, step)
 		if (wnd.spinning) then
 			wnd.zang = math.abs(wnd.zang + 0.5 * step, 360.0);
@@ -55,20 +59,24 @@ local function modelwnd(wnd, model, shader)
 	end
 
 	local def_drag = nw.drag;
-	nw.drag = function(wnd, vid, dx, dy)
-		if (wnd.wm.meta) then
-			return def_drag(wnd, vid, dx, dy);
+	nw.drag = function(ctx, vid, dx, dy)
+		if (nw.wm.meta) then
+			return def_drag(nw, vid, dx, dy);
 		end
 
 		if (nw.mmode == "rotate") then
 			nw.yang = nw.yang + dy;
 			nw.zang = nw.zang + dx;
-			rotate3d_model(wnd.model, wnd.xang, wnd.yang, wnd.zang);
+			rotate3d_model(nw.model, nw.xang, nw.yang, nw.zang);
 		else
-			forward3d_model(wnd.camera, -0.1 * dy);
-			strafe3d_model(wnd.camera, 0.1 * dx);
+			forward3d_model(nw.camera, -0.1 * dy);
+			strafe3d_model(nw.camera, 0.1 * dx);
 		end
 	end
+
+	nw.fullscreen_mouse = {
+		drag = nw.drag
+	};
 
 	nw.dispatch[BINDINGS["ZOOM"]] = function(wnd)
 	end
@@ -164,11 +172,8 @@ end
 local function activate_link(wnd)
 	wnd.zoom_link = function(wnd, parent, txcos)
 		image_set_txcos(wnd.scalebuf, txcos);
-
--- nasty little workaround, quickest way for actually flagging
--- all involved buffers as dirty..
-		local tmp = fill_surface(1, 1, 255, 255, 255);
-		expire_image(tmp, 1);
+		rendertarget_forceupdate(wnd.scaletarget);
+		rendertarget_forceupdate(wnd.rendertarget);
 	end
 
 	setup_scaletarget(wnd, wnd.parent.canvas);

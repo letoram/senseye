@@ -77,9 +77,10 @@ function spawn_histogram(wnd)
 
 	nw.motion = function(wnd, vid, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
-		move_image(cursor, x - rprops.x, 0);
-		x = (x - rprops.x) / rprops.width;
-		y = (y - rprops.y) / rprops.height;
+		local newx = (x-rprops.x > wnd.width) and wnd.width or (x-rprops.x);
+		move_image(cursor, newx, 0);
+		x = (x - rprops.x) / wnd.width;
+		y = (y - rprops.y) / wnd.height;
 		nw.hgram_slot = math.ceil(x * 255);
 		resize_image(cursor, 1, rprops.height);
 	end
@@ -122,6 +123,7 @@ function spawn_histogram(wnd)
 
 	nw.zoom_link = function(self, wnd, txcos)
 		image_set_txcos(csurf, txcos);
+		rendertarget_forceupdate(ibuf);
 		stepframe_target(ibuf);
 	end
 

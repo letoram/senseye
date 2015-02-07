@@ -155,6 +155,7 @@ function convert_type(wnd, th, basemenu)
 
 	wnd.popup = merge_menu(basemenu, th.popup_sub);
 
+	wnd.basename = th.name;
 	wnd.name = wnd.name .. "_" .. th.name;
 	if (th.source_listener) then
 		table.insert(wnd.source_listener, th.source_listener);

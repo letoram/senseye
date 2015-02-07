@@ -45,18 +45,6 @@ local dpack_sub = {
 	}
 };
 
--- how many bytes in each pixel corresponds to a meaningful value
-local function pack_to_size(pmode)
-	if (pmode == 0 or pmode == 1) then
-		return 1;
-	elseif (pmode == 2) then
-		return 4;
-	elseif (pmode == 3) then
-		return 3;
-	end
-	return 1;
-end
-
 local alpha_sub = {
 	{
 		label = "Full (no data)",
@@ -175,7 +163,6 @@ local fsrv_ev = {
 	streaminfo = function(wnd, source, status)
 		local base = string.byte("0", 1);
 		wnd.pack_cur = string.byte(status.lang, 1) - base;
-		wnd.pack_sz  = pack_to_size(wnd.pack_cur);
 		wnd.map_cur  = string.byte(status.lang, 2) - base;
 		wnd.size_cur = string.byte(status.lang, 3) - base;
 	end,
@@ -189,17 +176,10 @@ local fsrv_ev = {
 	end
 };
 
---
--- attach to framestatus events, extract and show in a new window
---
-local function statwnd(wnd, table)
-	print("spawn stats- window");
-end
-
 local pop = {{
 	label = "Data Packing...",
 	submenu = dpack_sub }, {
-	label = "Alpha Channel...",
+	label = "Metadata...",
 	submenu = alpha_sub }, {
 	label = "Transfer Clock...",
 	submenu = clock_sub }, {

@@ -139,6 +139,10 @@ function setup_dispatch(dt)
 	end
 
 	dt[BINDINGS["RESIZE_X2"]] = function(wm)
+		if (wm.fullscreen) then
+			return;
+		end
+
 		local wnd = wm.selected;
 		if (wnd == nil) then
 			return;
@@ -166,6 +170,10 @@ function setup_dispatch(dt)
 	end
 
 	dt["BACKSPACE"] = function(wm)
+		if (wm.fullscreen) then
+			return;
+		end
+
 		if (wm.meta) then
 			if (wm.selected) then
 				wm.selected:destroy();
@@ -568,6 +576,60 @@ local wnd_xl = {
 	},
 };
 
+local function gen_dumpname(sens, suffix)
+	local testname;
+	local attempt = 0;
+
+	repeat
+		testname = string.format("dumps/%s_%d%s.%s", sens,
+			benchmark_timestamp(1), attempt > 0 and tostring(CLOCK) or "", suffix);
+		attempt = attempt + 1;
+	until (resource(testname) == nil);
+
+	return testname;
+end
+
+local function dump_png(wnd)
+	local name = gen_dumpname(wnd.basename, "png");
+	save_screenshot(name, FORMAT_PNG_FLIP, wnd.ctrl_id);
+	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+end
+
+local function dump_full(wnd)
+	local name = gen_dumpname(wnd.basename, "raw");
+	save_screenshot(name, FORMAT_RAW32, wnd.ctrl_id);
+	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+end
+
+local function dump_noalpha(wnd)
+	local name = gen_dumpname(wnd.basename, "raw");
+	local fmt = FORMAT_RAW32;
+
+	if wnd.size_cur == 1 then
+		fmt = FORMAT_RAW8;
+	elseif wnd.size_cur == 3 then
+		fmt = FORMAT_RAW24;
+	end
+
+	save_screenshot(name, fmt, wnd.ctrl_id);
+	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+end
+
+local wnd_dump = {
+	{
+		label = "PNG",
+		handler = dump_png
+	},
+	{
+		label = "Full",
+		handler = dump_full
+	},
+	{
+		label = "No Alpha",
+		handler = dump_noalpha
+	}
+};
+
 subwnd_menu = {
 	{
 		label = "Reset",
@@ -581,5 +643,9 @@ subwnd_menu = {
 	{
 		label = "Translation...",
 		submenu = wnd_xl
+	},
+	{
+		label = "Dump...",
+		submenu = wnd_dump
 	},
 };

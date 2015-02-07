@@ -140,11 +140,11 @@ local function compsurf_wnd_select(wnd)
 	wm.selected = wnd;
 	broadcast(wm.handlers.select, wnd);
 
+	forward_children(wm, wnd);
 	local ind = wnd_ind(wm, wnd);
 	table.remove(wm.windows, ind);
 	table.insert(wm.windows, wnd);
 
-	forward_children(wm, wnd);
 	for i, v in ipairs(wnd.wm.windows) do
 		order_image(v.anchor, 1 + i * 10);
 	end
@@ -571,6 +571,13 @@ local function compsurf_input(ctx, iotbl)
 		return;
 	end
 
+	if (ctx.fullscreen) then
+		if (ctx.fullscreen.fullscreen_input) then
+			ctx.fullscreen:fullscreen_input(iotbl, ctx.fullscreen_vid);
+		end
+		return;
+	end
+
 	if (ctx.selected) then
 		ctx.selected:input(iotbl);
 	end
@@ -586,15 +593,23 @@ local function compsurf_input_sym(ctx, sym)
 		return ctx.dispatch[sym](ctx, sym);
 	end
 
+	if (ctx.fullscreen) then
+		if (ctx.fullscreen.fullscreen_input) then
+			ctx.fullscreen:fullscreen_input(iotbl, ctx.fullscreen_vid);
+		end
+		return;
+	end
+
 	if (ctx.selected) then
 		ctx.selected:input_sym(sym);
 	end
 end
 
 --
--- fullscreen is rather complex as it involved input routing,
--- possible specialized input modes, shaders, being overridden
--- by various keypresses etc.
+-- fullscreen is rather complex as it involved input routing, possible
+-- specialized input modes, shaders, being overridden by various keypresses
+-- etc. Add to that 'fullscreen' actually means "filling the composition
+-- surface" as we can have nested composition etc.
 --
 local function compsurf_fullscreen(ctx)
 	if (ctx.selected == nil or
@@ -606,10 +621,32 @@ local function compsurf_fullscreen(ctx)
 		delete_image(ctx.fullscreen_vid);
 		ctx.fullscreen = nil;
 		ctx.fullscreen_vid = nil;
+		for i,v in ipairs(ctx.windows) do
+			v:show();
+		end
+		if (ctx.fullscreen_mouse) then
+			mouse_droplistener(ctx.fullscreen_mouse);
+			ctx.fullscreen_mouse = nil;
+		end
 		return;
 	end
 
+	for i,v in ipairs(ctx.windows) do
+		v:hide();
+	end
+
 	ctx.fullscreen_vid = null_surface(ctx.max_w, ctx.max_h);
+
+	if (ctx.selected.fullscreen_mouse) then
+		ctx.fullscreen_mouse = ctx.selected.fullscreen_mouse;
+		ctx.fullscreen_mouse.own = function(src, vid)
+			return vid == ctx.fullscreen_vid;
+		end
+		ctx.fullscreen_mouse.name = ctx.name .. "_fullscreen";
+		mouse_addlistener(ctx.selected.fullscreen_mouse,
+		{"click", "drag", "drop",	"motion", "dblclick", "rclick"});
+	end
+
 	show_image(ctx.fullscreen_vid);
 	image_tracetag(ctx.fullscreen_vid, "fullscreen");
 	image_sharestorage(ctx.selected.canvas, ctx.fullscreen_vid);

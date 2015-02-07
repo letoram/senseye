@@ -70,7 +70,7 @@ rtbl.init = function(wnd)
 		local props = image_storage_properties(wnd.canvas);
 		local sfx = wnd.width / props.width;
 		local sfy = wnd.height / props.height;
-		resize_image(pview, wnd.width, last_pts * sfy);
+		resize_image(pview, wnd.width, (last_pts <= 0 and 1 or last_pts) * sfy);
 		move_image(pview, 0, last_frame * sfy);
 	end
 
@@ -93,4 +93,5 @@ rtbl.init = function(wnd)
 	end
 end
 
+rtbl.name = "fsense";
 return rtbl;

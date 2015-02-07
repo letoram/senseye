@@ -177,8 +177,6 @@ end
 function mouse_destroy()
 	mouse_handlers = {};
 	mouse_handlers.click = {};
-	mouse_handlers.cver  = {};
-	mouse_handlers.cut   = {};
   mouse_handlers.drag  = {};
 	mouse_handlers.drop  = {};
 	mouse_handlers.over = {};
@@ -558,14 +556,13 @@ function mouse_addlistener(tbl, events)
 
 	for ind, val in ipairs(events) do
 		if (mstate.handlers[val] ~= nil and
-			linear_find(mstate.handlers[val], tbl) == nil) then
+			linear_find(mstate.handlers[val], tbl) == nil and tbl[val] ~= nil) then
 			insert_unique(mstate.handlers[val], tbl);
-		else
+		elseif (tbl[val] ~= nil) then
 			warning("mouse_addlistener(), unknown event function: "
 				.. val ..".\n");
 		end
 	end
-
 end
 
 function mouse_dumphandlers()
