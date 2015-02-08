@@ -214,11 +214,13 @@ end
 --
 -- Load / Prepare cursor, read default acceleration and
 -- filtering settings.
--- cicon(string) : path to valid resource for cursor
--- clayer(uint)  : which ordervalue for cursor to have
--- pickdepth
+-- cvid : video id of image to use as cursor (will take control of id)
+-- clayer : which ordervalue for cursor to have
+-- pickdepth : how many vids beneath cvid should be concidered?
+-- cachepick : avoid unecessary
+-- hidden : start in hidden state or not
 --
-function mouse_setup(cvid, clayer, pickdepth, cachepick, hidden, opts)
+function mouse_setup(cvid, clayer, pickdepth, cachepick, hidden)
 	mstate.cursor = cvid;
 	mstate.hidden = false;
 	mstate.x = math.floor(VRESW * 0.5);
@@ -242,7 +244,7 @@ function mouse_setup(cvid, clayer, pickdepth, cachepick, hidden, opts)
 	mouse_cursorupd(0, 0);
 end
 
-function mouse_setup_native(resimg, opts)
+function mouse_setup_native(resimg)
 	local tmp = null_surface(1, 1);
 	local props = image_surface_properties(resimg);
 

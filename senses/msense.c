@@ -259,19 +259,18 @@ seek0:
 				cofs = lseek64(pch->fd, 0, SEEK_CUR);
 			}
 			else if (ev.tgt.ioevs[0].iv == 1){
-				if (cofs + buf_sz > pch->size){
-					lseek64(pch->fd, pch->size - buf_sz >pch->base ?
-						pch->base : pch->base + pch->size - buf_sz, SEEK_SET);
-				}
-				else
-					lseek64(pch->fd, buf_sz, SEEK_CUR);
+				ssize_t left = pch->base + pch->size - cofs;
+				if (left == 0)
+					goto seek0;
+
+				if (left > buf_sz)
+					cofs = lseek64(pch->fd, buf_sz, SEEK_CUR);
+
 				goto seek0;
 			}
 			else if (ev.tgt.ioevs[0].iv == -1){
-				if (cofs - buf_sz > pch->base)
-					lseek64(pch->fd, cofs - buf_sz, SEEK_SET);
-				else
-					lseek64(pch->fd, pch->base, SEEK_SET);
+				cofs = lseek64(pch->fd, cofs - buf_sz >= pch->base ?
+					cofs - buf_sz : pch->base, SEEK_SET);
 				goto seek0;
 			}
 		}

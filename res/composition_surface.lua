@@ -594,8 +594,8 @@ local function compsurf_input_sym(ctx, sym)
 	end
 
 	if (ctx.fullscreen) then
-		if (ctx.fullscreen.fullscreen_input) then
-			ctx.fullscreen:fullscreen_input(iotbl, ctx.fullscreen_vid);
+		if (ctx.fullscreen.fullscreen_input_sym) then
+			ctx.fullscreen:fullscreen_input_sym(sym, ctx.fullscreen_vid);
 		end
 		return;
 	end
@@ -650,7 +650,7 @@ local function compsurf_fullscreen(ctx)
 	show_image(ctx.fullscreen_vid);
 	image_tracetag(ctx.fullscreen_vid, "fullscreen");
 	image_sharestorage(ctx.selected.canvas, ctx.fullscreen_vid);
-	order_image(ctx.fullscreen_vid, max_current_image_order() + 1);
+	order_image(ctx.fullscreen_vid, ctx:max_order());
 	ctx.fullscreen = ctx.selected;
 
 --
@@ -674,6 +674,14 @@ local function compsurf_tick_windows(ctx, tc)
 			v:tick(tc);
 		end
 	end
+end
+
+--
+-- need to track this in order to not interfere with the
+-- software defined mouse cursor and other compsurfaces
+--
+local function compsurf_maxorder(ctx)
+	return 10 + (#ctx.windows * 10) + 1;
 end
 
 --
@@ -703,6 +711,7 @@ function compsurf_create(width, height, opts)
 		add_window = compsurf_add_window,
 		set_background = compsurf_background,
 		toggle_fullscreen = compsurf_fullscreen,
+		max_order = compsurf_maxorder,
 
 -- explicitly hint what state the cursor should be in
 		cursor_normal = function() end,

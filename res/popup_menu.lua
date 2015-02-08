@@ -122,9 +122,9 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	end
 
 	local index = 1;
-	popup.click = function(cpop)
+	popup.click = function(cpop, rv)
 		if (menutbl[index].handler) then
-			menutbl[index].handler(target);
+			menutbl[index].handler(target, rv);
 			menu_input(wm, popup, "ESCAPE", true);
 
 		elseif (menutbl[index].submenu) then
@@ -135,9 +135,13 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 			spawn_popupmenu(wm, mnu, target, cpop);
 
 		elseif (menutbl[index].value) then
-			menutbl.handler(target, menutbl[index].value);
+			menutbl.handler(target, menutbl[index].value, rv);
 			menu_input(wm, popup, "ESCAPE");
 		end
+	end
+
+	popup.rclick = function(cpop)
+		cpop.click(cpop, true);
 	end
 
 	popup.step = function(p, ns)
@@ -179,7 +183,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	show_image(capt);
 
 -- cheat with order to have submenus and captures work correctly
-	order_image(popup.anchor, max_current_image_order() + 1);
+	order_image(popup.anchor, wm:max_order());
 
 	local mh = {
 		name = "capture_mh",
@@ -195,5 +199,5 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 	popup:step(0);
 	popup.capt_mh = mh;
-	mouse_addlistener(mh, {"click"});
+	mouse_addlistener(mh, {"click", "rclick"});
 end

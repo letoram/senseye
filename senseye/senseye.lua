@@ -15,7 +15,7 @@ pending_lim = 4;
 --
 -- global, used in all menus and messages
 --
-menu_text_fontstr = "\\fdefault.ttf,16\\#aaaaaa ";
+menu_text_fontstr = "\\fdefault.ttf,16\\#cccccc ";
 
 --
 -- customized dispatch handlers based on registered sensor type
@@ -59,9 +59,12 @@ function senseye()
 		end
 	end
 
-	cursimg = load_image("cursor.png", 0, 10, 16);
-	mouse_setup_native(cursimg, {});
+-- uncomment for non-native cursor (would be visible in video recording)
+--	cursimg = load_image("cursor.png", 0, 10, 16);
+--	show_image(cursimg);
+--  mouse_setup(cursimg, 1000, 1, true);
 
+	mouse_setup_native(cursimg);
 --
 -- create a window manager for the composition surface
 --

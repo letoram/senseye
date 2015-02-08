@@ -8,6 +8,10 @@ local defaults = {
 	hlight_r = 0.0;
 	hlight_g = 1.0;
 	hlight_b = 0.0;
+	map_default = 10,
+	pack_default = 23,
+	alpha_default = 32,
+	sample_default = 256,
 };
 
 function gconfig_set(key, val)

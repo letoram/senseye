@@ -25,22 +25,22 @@ end
 local dpack_sub = {
 	{
 		label = "Intensity",
-		name  = "pack_intens",
+		name  = "pack_default",
 		value = 0
 	},
 	{
 		label = "Histogram Intensity",
-		name  = "pack_histo",
+		name  = "pack_default",
 		value = 1
 	},
 	{
 		label = "Tight (alpha)",
-		name  = "pack_tight",
+		name  = "pack_default",
 		value = 2
 	},
 	{
 		label = "Tight (no-alpha)",
-		name = "pack_tight_alpha",
+		name = "pack_default",
 		value = 3
 	}
 };
@@ -48,66 +48,78 @@ local dpack_sub = {
 local alpha_sub = {
 	{
 		label = "Full (no data)",
-		name  = "map_alpha_full",
+		name  = "alpha_default",
 		value = 0
 	},
 	{
 		label = "Shannon Entropy",
-		name  = "map_alpha_entropy",
+		name  = "alpha_default",
 		value = 2
 	},
 	{
 		label = "Pattern Signal",
-		name  = "map_alpha_signal",
+		name  = "alpha_default",
 		value = 1
 	}
 };
 
-alpha_sub.handler = function(wnd, value)
+alpha_sub.handler = function(wnd, value, rv)
 	target_graphmode(wnd.ctrl_id, 30 + value);
+	if (rv) then
+		gconfig_set("alpha_default", 30 + value);
+	end
 end
 
-dpack_sub.handler = function(wnd, value)
+dpack_sub.handler = function(wnd, value, rv)
 	target_graphmode(wnd.ctrl_id, 20 + value);
+	if (rv) then
+		gconfig_set("pack_default", 20 + value);
+	end
 end
 
 local space_sub = {
 	{
 		label = "Wrap",
-		name  = "map_wrap",
+		name  = "map_default",
 		value = 0
 	},
 	{
 		label = "Tuple",
-		name  = "map_tuple",
+		name  = "map_default",
 		value = 1
 	},
 	{
 		label = "Hilbert",
-		name  = "map_hilbert",
+		name  = "map_default",
 		value = 2
 	}
 };
 
-space_sub.handler = function(wnd, value)
+space_sub.handler = function(wnd, value, rv)
 	target_graphmode(wnd.ctrl_id, 10 + value);
+	if (rv) then
+		gconfig_set("map_default", 10 + value);
+	end
 end
 
 local clock_sub = {
 	{
 		label = "Buffer Limit",
-		name  = "clk_blk",
+		name  = "clock_default",
 		value = 0
 	},
 	{
 		label = "Sliding Window",
-		name  = "clk_slide",
+		name  = "clock_default",
 		value = 1
 	}
 };
 
-clock_sub.handler = function(wnd, value)
+clock_sub.handler = function(wnd, value, rv)
 	target_graphmode(wnd.ctrl_id, 0 + value);
+	if (rv) then
+		gconfig_set("clock_default", 10 + value);
+	end
 end
 
 function color_sub()
@@ -118,7 +130,8 @@ local sample_sub = {};
 for i=6,10 do
 	table.insert(sample_sub, {
 		label = tostring(math.pow(2, i)),
-		value = math.pow(2, i);
+		value = math.pow(2, i),
+		name = "sample_default",
 	});
 end
 sample_sub.handler = function(wnd, value)
@@ -203,5 +216,11 @@ return {
 		wnd.motion = lookup_motion;
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
 		wnd.dynamic_zoom = true;
+		target_graphmode(wnd.ctrl_id, gconfig_get("map_default"));
+		target_graphmode(wnd.ctrl_id, gconfig_get("pack_default"));
+		target_graphmode(wnd.ctrl_id, gconfig_get("alpha_default"));
+		target_displayhint(wnd.ctrl_id,
+			gconfig_get("sample_default"), gconfig_get("sample_default"));
+
 	end -- hook to set members before data comes
 };

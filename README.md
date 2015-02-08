@@ -15,6 +15,9 @@ As such it requires a recent and working arcan build, see _Compiling_ below
 for more details on a quick and dirty setup and _Starting_ for information
 on how to start the user interface and to connect a sensor.
 
+It current runs on Linux/FreeBSD/OSX, with a Windows port hiding in the near
+future.
+
 Compiling
 =====
 

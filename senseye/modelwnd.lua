@@ -48,7 +48,14 @@ local function modelwnd(wnd, model, shader)
 	window_shared(nw);
 
 	nw.fullscreen_input = function(wnd, iotbl)
-		print("fullscreen input");
+	end
+
+	nw.fullscreen_input_sym = function(wnd, sym)
+		if ((sym == BINDINGS["PSENSE_STEP_FRAME"] or
+			sym == BINDINGS["PSENSE_STEP_BACKWARD"]) and
+			wnd.parent.dispatch[sym] ~= nil) then
+			wnd.parent.dispatch[sym](wnd.parent);
+		end
 	end
 
 	nw.tick = function(wnd, step)

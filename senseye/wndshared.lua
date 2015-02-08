@@ -113,6 +113,17 @@ function setup_dispatch(dt)
 
 	shader_pcloud_pointsz(point_sz);
 
+-- just used for recording videos
+-- dt["F9"] = function(wm)
+--		local ns = null_surface(VRESW, VRESH);
+--		image_sharestorage(WORLDID, ns);
+--		image_set_txcos_default(ns, 1);
+--		show_image(ns);
+--		local buf = alloc_surface(VRESW, VRESH);
+--		define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=30:noaudio", {ns}, {},
+--			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
+--	end
+
 	dt[BINDINGS["POINTSZ_INC"]] = function(wm)
 		point_sz = point_sz + 0.5;
 		gconfig_set("point_size", point_sz);
