@@ -72,6 +72,7 @@ end
 
 dpack_sub.handler = function(wnd, value, rv)
 	target_graphmode(wnd.ctrl_id, 20 + value);
+	stepframe_target(wnd.ctrl_id, 0);
 	if (rv) then
 		gconfig_set("pack_default", 20 + value);
 	end

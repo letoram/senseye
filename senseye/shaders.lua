@@ -307,6 +307,9 @@ function shader_pcloud_pointsz(val)
 end
 
 function shader_update_range(wnd, low, high)
+	low = low < 0.0 and 0.0 or low;
+	high = high > 1.0 and 1.0 or high;
+
 	for k,v in ipairs(shader_groups) do
 		for j,j in ipairs(v) do
 			shader_uniform(j.shid, "highlight_range", "ff", NOPERSIST, low, high);

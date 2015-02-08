@@ -74,14 +74,31 @@ function spawn_histogram(wnd)
 	order_image(cursor, 1);
 	image_mask_set(cursor, MASK_UNPICKABLE);
 	table.insert(nw.autodelete, cursor);
+	nw.hgram_lock = false;
+	local cursor_label = null_surface(1, 1);
 
 	nw.motion = function(wnd, vid, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
 		local newx = (x-rprops.x > wnd.width) and wnd.width or (x-rprops.x);
 		move_image(cursor, newx, 0);
 		x = (x - rprops.x) / wnd.width;
-		y = (y - rprops.y) / wnd.height;
-		nw.hgram_slot = math.ceil(x * 255);
+		nw.hgram_slot = math.floor(x * 255);
+
+		local lockstr = nw.hgram_lock and ", lock: " .. tostring(nw.lockv) or "";
+
+		delete_image(cursor_label);
+		cursor_label = render_text(menu_text_fontstr ..
+			" " .. tostring(nw.hgram_slot) .. lockstr);
+		show_image(cursor_label);
+		image_inherit_order(cursor_label, true);
+		link_image(cursor_label, cursor);
+		move_image(cursor_label, 0, 10);
+
+		if (not nw.hgram_lock and nw.parent.highlight) then
+			nw.parent:highlight((nw.hgram_slot-0.5) / 255.0,
+				(nw.hgram_slot+0.5) / 255.0);
+		end
+
 		resize_image(cursor, 1, rprops.height);
 	end
 
@@ -92,6 +109,9 @@ function spawn_histogram(wnd)
 		if (wnd.wm.meta) then
 			return oldclick(wnd, vid, x, y);
 		end
+
+		nw.hgram_lock = not nw.hgram_lock;
+		nw.lockv = nw.hgram_slot;
 
 		if (nw.parent.highlight) then
 			nw.parent:highlight((nw.hgram_slot-0.5) / 255.0,

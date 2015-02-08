@@ -188,6 +188,13 @@ void* data_loop(void* th_data)
 
 					refresh_data(ch, lofs, bsz);
 				}
+				else if (ev.tgt.ioevs[0].iv == 0){
+					ch->switch_clock(ch, RW_CLK_BLOCK);
+					pthread_mutex_lock(&fsense.flock);
+					size_t lofs = fsense.ofs;
+					pthread_mutex_unlock(&fsense.flock);
+					refresh_data(ch, lofs, bsz);
+				}
 				else if (ev.tgt.ioevs[0].iv == 1){
 					ch->switch_clock(ch, RW_CLK_BLOCK);
 					pthread_mutex_lock(&fsense.flock);

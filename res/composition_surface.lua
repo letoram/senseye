@@ -246,6 +246,8 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	show_image(msg);
 	move_image(msg, 5, 2);
 	image_inherit_order(msg, true);
+	image_inherit_order(bg, true);
+	order_image(bg, 1);
 	link_image(msg, bg);
 	link_image(bg, ctx.border and ctx.border or ctx.canvas, anchor);
 
