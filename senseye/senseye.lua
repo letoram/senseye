@@ -60,10 +60,10 @@ function senseye()
 	end
 
 -- uncomment for non-native cursor (would be visible in video recording)
---	cursimg = load_image("cursor.png", 0, 10, 16);
 --	show_image(cursimg);
 --  mouse_setup(cursimg, 1000, 1, true);
 
+	cursimg = load_image("cursor.png", 0, 10, 16);
 	mouse_setup_native(cursimg);
 --
 -- create a window manager for the composition surface
@@ -72,6 +72,8 @@ function senseye()
 	table.insert(wm.handlers.select, focus_window);
 	table.insert(wm.handlers.deselect, defocus_window);
 	wm:set_background(load_image("background.png"));
+
+	switch_default_texfilter(FILTER_NONE); -- barely anything should be filtered
 
 --
 -- map bindings to default UI actions (wndshared.lua + keybindings.lua)
@@ -257,7 +259,6 @@ end
 --
 function new_connection(source, status)
 	local vid = target_alloc(connection_path, new_connection);
-	image_texfilter(vid, FILTER_NONE);
 
 	wndcnt = wndcnt + 1;
 	image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
