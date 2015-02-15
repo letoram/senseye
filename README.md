@@ -37,7 +37,7 @@ settings mentioned below). You also need cmake (2.8+) and gcc4.8+ or clang.
     mkdir build
     cd build
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
-     -DARCAN_SOURCE_DIR=../arcan/src ../senseye/senses
+     -DARCAN_SOURCE_DIR=../arcan/src ../senses
     make -j 4
 
 The arcan build configuration above disables a lot of features that we have
