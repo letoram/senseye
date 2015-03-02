@@ -47,7 +47,7 @@
 #include <sys/resource.h>
 #include <sys/ptrace.h>
 
-#include "senseye.h"
+#include "sense_supp.h"
 #include "font_8x8.h"
 #include "rwstat.h"
 
@@ -287,7 +287,7 @@ error:
 
 static FILE* get_map_descr(pid_t pid)
 {
-	char wbuf[sizeof("/proc//maps") + 8];
+	char wbuf[sizeof("/proc//maps") + 20];
 	snprintf(wbuf, sizeof(wbuf), "/proc/%d/maps", (int) msense.pid);
 	FILE* fpek = fopen(wbuf, "r");
 	return fpek;

@@ -6,7 +6,7 @@
 --
 -- popup drawing (ctrlh_wnd.lua)
 --
-local menu_text_fontstr = "\\fdefault.ttf,16\\#aaaaaa ";
+local menu_text_fontstr = "\\fdefault.ttf,16\\#cccccc ";
 local menu_border_color = {140, 140, 140};
 local menu_bg_color = {80, 80, 80};
 
@@ -22,6 +22,10 @@ local function menu_input(wm, popup, iv, cascade)
 		elseif (iv == "ESCAPE" or iv == "LEFT") then
 			mouse_droplistener(popup.capt_mh);
 			local p = popup.parent;
+			if (p ~= nil) then
+				local x, y = mouse_xy();
+				p:motion(0, x, y);
+			end
 
 -- need to track this so we can re-focus the right window on
 -- a deleted cascade
@@ -111,7 +115,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 		popup:move(x - 5, y - 5, true); -- true makes sure we don't flow outside win
 	else
 		local px, py = prev:abs_xy(prev.x, prev.y);
-		local px = px + prev.width + 2;
+		local px = px + prev.width + prev.borderw + 2;
 		py = py + image_surface_properties(prev.cursor).y + 5;
 		popup:move(px, py, true);
 	end
@@ -131,6 +135,8 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 			local mnu = menutbl[index].submenu;
 			if (type(mnu) == "function") then
 				mnu = mnu();
+			elseif (#mnu == 0) then
+				return;
 			end
 			spawn_popupmenu(wm, mnu, target, cpop);
 

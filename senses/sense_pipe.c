@@ -18,7 +18,7 @@
 #include <fcntl.h>
 
 #include <arcan_shmif.h>
-#include "senseye.h"
+#include "sense_supp.h"
 
 static size_t inp_buf_sz = 1024 * 1;
 static struct arcan_shmif_cont* shm;

@@ -142,21 +142,6 @@ static inline float shent(uint8_t* buf, size_t bufsz)
 	return shent_h(buf, bufsz, hgram);
 }
 
-/*
- * normalize histogram to 0..255 range
- */
-static inline void hnorm(uint32_t* hgram)
-{
-	uint32_t acc = 0;
-	for (int i = 0; i < 256; i++)
-		acc += hgram[ i ];
-
-	if (acc > 0){
-		for (int i = 0; i < 256; i++)
-			hgram[i] = (uint8_t) (255 * ((float)hgram[i] / (float) acc));
-	}
-}
-
 static inline void pack_bytes(
 	struct rwstat_ch_priv* chp, uint8_t* buf, size_t ofs)
 {
@@ -191,12 +176,6 @@ static inline void pack_bytes(
 	break;
 	case PACK_INTENS:
 		val = RGBA(buf[lofs], buf[lofs], buf[lofs], chp->alpha[ofs]);
-	break;
-	case PACK_HINTENS:
-	{
-		uint8_t hv = chp->hgram[buf[lofs]];
-		val = RGBA(hv, hv, hv, chp->alpha[ofs]);
-	}
 	break;
 	}
 
@@ -292,8 +271,6 @@ static void ch_step(struct rwstat_ch* ch)
 	};
 
 	size_t ntw = chp->base * chp->base;
-	outev.ext.framestatus.fhint = shent_h(chp->buf,
-			chp->buf_sz, chp->hgram) / 8.0;
 	ch->event(ch, &outev);
 
 /*
@@ -315,8 +292,6 @@ static void ch_step(struct rwstat_ch* ch)
 	if ( 1 == (chp->clock & (RW_CLK_SLIDE)) )
 		rebuild_hgram(chp);
 
-	if (chp->pack == PACK_HINTENS)
-		hnorm(chp->hgram);
 	if (chp->amode == RW_ALPHA_ENTBASE)
 		update_entalpha(chp, chp->base);
 	else if (chp->amode == RW_ALPHA_PTN)
@@ -325,6 +300,7 @@ static void ch_step(struct rwstat_ch* ch)
 	for (size_t i = 0; i < chp->buf_sz; i+= chp->pack_sz)
 		pack_bytes(chp, &chp->buf[i], i / chp->pack_sz);
 
+	chp->cont->addr->vpts = ch->priv->cnt_total;
 	arcan_shmif_signal(chp->cont, SHMIF_SIGVID);
 	chp->cnt_local = chp->cnt_total;
 
@@ -581,12 +557,9 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 		ch->switch_packing(ch, PACK_INTENS);
 	break;
 	case 21:
-		ch->switch_packing(ch, PACK_HINTENS);
-	break;
-	case 22:
 		ch->switch_packing(ch, PACK_TIGHT);
 	break;
-	case 23:
+	case 22:
 		ch->switch_packing(ch, PACK_TNOALPHA);
 	break;
 	case 30:
@@ -710,7 +683,7 @@ struct rwstat_ch* rwstat_addch(
 
 	res->priv->map = map;
 	res->priv->pack = pack;
-	res->priv->amode = RW_ALPHA_ENTBASE;
+	res->priv->amode = RW_ALPHA_FULL;
 	res->resize(res, c->addr->w);
 	res->priv->status_dirty = true;
 

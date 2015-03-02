@@ -153,14 +153,21 @@ end
 local function compsurf_wnd_destroy(wnd, cascade)
 -- drop connection to mouse handler, zero out table members
 -- and optionally cascade upwards
+	local wm = wnd.wm;
+
 	mouse_droplistener(wnd);
 
 	if (wnd.wm.selected == wnd) then
 		wnd.wm.selected = nil;
 	end
 
--- first recurse through all children
+-- need to copy the children list as the recursive destroy
+-- deregisters itself (!)
+	local list = {};
 	for i,v in ipairs(wnd.children) do
+		list[i] = v;
+	end
+	for i,v in ipairs(list) do
 		v:destroy();
 	end
 
@@ -242,6 +249,7 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	local bg = color_surface(props.width + 10, props.height + 5, 64, 64, 64);
 	blend_image(bg, 0.8);
 	image_mask_clear(msg, MASK_OPACITY);
+	image_tracetag(bg, "compsurf_wnd_msgbg");
 
 	show_image(msg);
 	move_image(msg, 5, 2);
@@ -320,7 +328,12 @@ local function compsurf_wnd_move(wnd, newx, newy, repos)
 	end
 end
 
-local function compsurf_wnd_resize(wnd, neww, newh)
+--
+-- interm marks that we will likely receive additional
+-- events close to this one, more important when we
+-- forward to a frameserver
+--
+local function compsurf_wnd_resize(wnd, neww, newh, interm)
 	resize_image(wnd.canvas, neww, newh);
 
 	wnd.width = neww;
@@ -526,7 +539,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		hover = compsurf_wnd_hover,
 	};
 
-	image_mask_set(wnd.anchor, MASK_UNPICKABLE);
+--	image_mask_set(wnd.anchor, MASK_UNPICKABLE);
 	image_tracetag(wnd.anchor, wnd.name .. "_anchor");
 	image_tracetag(wnd.canvas, wnd.name .. "_canvas");
 
@@ -561,6 +574,7 @@ local function compsurf_background(ctx, bg)
 		delete_image(ctx.background_id);
 	end
 
+	image_tracetag(bg, "compsurf_background");
 	link_image(bg, ctx.canvas);
 	show_image(bg);
 	move_image(bg, 0, 0);
@@ -738,6 +752,7 @@ function compsurf_create(width, height, opts)
 		},
 	};
 
+	image_tracetag(restbl.canvas, "compsurf_canvas");
 	image_mask_set(restbl.canvas, MASK_UNPICKABLE);
 	show_image(restbl.canvas);
 	seq = seq + 1;

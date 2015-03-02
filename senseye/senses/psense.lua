@@ -24,25 +24,26 @@ end
 
 local dpack_sub = {
 	{
-		label = "Intensity",
+		label = "Intensity (1b/pixel)",
 		name  = "pack_default",
 		value = 0
 	},
 	{
-		label = "Histogram Intensity",
+		label = "Tight (4b/pixel)",
 		name  = "pack_default",
 		value = 1
 	},
 	{
-		label = "Tight (alpha)",
-		name  = "pack_default",
-		value = 2
-	},
-	{
-		label = "Tight (no-alpha)",
+		label = "Meta (3b+meta/pixel)",
 		name = "pack_default",
-		value = 3
+		value = 2
 	}
+};
+
+local pack_sztbl = {
+	1,
+	4,
+	3
 };
 
 local alpha_sub = {
@@ -169,16 +170,19 @@ local function coord_map(wnd, x, y)
 	return msg;
 end
 
+function psense_decode_streaminfo(wnd, status)
+	local base = string.byte("0", 1);
+	wnd.pack_cur = string.byte(status.lang, 1) - base;
+	wnd.map_cur  = string.byte(status.lang, 2) - base;
+	wnd.size_cur = string.byte(status.lang, 3) - base;
+end
+
 local fsrv_ev = {
 	framestatus = function(wnd, source, status)
 		wnd.ofs = status.frame;
-		return true; -- don't forward
 	end,
 	streaminfo = function(wnd, source, status)
-		local base = string.byte("0", 1);
-		wnd.pack_cur = string.byte(status.lang, 1) - base;
-		wnd.map_cur  = string.byte(status.lang, 2) - base;
-		wnd.size_cur = string.byte(status.lang, 3) - base;
+		psense_decode_streaminfo(wnd, status);
 	end,
 	resized = function(wnd, source, status)
 		wnd.base = status.width;
@@ -186,7 +190,14 @@ local fsrv_ev = {
 			warning(string.format("psense:resize(%d,%d) expected pow2 and w=h",
 				status.width, status.height));
 		end
-		return false; -- forward
+
+		local torem = {};
+		for k,v in ipairs(wnd.children) do
+			table.insert(torem, v);
+		end
+		for k, v in ipairs(torem) do
+			v:destroy();
+		end
 	end
 };
 
@@ -213,7 +224,7 @@ return {
 	popup_sub = pop, -- sensor specific popup
 	init = function(wnd)
 		wnd.ofs = 0;
-		wnd.pack_sz = 3; -- default packing mode is 3
+		wnd.size_cur = 3; -- default packing mode is 2
 		wnd.motion = lookup_motion;
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
 		wnd.dynamic_zoom = true;

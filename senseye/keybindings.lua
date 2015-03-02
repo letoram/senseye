@@ -14,6 +14,7 @@ BINDINGS["RESIZE_X2"]     = "F2" -- + META shrinks
 BINDINGS["PLAYPAUSE"]     = " "
 BINDINGS["DESTROY"]       = "BACKSPACE" -- requires meta
 BINDINGS["CYCLE_SHADER"]  = "c"
+BINDINGS["TRANSLATORS"]   = "t" -- requires meta
 
 -- global
 BINDINGS["POINTSZ_INC"]   = "F7"

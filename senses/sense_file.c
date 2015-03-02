@@ -27,7 +27,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#include "senseye.h"
+#include "sense_supp.h"
 #include "rwstat.h"
 
 struct {

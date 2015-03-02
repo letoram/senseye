@@ -41,6 +41,7 @@ local function modelwnd(wnd, model, shader)
 	nw.model = model;
 	nw.mmode = "rotate";
 	nw.spinning = false;
+	nw:resize(wnd.width, wnd.height);
 
 	rotate3d_model(model, nw.xang, nw.yang, nw.zang);
 
@@ -131,12 +132,7 @@ end
 
 local function drop_scaletarget(wnd)
 	if (valid_vid(wnd.scaletarget)) then
-		for k,v in ipairs(wnd.autodelete) do
-			if (v == wnd.scaletarget) then
-				table.remove(wnd.autodelete, k);
-				break;
-			end
-		end
+		table.remove_match(wnd.autodelete, wnd.scaletarget);
 		delete_image(wnd.scaletarget);
 	end
 end
@@ -147,13 +143,11 @@ local function setup_scaletarget(wnd, vid)
 	wnd.scaletarget = alloc_surface(props.width, props.height);
 	wnd.scalebuf = null_surface(props.width, props.height);
 
-	image_texfilter(wnd.scalebuf, FILTER_NONE);
-	image_texfilter(wnd.scaletarget, FILTER_NONE);
-
 	switch_shader(wnd, wnd.scalebuf, shaders_2dview[1]);
 
 	show_image(wnd.scalebuf);
 	image_sharestorage(vid, wnd.scalebuf);
+
 	define_rendertarget(wnd.scaletarget, {wnd.scalebuf},
 		RENDERTARGET_DETACH, RENDERTARGET_NOSCALE);
 
@@ -176,6 +170,11 @@ local function deactivate_link(wnd)
 	wnd:set_message(img);
 end
 
+--
+-- There is a current and weird bug for the link that provides
+-- a notably different alpha channel in the linked version than
+-- what is in the normal one. Reason for this is unknown stil.
+--
 local function activate_link(wnd)
 	wnd.zoom_link = function(wnd, parent, txcos)
 		image_set_txcos(wnd.scalebuf, txcos);

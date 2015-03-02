@@ -34,7 +34,8 @@ function spawn_histogram(wnd)
 --
 	local nw = wnd.wm:add_window(hgram, {});
 	nw.reposition = repos_window;
-	nw:set_parent(wnd, ANCHOR_UR);
+	nw:set_parent(wnd, ANCHOR_LR);
+	nw:resize(wnd.width, wnd.height);
 	local destroy = nw.destroy;
 	nw.normalize = true;
 
@@ -56,11 +57,12 @@ function spawn_histogram(wnd)
 			stepframe_target(ibuf);
 		end
 	end
-	local frameh = {
-		frame = function()
+
+	nw.source_handler = function(wnd, source, status)
+		if (status.kind == "frame") then
 			nw.pending = nw.pending + 1;
 		end
-	};
+	end
 
 --
 -- highlight cursor that follows mouse motion and indicates
@@ -119,37 +121,19 @@ function spawn_histogram(wnd)
 		end
 	end
 
--- hook up the 'frame' event in the parent frameserver so
--- the readback and histogram update is only performed when there
--- is new data. Make sure it is de-registered if this window is
--- dropped.
-	table.insert(nw.parent.source_listener, frameh);
-	nw.destroy = function(wnd, cascade)
-		nw.parent:drop_zoom_handler(wnd);
-		if (nw.parent.source_listener) then
-			for k, v in ipairs(nw.parent.source_listener) do
-				if (v == frameh) then
-					table.remove(nw.parent.source_listener, k);
-					break;
-				end
-			end
-		end
-
-		destroy(wnd, cascade);
-	end
-
-	nw.popup = histo_popup;
-	nw.dispatch[BINDINGS["POPUP"]] = wnd.dispatch[BINDINGS["POPUP"]];
-
 	nw.zoom_link = function(self, wnd, txcos)
 		image_set_txcos(csurf, txcos);
 		rendertarget_forceupdate(ibuf);
 		stepframe_target(ibuf);
 	end
 
+	table.insert(nw.parent.source_listener, nw);
+	table.insert(nw.autodelete, ibuf);
 	nw.parent:add_zoom_handler(nw);
 
-	table.insert(nw.autodelete, ibuf);
+	nw.popup = histo_popup;
+	nw.dispatch[BINDINGS["POPUP"]] = wnd.dispatch[BINDINGS["POPUP"]];
+
 	nw.shader_group = shaders_1dplot;
 	nw.shind = 1;
 	nw.fullscreen_disabled = true;

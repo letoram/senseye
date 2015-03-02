@@ -21,7 +21,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#include "senseye.h"
+#include "sense_supp.h"
 #include "rwstat.h"
 
 static FILE* logout;
@@ -131,7 +131,8 @@ bool senseye_connect(const char* key, FILE* log,
 	dcont->context = cont_getctx;
 
 	setenv("ARCAN_CONNPATH", key, 0);
-		dcont->priv->cont = arcan_shmif_open(SEGID_APPLICATION, 0, darg);
+	dcont->priv->cont = arcan_shmif_open(
+		SEGID_SENSOR, SHMIF_CONNECT_LOOP, darg);
 	unsetenv("ARCAN_CONNPATH");
 
 	opts.args = *darg;
@@ -315,6 +316,9 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 			cp->framecount = 0;
 			cp->cont = arcan_shmif_acquire(&cpriv->cont,
 				NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+			if (!cp->cont.addr)
+				goto fail;
+
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
 				opts.def_map, opts.def_pack, &cp->cont);
 			rv->in_handle = cp->cont.epipe;

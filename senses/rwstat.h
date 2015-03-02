@@ -42,8 +42,6 @@ enum rwstat_pack {
 	PACK_TIGHT    = 0, /* first byte R, second G, third B, fourth A */
 	PACK_TNOALPHA = 1, /* first byte R, second G, third B, - full a */
 	PACK_INTENS   = 2, /* full alpha, same byte in R, G, B - full a */
-	PACK_HINTENS  = 3, /* lookup byte against normalized histogram, *
-	                    * same byte in R, G, B - full a             */
 };
 
 enum ptn_flags {

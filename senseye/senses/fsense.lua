@@ -40,7 +40,6 @@ local old_init = rtbl.init;
 
 rtbl.init = function(wnd)
 	old_init(wnd);
-	wnd.parent.source_listener = {};
 
 -- unpickable overlay that estimated the position of the
 -- currently presented datablock. This is based on an approximation
@@ -76,13 +75,15 @@ rtbl.init = function(wnd)
 
 -- subscribe to updates on the last pushed block and use that
 -- to draw the preview box
-	wnd.parent.source_listener["framestatus"] = function(wnd, source, status)
-		if (status.kind == "framestatus") then
-			last_pts = status.pts;
-			last_frame = status.frame;
-			wnd:update_preview();
+	table.insert(wnd.parent.source_listener, wnd.parent);
+	wnd.parent.source_handler =
+		function(wnd, source, status)
+			if (status.kind == "framestatus") then
+				last_pts = status.pts;
+				last_frame = status.frame;
+				wnd:update_preview();
+			end
 		end
-	end
 
 -- need to override the default resize behavior to account
 -- for the preview box being shaped differently

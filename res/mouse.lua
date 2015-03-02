@@ -421,6 +421,15 @@ function mouse_button_input(ind, active)
 	end
 
 	local hists = mouse_pickfun(mstate.x, mstate.y, mstate.pickdepth, 1);
+	if (DEBUGLEVEL > 2) then
+		local res = {};
+		print("button matches:");
+		for i, v in ipairs(hists) do
+			print("\t" .. tostring(v) .. ":" .. (image_tracetag(v) ~= nil
+				and image_tracetag(v) or "unknown"));
+		end
+		print("\n");
+	end
 
 	if (ind == 1 and active ~= mstate.btns[1]) then
 		lmbhandler(hists, active);

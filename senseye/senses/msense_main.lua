@@ -8,9 +8,6 @@
 -- translation as the local cursor (selected row) is drawn in
 -- the sensor, not in the UI.
 
-local main_ev = {
-};
-
 local disp = {};
 disp[BINDINGS["MSENSE_MAIN_UP"]] = function(wnd)
 	local iotbl = {kind = "digital", active = true, label = "UP"};
@@ -39,7 +36,6 @@ end
 
 local rtbl = {
 	name = "msense_main",
-	source_listener = main_ev,
 	dispatch_sub = disp,
 	popup_sub = {},
 	init = function(wnd)

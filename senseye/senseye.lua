@@ -1,4 +1,4 @@
---- Copyright 2014-2015, Björn Ståhl
+-- Copyright 2014-2015, Björn Ståhl
 -- License: 3-Clause BSD
 -- Reference: http://senseye.arcan-fe.com
 -- Description:
@@ -23,6 +23,21 @@ menu_text_fontstr = "\\fdefault.ttf,16\\#cccccc ";
 --
 type_handlers = {};
 
+translators = {};
+data_meta_popup = {
+	{
+		label = "Activate Translator...",
+		submenu = function()
+			return #translator_popup > 0 and translator_popup or {
+				{
+				label = "No Translators Connected",
+				handler = function() end
+				}
+			};
+		end
+	}
+};
+
 function senseye()
 	system_load("mouse.lua")();
 	symtable = system_load("symtable.lua")();
@@ -33,6 +48,7 @@ function senseye()
 	system_load("gconf.lua")();
 	system_load("wndshared.lua")();
 	system_load("shaders.lua")();
+	system_load("translators.lua")();
 --
 -- load sense- specific user interfaces (name matches the
 -- identification string that the connected frameserver sensor
@@ -71,7 +87,11 @@ function senseye()
 	wm = compsurf_create(VRESW, VRESH, {});
 	table.insert(wm.handlers.select, focus_window);
 	table.insert(wm.handlers.deselect, defocus_window);
-	wm:set_background(load_image("background.png"));
+	table.insert(wm.handlers.destroy, check_listeners);
+
+	local bgimg = load_image("background.png");
+	image_tracetag(bgimg, "background");
+	wm:set_background(bgimg);
 
 	switch_default_texfilter(FILTER_NONE); -- barely anything should be filtered
 
@@ -108,8 +128,10 @@ local function add_subwindow(parent, id)
 	wnd:set_parent(parent, ANCHOR_UR);
 	nudge_image(wnd.anchor, 2, 0);
 	image_shader(wnd.canvas, shaders_2dview[1].shid);
+	wnd.popup_meta = data_meta_popup;
 	wnd.shader_group = shaders_2dview;
 	wnd.shind = 1;
+	target_flags(id, TARGET_VSTORE_SYNCH);
 	return wnd;
 end
 
@@ -143,6 +165,12 @@ function error_message(note)
 	warning(note);
 end
 
+local function def_sourceh(wnd, source, status)
+	if (wnd.handler_tbl[status.kind]) then
+		wnd.handler_tbl[status.kind](wnd, source, status);
+	end
+end
+
 --
 -- switch a window to expose one set of UI functions in
 -- favor of another. Only really performed when a segment
@@ -159,14 +187,16 @@ function convert_type(wnd, th, basemenu)
 	end
 
 	wnd.popup = merge_menu(basemenu, th.popup_sub);
-
 	wnd.basename = th.name;
 	wnd.name = wnd.name .. "_" .. th.name;
+	wnd.map = th.map;
+
 	if (th.source_listener) then
-		table.insert(wnd.source_listener, th.source_listener);
+		wnd.source_handler = def_sourceh;
+		wnd.handler_tbl = th.source_listener;
+		table.insert(wnd.source_listener, wnd);
 	end
 
-	wnd.map = th.map;
 	th.init(wnd);
 
 	if (wm.selected == wnd) then
@@ -188,28 +218,16 @@ function subid_handle(source, status)
 		wnd.pending = wnd.pending - 1;
 	end
 
-	if (wnd.source_listener) then
-		local done = false;
-
-		for k, v in ipairs(wnd.source_listener) do
-			if (v[status.kind]) then
-				if (v[status.kind](wnd, source, status)) then
-					done = true;
-				end
-			end
-		end
-
-		if (done) then
-			return;
-		end
-	end
-
 	if (status.kind == "resized") then
 		wnd:resize(status.width, status.height);
 
 	elseif (status.kind == "ident") then
 		convert_type(wnd, type_handlers[status.message], subwnd_menu);
 	else
+	end
+
+	for i,v in ipairs(wnd.source_listener) do
+		v:source_handler(source, status);
 	end
 end
 
@@ -221,7 +239,7 @@ end
 function default_wh(source, status)
 	local wnd = wm:find(source);
 
-	if (status.kind == "resized") then
+	if (status.kind == "resized" and wnd ~= nil) then
 		wnd:resize(status.width, status.height);
 --
 -- currently permitting infinite subsegments
@@ -241,13 +259,41 @@ function default_wh(source, status)
 
 	elseif (status.kind == "ident") then
 		convert_type(wnd, type_handlers[status.message], {});
-
-	elseif (status.kind == "registered") then
---		print("window registered:", status.segkind);
 	end
 
-	if (wnd.source_listener and wnd.source_listener[status.kind]) then
-		wnd.source_listener[status.kind](wnd, source, status);
+	for k,v in ipairs(wnd.source_listener) do
+		v:source_handler(source, status);
+	end
+end
+
+--
+-- note: translators are initially considered to be on
+-- the same privilege level as the main senseye process,
+-- it is only individual sessions that are deemed tainted.
+-- Thus we assume that status.message is reasonable.
+--
+function translate_wh(source, status)
+	if (status.kind == "ident") then
+		if (translators[status.message] ~= nil) then
+			warning("translator for that type already exists, terminating.");
+			delete_image(source);
+			return;
+		else
+			translators[status.message] = source;
+			translators[source] = status.message;
+			table.insert(translator_popup, {
+				value = source,
+				label = string.gsub(status.message, "\\", "\\\\") -- filter more?
+			});
+		end
+	elseif (status.kind == "terminated") then
+		for k,v in ipairs(translator_popup) do
+			if (v.value == source) then
+				table.remove(translator_popup, k);
+				break;
+			end
+		end
+		table.remove_vmatch(translators, source);
 	end
 end
 
@@ -258,19 +304,37 @@ end
 -- but >currently< we expect the sensor to cooperate.
 --
 function new_connection(source, status)
+-- need to distinguish between a translator (data interpreter)
+-- and a sensor (data provider) as they have different usr-int schemes
+	if (status.kind ~= "registered") then
+		delete_image(source);
+		warning("connection attempted from uncooperative client." .. status.kind);
+
+	else
+		if (status.segkind == "sensor") then
+			target_updatehandler(source, default_wh);
+			local wnd = add_window(source);
+			wnd:select();
+			default_wh(source, status);
+
+		elseif (status.segkind == "encoder") then
+			target_updatehandler(source, translate_wh);
+
+		else
+			warning("attempted connection from unsupported type, " .. status.segkind);
+			delete_image(source);
+		end
+	end
+
 	local vid = target_alloc(connection_path, new_connection);
 
-	wndcnt = wndcnt + 1;
-	image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
-
 	if (not valid_vid(vid)) then
+		warning("connection limit reached, non-auth connections disabled.");
 		return;
 	end
 
-	target_updatehandler(source, default_wh);
-	local wnd = add_window(source);
-	wnd:select();
-	default_wh(source, status);
+	wndcnt = wndcnt + 1;
+	image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
 end
 
 function senseye_clock_pulse()

@@ -26,13 +26,13 @@
  * build the outer array, dump to header and replace
  */
 
-// Constant: font8x8_basic
+// Constant: builtin_font
 // Contains an 8x8 font map for unicode points U+0000 - U+007F (basic latin)
 
 static int fontw = 8;
 static int fonth = 8;
 
-static unsigned char font8x8_basic[128][8] = {
+static unsigned char builtin_font[128][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0001
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0002
@@ -179,21 +179,33 @@ static bool draw_box(struct arcan_shmif_cont* c, uint16_t x, uint16_t y,
 	return true;
 }
 
-static bool draw_text(struct arcan_shmif_cont* c, const char* msg,
+static inline void draw_char(struct arcan_shmif_cont* c, uint8_t ch,
 	uint16_t x, uint16_t y, shmif_pixel txcol)
 {
+	for (int row = 0; row < fonth && row + y < c->addr->h; row++)
+		for (int col = 0; col < fontw && col + x < c->addr->w; col++)
+			if (builtin_font[ch][row] & 1 << col)
+				c->vidp[c->addr->w * (row + y) + col + x] = txcol;
+}
+
+static void draw_text(struct arcan_shmif_cont* c, const char* msg,
+	uint16_t x, uint16_t y, shmif_pixel txcol)
+{
+	uint16_t cx = x;
+	uint16_t cy = y;
+
 	while (*msg){
 		uint8_t ch = *msg++;
+
 		if (ch > 127)
 			continue;
 
-			for (int row = 0; row < fonth && row + y < c->addr->h; row++)
-				for (int col = 0; col < fontw && col + x < c->addr->w; col++)
-					if (font8x8_basic[ch][row] & 1 << col)
-						c->vidp[c->addr->w * (row + y) + col + x] = txcol;
-
-			x += fontw;
+		if ('\n' == ch){
+			cx = x;
+			cy += fonth + 2;
 		}
 
-	return true;
+		draw_char(c, ch, cx, cy, txcol),
+		cx += fontw;
+	}
 }

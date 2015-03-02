@@ -8,10 +8,13 @@
 -- Exported Functions:
 --  focus_window(wnd)   hook to map to window manager
 --  defocus_window(wnd) hook to map to window manager
+--  check_listeners(wnd)hook to map to window manager for cleanup
 --  setup_dispatch(tbl) add basic input dispatch to table
 --  window_shared(wnd)  add basic popups etc. to window
 --  lookup_motion(wnd)  add overlay that shows agecant hex values on motion
 --  merge_menu(m1, m2)  combine two popup menus into one
+--  table.remove_match  find one occurence of (tbl, match) and remove
+--  repos_window(wnd)   handle for automated positioning
 --
 
 -- some more complex window setups are kept separately
@@ -44,6 +47,19 @@ local function wnd_gather(wnd)
 		if (#v.children > 0) then
 			wnd_gather(v);
 		end
+	end
+end
+
+function repos_window(wnd)
+	local props = image_surface_resolve_properties(wnd.canvas);
+	if (props.x + props.width < 10) then
+		nudge_image(wnd.anchor, 0 - props.x, 0);
+	end
+	if (props.y + props.height < 10) then
+		nudge_image(wnd.anchor, 0, 0 - props.y);
+	end
+	for i, v in ipairs(wnd.children) do
+		v:reposition();
 	end
 end
 
@@ -95,12 +111,12 @@ function merge_menu(m1, m2)
 	return res;
 end
 
-function ppot(val)
+local function ppot(val)
 	val = math.pow(2, math.floor( math.log(val) / math.log(2) ));
 	return val < 32 and 32 or val;
 end
 
-function npot(val)
+local function npot(val)
 	val = math.pow(2, math.ceil( math.log(val) / math.log(2) ));
 	return val < 32 and 32 or val;
 end
@@ -123,6 +139,7 @@ function setup_dispatch(dt)
 --		define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=30:noaudio", {ns}, {},
 --			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
 --	end
+--
 
 	dt[BINDINGS["POINTSZ_INC"]] = function(wm)
 		point_sz = point_sz + 0.5;
@@ -146,6 +163,16 @@ function setup_dispatch(dt)
 
 		elseif (wm.selected) then
 			wm.selected:deselect();
+		end
+	end
+
+	dt[BINDINGS["TRANSLATORS"]] = function(wm)
+		if (wm.fullscreen or wm.selected == nil) then
+			return;
+		end
+
+		if (wm.meta and #translator_popup > 0) then
+			spawn_popupmenu(wm, translator_popup);
 		end
 	end
 
@@ -199,6 +226,37 @@ function focus_window(wnd)
 	end
 end
 
+local function translate_2d(wnd, vid, x, y)
+-- figure out surface relative coordinate
+	local oprops = image_storage_properties(wnd.canvas);
+	local rprops = image_surface_resolve_properties(wnd.canvas);
+	x = (x - rprops.x) / rprops.width;
+	y = (y - rprops.y) / rprops.height;
+
+-- use the current textured coordinates rather than wnd.zoom_range etc.
+-- to get the benefit even if we do non-uniform magnification.
+	local txcos = image_get_txcos(wnd.canvas);
+	x = txcos[1] + x * (txcos[3] - txcos[1]);
+	y = txcos[2] + y * (txcos[6] - txcos[2]);
+
+-- translate into source input dimensions
+	x = math.floor(x * oprops.width);
+	y = math.floor(y * oprops.height);
+
+	return x, y;
+end
+
+--
+-- called on delete, make sure to drop the custom event
+-- listeners so we don't get dangling vid / table refs.
+--
+function check_listeners(wnd)
+	if (wnd.parent) then
+		table.remove_match(wnd.parent.zoomh, wnd);
+		table.remove_match(wnd.parent.source_listener, wnd);
+	end
+end
+
 function defocus_window(wnd, nw)
 	if (nw) then
 		if (not nw.flag_popup) then
@@ -222,18 +280,44 @@ local function update_zoom(wnd)
 	end
 
 	for i,v in ipairs(wnd.zoomh) do
-		v:zoom_link(wnd, txcos);
+		if (v.zoom_link) then
+			v:zoom_link(wnd, txcos);
+		end
 	end
+end
+
+function table.remove_match(tbl, match)
+	if (tbl == nil) then
+		return;
+	end
+
+	for k,v in ipairs(tbl) do
+		if (v == match) then
+			table.remove(tbl, k);
+			return true;
+		end
+	end
+
+	return false;
+end
+
+function table.remove_vmatch(tbl, match)
+	if (tbl == nil) then
+		return;
+	end
+
+	for k,v in pairs(tbl) do
+		if (v == match) then
+			tbl[k] = nil;
+			return true;
+		end
+	end
+	return false;
 end
 
 local function drop_zoom_handler(wnd, zoomh)
 	if (wnd.zoomh) then
-		for k,v in ipairs(wnd.zoomh) do
-			if (v == zoomh) then
-				table.remove(wnd.zoomh, k);
-				return;
-			end
-		end
+		table.remove_match(wnd.zoomh, zoomh);
 	end
 end
 
@@ -245,19 +329,6 @@ local function add_zoom_handler(wnd, zoomh)
 	drop_zoom_handler(wnd, zoomh);
 	table.insert(wnd.zoomh, zoomh);
 	update_zoom(wnd);
-end
-
-function repos_window(wnd)
-	local props = image_surface_resolve_properties(wnd.canvas);
-	if (props.x + props.width < 10) then
-		nudge_image(wnd.anchor, 0 - props.x, 0);
-	end
-	if (props.y + props.height < 10) then
-		nudge_image(wnd.anchor, 0, 0 - props.y);
-	end
-	for i, v in ipairs(wnd.children) do
-		v:reposition();
-	end
 end
 
 -- sample n pixels in a clamped square around around into overlay string,
@@ -349,7 +420,7 @@ function window_shared(wnd)
 
 	local prev_drag = wnd.drag;
 	wnd.drag = function(wnd, vid, x, y)
-		if (wnd.wm.meta) then
+		if (wnd.wm.meta and not wnd.dz) then
 			return prev_drag(wnd, vid, x, y);
 		end
 
@@ -386,6 +457,7 @@ function window_shared(wnd)
 				my = my - props.y;
 				wnd.dz = {mx, my, mx+1, my+1};
 				wnd.dzv = color_surface(1, 1, 255, 255, 255);
+				image_tracetag(wnd.dzv, "wnd_dynamic_zoom");
 				link_image(wnd.dzv, wnd.canvas);
 				image_inherit_order(wnd.dzv, true);
 				order_image(wnd.dzv, 1);
@@ -396,6 +468,8 @@ function window_shared(wnd)
 	end
 
 	wnd.drop = function(wnd, vid, x, y)
+		wnd.zoom_drag = false;
+
 		if (wnd.dynamic_zoom and wnd.dz) then
 			if (wnd.zoom_ofs[1] > 0) then
 				wnd.zoom_ofs[1] = 0.0;
@@ -431,15 +505,26 @@ function window_shared(wnd)
 		end
 	end
 
-	wnd.click = function(wnd, tbl)
+	wnd.click = function(wnd, tbl, x, y)
+		local rprops = image_surface_resolve_properties(wnd.canvas);
+		x, y = translate_2d(wnd, BADID, x, y);
+
 		wnd:select();
+		if (wnd.wm.meta and wnd.zoomh) then
+			for i,v in ipairs(wnd.zoomh) do
+				if (v.zoom_position) then
+					v:zoom_position(wnd, x, y);
+				end
+			end
+		end
 	end
 
 	wnd.rclick = function(wnd, tbl)
 		local wm = wnd.wm;
+		local popup = wnd.wm.meta and wnd.popup_meta or wnd.popup;
 		wnd:select();
-		if (wnd.popup and #wnd.popup > 0) then
-			spawn_popupmenu(wm, wnd.popup);
+		if (popup and #popup > 0) then
+			spawn_popupmenu(wm, popup);
 		end
 	end
 
@@ -472,7 +557,7 @@ function window_shared(wnd)
 	wnd.dispatch[BINDINGS["POPUP"]] = function(wnd)
 		local wm = wnd.wm;
 
-		if (wm.fullscreen) then
+		if (wm.fullscreen or wm.selected == nil) then
 			return;
 		end
 
@@ -489,31 +574,6 @@ function window_shared(wnd)
 		else
 			spawn_popupmenu(wm, wnd.popup);
 		end
-	end
-end
-
-local function translate_2d(wnd, vid, x, y)
--- figure out surface relative coordinate
-	local oprops = image_storage_properties(wnd.canvas);
-	local rprops = image_surface_resolve_properties(wnd.canvas);
-	x = (x - rprops.x) / rprops.width;
-	y = (y - rprops.y) / rprops.height;
-
--- use the current textured coordinates rather than wnd.zoom_range etc.
--- to get the benefit even if we do non-uniform magnification.
-	local txcos = image_get_txcos(wnd.canvas);
-	x = txcos[1] + x * (txcos[3] - txcos[1]);
-	y = txcos[2] + y * (txcos[6] - txcos[2]);
-
--- translate into source input dimensions
-	x = math.floor(x * oprops.width);
-	y = math.floor(y * oprops.height);
-
--- forward to the sensor that can translate into a source-
--- relative offset (text representation)
-	if (wnd.map) then
-		local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
-		wnd:set_message(img);
 	end
 end
 
@@ -570,12 +630,20 @@ controlwnd_menu = {
 	},
 };
 
+local function motion_2d(wnd, vid, x, y)
+	if (wnd.map) then
+		local x, y = translate_2d(wnd, BADID, x, y);
+		local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
+		wnd:set_message(img);
+	end
+end
+
 local subwnd_toggle = function(wnd)
-	if (wnd.motion == translate_2d) then
+	if (wnd.motion == motion_2d) then
 		wnd.motion = function() end;
 		wnd.message_recv = wnd;
 	else
-		wnd.motion = translate_2d;
+		wnd.motion = motion_2d;
 		wnd.message_recv = nil;
 	end
 end
