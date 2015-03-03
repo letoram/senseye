@@ -168,7 +168,8 @@ UI
 ====
 A better introduction to the UI will be posted in video form,
 there is too much experimentation going on still for that to
-be worthwhile.
+be worthwhile. Some keybindings can be replaced by editing the
+keybindings.lua file.
 
 Default Keybindings (META is set to RIGHT SHIFT):
 
@@ -179,6 +180,9 @@ _Data Windows_
      F3 - Zoom In (+Meta, Zoom Out)
      META + BACKSPACE - Destroy Window
      C - Cycle Active Shader
+     Click+Drag - Zoom in on Subset
+     Shift+Click - Set as focus offset for translators
+     META + RClick - Pull up translator menu
 
 _Global_
 
@@ -222,19 +226,13 @@ First, recall that all transfers from a sensor to senseye is performed
 over a shared memory mapping that is treated as a packed image, where
 the build-time default is a 32-bit red,green,blue,alpha interleaved buffer.
 
-_Packing_ (what is to be stored) controls how the sensor formats data,
-_intensity_ means that the same byte will be set in the red, green and
-blue channels). It is a sparse format that wastes a lot of bandwidth
-but may be useful when higher semantic markers are encoded in the
-alpha channel as the alpha resolution will be per byte rather than in
-groups of three or four.
-
-_histogram intensity_ is a variant of _intensity_ where the channel value
-will be the running total frequency of that particular byte value.
-_tight (alpha)_ is similar to a straight memcpy, each color channel will
-corrspond to one sampled value (so 4 bytes per pixel). _tight(no-alpha)_
-is the better trade-off and the default that uses three bytes per pixel
-and permits other data to be encoded in the alpha channel.
+_Packing_ (what is to be stored) controls how much data the sensor encodes
+in a _pixel_. In _intensity_ packing mode, RGB channels are all populated
+with the same byte. In _tight_ packing mode, all channels grab one byte each
+although the data window will render the data channel as opaque by default.
+In _Meta_ (which is the default), the RGB channels grab one byte each and
+then the alpha channel is populated with what the Metadata setting is
+currently.
 
 The _Metadata_ options specifies what additional data should be encoded in
 each transfer (which also depends on which channels that could be used
@@ -258,13 +256,14 @@ _Space Mapping_ finally, determines the order in which the packed bytes
 should be encoded in the image buffer. This greatly affects how the image
 will 'look' and different mapping schemes preserve or emphasize different
 properties. _Wrap_ is the easiest one in that the bytes will be stored in
-the order which they arrived. This has the problem of the last pixel on
-each row being connected data-wise with the first pixel on the next row
-even though they will be spatially distant from eachother. _Hilbert_ mapping
-scheme instead uses a space filling fractal (the hilbert curve) which
-preserves locality better. _Tuple_ mapping uses the byte-values in the
-data-stream to determine position (first byte X, second byte Y) to
-highlight some specific relationships between a tuple of bytes.
+the order which they arrived. This is typically what the translators expect,
+as some packing operations are non-reversible (_Tuple_ for instance).
+_Wrap_ has the problem of the last pixel on each row being connected data-wise
+with the first pixel on the next row even though they will be spatially
+distant from eachother. _Hilbert_ mapping scheme instead uses a space filling
+fractal (the hilbert curve) which preserves locality better. _Tuple_ mapping
+uses the byte-values in the data-stream to determine position (first byte X,
+second byte Y) to highlight some specific relationships between a tuple of bytes.
 
 Repository
 =====
@@ -279,9 +278,10 @@ _files that might be of interest)_
         histogram.lua    - basic per-frame statistics
         modelwnd.lua     - camera management, 3d mapping
     senses\
-        code for the main sensors and translators , primarily data acquisition
+        code for the main sensors and translators, primarily data acquisition
         (sense_file,mem,pipe.c) with some minor statistics and
         translation done in rwstat.c and event-loop management in sense_supp.c
+        xlt_* for translators, with xlt_supp doing event-loop management.
     res\
         (mostly cherry-picked from the arcan codebase)
         shared resources, fonts, support scripts for UI features, window
