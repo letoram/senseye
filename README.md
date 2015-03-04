@@ -21,7 +21,17 @@ future.
 Compiling
 =====
 
-This requires an arcan build to be present / installed, e.g. (assuming all
+Senseye uses [Capstone engine](http://www.capstone-engine.org), so Capstone
+must be installed beforehand. See more instructions at 
+http://capstone-engine.org/download.html, or build it from source like
+followings:
+
+    git clone https://github.com/aquynh/capstone.git
+    cd capstone
+    ./make.sh
+    sudo ./make.sh install
+
+Senseye also requires an arcan build to be present / installed, e.g. (assuming all
 dependencies are installed: OpenGL, SDL, Freetype and openal for the build
 settings mentioned below). You also need cmake (2.8+) and gcc4.8+ or clang.
 
