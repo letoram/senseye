@@ -53,15 +53,35 @@ local alpha_sub = {
 		value = 0
 	},
 	{
-		label = "Shannon Entropy",
+		label = "Pattern Signal",
+		name  = "alpha_default",
+		value = 1
+	},
+	{
+		label = "Entropy (base width)",
 		name  = "alpha_default",
 		value = 2
 	},
 	{
-		label = "Pattern Signal",
-		name  = "alpha_default",
-		value = 1
-	}
+		label = "Entropy (8 bytes)",
+		name = "alpha_default",
+		value = 5,
+	},
+	{
+		label = "Entropy (16 bytes)",
+		name = "alpha_default",
+		value = 6,
+	},
+	{
+		label = "Entropy (32 bytes)",
+		name = "alpha_default",
+		value = 7,
+	},
+	{
+		label = "Entropy (64 bytes)",
+		name = "alpha_default",
+		value = 8,
+	},
 };
 
 alpha_sub.handler = function(wnd, value, rv)

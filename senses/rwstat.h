@@ -67,8 +67,8 @@ struct rwstat_ch {
 /* force a transfer step even though parts of buffer state may be incomplete */
 	void (*tick)(struct rwstat_ch*);
 
-/* define a new desired base size */
-	void (*resize)(struct rwstat_ch*, size_t);
+/* define a new desired base size and new entropy block size */
+	void (*resize)(struct rwstat_ch*, size_t base);
 
 /* enqeue an event to propagate upwards */
 	void (*event)(struct rwstat_ch*, arcan_event*);

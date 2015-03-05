@@ -63,7 +63,7 @@ struct rwstat_ch_priv {
 
 /* we need a local intermediary buffer that we flush in
  * order to support switching modes of packing etc. */
-	size_t base;
+	size_t base, ent_base;
 	uint8_t* buf;
 	size_t buf_sz;
 
@@ -293,7 +293,7 @@ static void ch_step(struct rwstat_ch* ch)
 		rebuild_hgram(chp);
 
 	if (chp->amode == RW_ALPHA_ENTBASE)
-		update_entalpha(chp, chp->base);
+		update_entalpha(chp, chp->ent_base);
 	else if (chp->amode == RW_ALPHA_PTN)
 		update_ptnalpha(chp);
 
@@ -444,8 +444,6 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 	}
 
 /* changing mapping mode may require different packing dimensions */
-	ch_pack(ch, chp->pack);
-
 /* reset the buffer to reflect change in mapping mode, this doesn't
  * matter in CLK_BYTES but for other modes */
 	if (map == MAP_TUPLE){
@@ -461,9 +459,23 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 
 static void ch_alpha(struct rwstat_ch* ch, enum rwstat_alpha amode)
 {
-	ch->priv->amode = amode;
-	if (0 == amode)
-		memset(ch->priv->alpha, 0xff, ch->priv->base * ch->priv->base);
+	struct rwstat_ch_priv* chp = ch->priv;
+	if (amode != ch->priv->amode){
+		chp->amode = amode;
+		if (0 == amode)
+			memset(ch->priv->alpha, 0xff, ch->priv->base * ch->priv->base);
+		if (amode >= RW_ALPHA_ENTBASE){
+			chp->amode = RW_ALPHA_ENTBASE;
+			amode -= RW_ALPHA_ENTBASE;
+
+			if (amode)
+				chp->ent_base = 1 << amode;
+
+			if (amode == 0 || chp->ent_base > chp->base ||
+				chp->base % chp->ent_base != 0)
+				chp->ent_base = chp->base;
+		}
+	}
 }
 
 static void ch_reclock(struct rwstat_ch* ch, enum rwstat_clock clock)
@@ -500,12 +512,6 @@ static size_t ch_left(struct rwstat_ch* ch)
 
 static void ch_resize(struct rwstat_ch* ch, size_t base)
 {
-/* initial state, black! */
-	if (ch->priv->buf){
-		free(ch->priv->buf);
-		free(ch->priv->alpha);
-	}
-
 /*
  * It is possible to change mapping without elaborate sliding buffer
  * windows (some mappings will only be more sparse), but we cannot do
@@ -513,6 +519,11 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
  * how large the raw buffer needs to be.
  */
 	size_t bsqr = base * base;
+		if (ch->priv->buf){
+			free(ch->priv->buf);
+			free(ch->priv->alpha);
+	}
+
 	ch->priv->buf_sz = bsqr * ch->priv->pack_sz;
 	ch->priv->buf = malloc(ch->priv->buf_sz);
 	ch->priv->alpha = malloc(bsqr);
@@ -523,7 +534,6 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 	ch->priv->sf_x = (float) (base-1) / 255.0f;
 	ch->priv->sf_y = (float) (base-1) / 255.0f;
 
-/* will setup / rebuild LUTs etc. */
 	ch_map(ch, ch->priv->map);
 }
 
@@ -537,45 +547,49 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)
 		return false;
 
+	bool done = false;
 	switch (ev->tgt.ioevs[0].iv){
 	case 0:
-		ch->switch_clock(ch, RW_CLK_BLOCK);
+		done = (ch->switch_clock(ch, RW_CLK_BLOCK), true);
 	break;
 	case 1:
-	 	ch->switch_clock(ch, RW_CLK_SLIDE);
+		done = (ch->switch_clock(ch, RW_CLK_SLIDE), true);
 	break;
 	case 10:
-		ch->switch_mapping(ch, MAP_WRAP);
+		done = (ch->switch_mapping(ch, MAP_WRAP), true);
 	break;
 	case 11:
-		ch->switch_mapping(ch, MAP_TUPLE);
+		done = (ch->switch_mapping(ch, MAP_TUPLE), true);
 	break;
 	case 12:
-		ch->switch_mapping(ch, MAP_HILBERT);
+		done = (ch->switch_mapping(ch, MAP_HILBERT), true);
 	break;
 	case 20:
-		ch->switch_packing(ch, PACK_INTENS);
+		done = (ch->switch_packing(ch, PACK_INTENS), true);
 	break;
 	case 21:
-		ch->switch_packing(ch, PACK_TIGHT);
+		done = (ch->switch_packing(ch, PACK_TIGHT), true);
 	break;
 	case 22:
-		ch->switch_packing(ch, PACK_TNOALPHA);
+		done = (ch->switch_packing(ch, PACK_TNOALPHA), true);
 	break;
 	case 30:
-		ch->switch_alpha(ch, RW_ALPHA_FULL);
+		done = (ch->switch_alpha(ch, RW_ALPHA_FULL), true);
 	break;
 	case 31:
-		ch->switch_alpha(ch, RW_ALPHA_PTN);
+		done = (ch->switch_alpha(ch, RW_ALPHA_PTN), true);
 	break;
-	case 32:
-		ch->switch_alpha(ch, RW_ALPHA_ENTBASE);
-	break;
-	default:
+	}
+
+	if (ev->tgt.ioevs[0].iv >= 32){
+		ch->switch_alpha(ch, RW_ALPHA_ENTBASE + ev->tgt.ioevs[0].iv - 32);
+		done = true;
+	}
+
+	if (!done)
 		fprintf(stderr, "Senseye:FDsense:dispatch_event(),"
 			" unknown graphmode: %d\n", ev->tgt.ioevs[0].iv);
 		return false;
-	}
 
 	return true;
 }

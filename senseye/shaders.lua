@@ -11,23 +11,28 @@
 -- use function shader_menu(group, target) to impose the list of available
 -- shaders in a subgroup to a popup menu.
 --
--- The system used here is too rigid and should be reworked / redesigned.
--- The actual shader code should be dynamically generated and let the
--- user specify certain parameters:
---  . data mapping function (vertex stage)
---  . coloring function (fragment stage)
---  . optional lookup table (fragment stage)
---  . highlight value / range (fragment stage)
---
--- then cache common combinations and build those on launch (to lessen
--- the embarassing stalls imposed by shader compilation on some drivers).
---
+-- The system used here is too rigid and is in the process of being reworked.
+
+
+-- we generate the default color lookup table programatically,
+-- just a a gradient -- others can be loaded as images
+local default_lut = {};
+for i=0,255 do -- invisibles
+	default_lut[i*3+1] = 0;
+	default_lut[i*3+2] = i;
+	default_lut[i*3+3] = 0;
+end
+
+local global_lookup = load_image("color_lut/ascii.png");
+if (not valid_vid(global_lookup)) then
+	global_lookup = raw_surface(256, 1, 3, default_lut);
+end
+
 shaders_2dview = {
 	{
 		name = "Normal",
 		fragment = [[
 			uniform sampler2D map_tu0;
-			uniform vec3 col_highlight;
 			varying vec2 texco;
 
 			void main()
@@ -51,8 +56,7 @@ shaders_2dview = {
 			{
 				vec4 col = texture2D(map_tu0, texco);
 				float intens = (col.r + col.g + col.b) / 3.0;
-				if (highlight_range.x < 0.0 || intens < highlight_range.x ||
-					intens > highlight_range.y)
+				if (intens < highlight_range.x || intens > highlight_range.y)
 					gl_FragColor = vec4(0.5 * intens, 0.5 * intens, 0.5 * intens, 1.0);
 				else
 					gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
@@ -76,53 +80,23 @@ shaders_2dview = {
 		]],
 	},
 	{
-		name = "Alpha Lookup Table",
-		description = "Lookup Table and Alpha value determines color",
+		name = "Luma Lookup Table",
+		description = "Byte value determines color",
 		vertex = nil,
 		fragment = [[
 			uniform sampler2D map_tu0;
 			uniform sampler2D map_tu1;
-
 			varying vec2 texco;
-
 			void main()
 			{
-				float av = texture2D(map_tu0, texco).a;
-	 			vec3 col = texture2D(map_tu1, vec2(av, 0.0)).rgb;
-				gl_FragColor = vec4(col.r, col.g, col.b, 1.0);
+				vec3 col = texture2D(map_tu0, texco).rgb;
+				float luma = (col.r + col.g + col.b) / 3.0;
+				col = texture2D(map_tu1, vec2(luma, 0)).rgb;
+				gl_FragColor = vec4(col.rgb, 1.0);
 			}
 		]],
-		lookup = "palettes/gradients.png"
-	},
-	{
-		name = "Alpha Gradient",
-		description = "Green Alpha Channel",
-		vertex = nil,
-		fragment = [[
-		uniform sampler2D map_tu0;
-		varying vec2 texco;
-		void main()
-		{
-			float av = texture2D(map_tu0, texco).a;
-			gl_FragColor = vec4(0, av, 0, 1.0);
-		}
-		]]
-	},
-	{
-		name = "Red Entropy, Green Intensity",
-		description = "maps intensity into green channel, alpha into red",
-		vertex = nil,
-		fragment = [[
-		uniform sampler2D map_tu0;
-		varying vec2 texco;
-
-		void main()
-		{
-			vec4 col = texture2D(map_tu0, texco);
-			float intens = (col.r + col.g + col.b) / 3.0;
-			gl_FragColor = vec4(col.a, intens, 0.0, 1.0);
-		}
-	]]}
+		lookup = true
+	}
 };
 
 shaders_3dview_plane = {
@@ -161,6 +135,8 @@ shaders_3dview_plane = {
 
 local pc_triple_v = [[
 	uniform sampler2D map_tu0;
+	uniform sampler2D map_tu1;
+
 	uniform mat4 modelview;
 	uniform mat4 projection;
 	uniform float point_sz;
@@ -169,16 +145,31 @@ local pc_triple_v = [[
 	attribute vec4 vertex;
 
 	varying vec2 texco;
+	varying float intens;
 
 	void main(){
 		vec4 dv   = texture2D(map_tu0, texcoord);
 		vec4 vert = vertex;
+		intens = (dv.r + dv.g + dv.b) / 3.0;
 		vert.x    = 2.0 * dv.r - 1.0;
 		vert.y    = 2.0 * dv.g - 1.0;
 		vert.z    = 2.0 * dv.b - 1.0;
 		gl_Position = (projection * modelview) * vert;
 		gl_PointSize = point_sz;
 		texco = texcoord;
+	}
+]];
+
+local pc_lut_f = [[
+	uniform sampler2D map_tu0;
+	uniform sampler2D map_tu1;
+
+	varying vec2 texco;
+	varying float intens;
+
+	void main(){
+		vec4 col = texture2D(map_tu1, vec2(intens, 0.0));
+		gl_FragColor = vec4(col.rgb, 1.0);
 	}
 ]];
 
@@ -192,13 +183,15 @@ local pc_disp_v = [[
 	attribute vec4 vertex;
 
 	varying vec2 texco;
+	varying float intens;
 
 	void main(){
 		vec4 dv   = texture2D(map_tu0, texcoord);
 		vec4 vert = vertex;
-		vert.x    = (2.0 * texcoord.s) - 1.0;
-		vert.y    = (2.0 * texcoord.t) - 1.0;
-		vert.z    = (2.0 * (dv.r + dv.g + dv.b) / 3.0) - 1.0;
+		intens = (dv.r + dv.g + dv.b) / 3.0;
+		vert.x    = 2.0 * texcoord.s - 1.0;
+		vert.y    = 2.0 * texcoord.t - 1.0;
+		vert.z    = 2.0 * intens - 1.0;
 		gl_Position = (projection * modelview) * vert;
 		gl_PointSize = point_sz;
 		texco = texcoord;
@@ -209,47 +202,16 @@ shaders_3dview_pcloud = {
 	{
 	name = "Z Displace",
 	description = [[displacement, intensity determines z- val]],
-	fragment = [[
-		uniform sampler2D map_tu0;
-		varying vec2 texco;
-		void main(){
-			vec4 col = texture2D(map_tu0, texco);
-			float intens = (col.r + col.g + col.b) / 3.0;
-			gl_FragColor = vec4(col.a, 0.0, intens, 1.0);
-		}
-	]],
-	vertex = pc_disp_v
-	},
-	{
-	name = "Z Displace LUT",
-	description = [[displacement, alpha LUT sets color]],
-	fragment = [[
-		uniform sampler2D map_tu0;
-		uniform sampler2D map_tu1;
-		varying vec2 texco;
-		void main(){
-			float av = texture2D(map_tu0, texco).a;
- 			vec3 col = texture2D(map_tu1, vec2(av, 0.0)).rgb;
-			gl_FragColor = vec4(col.r, col.g, col.b, 1.0);
-		}
-	]],
-	lookup = "palettes/gradients.png",
-	vertex = pc_disp_v
+	fragment = pc_lut_f,
+	vertex = pc_disp_v,
+	lookup = true,
 	},
 	{
 	name = "triple",
 	description = [[triple, first byte x, second y, third z]],
 	vertex = pc_triple_v,
-	fragment = [[
-		uniform sampler2D map_tu0;
-		varying vec2 texco;
-
-		void main(){
-			vec4 col = texture2D(map_tu0, texco);
-			float intens = (col.r + col.g + col.b) / 3.0;
-			gl_FragColor = vec4(intens, col.a, 0.0, 1.0);
-		}
-	]],
+	fragment = pc_lut_f,
+	lookup = true,
 	}
 };
 
@@ -291,12 +253,6 @@ for k,v in ipairs(shader_groups) do
 	for j,m in ipairs(v) do
 		m.shid = build_shader(m.vertex, m.fragment, m.name);
 		shader_uniform(m.shid, "highlight_range", "ff", NOPERSIST, -1.0, -1.0);
-		if (m.lookup) then
-			local n = m.lookup;
-			m.lookup = load_image(m.lookup);
-			image_texfilter(m.lookup, FILTER_NONE);
-			image_tracetag(m.lookup, "LUT:" .. n);
-		end
 	end
 end
 
@@ -318,14 +274,24 @@ function shader_update_range(wnd, low, high)
 end
 
 function switch_shader(wnd, target, shtbl)
+	if (shtbl == nil) then
+		shtbl = wnd.shtbl;
+	end
+
+	if (target == nil) then
+		print("wnd.model:", wnd.model);
+		target = wnd.model ~= nil and wnd.model or wnd.canvas;
+	end
+
 	image_shader(target, shtbl.shid);
 
 -- always drop current frameset
 	image_framesetsize(target, 1);
+	wnd.shtbl = shtbl;
 
 	if (shtbl.lookup) then
 		image_framesetsize(target, 2, FRAMESET_MULTITEXTURE);
-		set_image_as_frame(target, shtbl.lookup, 1);
+		set_image_as_frame(target, global_lookup, 1);
 	end
 
 	local msg = render_text(menu_text_fontstr .. "Shader: " .. shtbl.name);
@@ -340,13 +306,48 @@ function switch_shader(wnd, target, shtbl)
 
 		if (shtbl.lookup) then
 			image_framesetsize(wnd.wm.fullscreen_vid, 2, FRAMESET_MULTITEXTURE);
-			set_image_as_frame(wnd.wm.fullscreen_vid, shtbl.lookup, 1);
+			set_image_as_frame(wnd.wm.fullscreen_vid, global_lookup, 1);
 		end
+	end
+end
+
+local function load_new_lut(wnd, val, id)
+	local newimg = load_image(val, asynch);
+
+	if (valid_vid(newimg) and valid_vid(global_lookup)) then
+		delete_image(global_lookup);
+		global_lookup = newimg;
+	end
+
+	if (wnd.parent and wnd.parent.shtbl) then
+		switch_shader(wnd.parent);
 	end
 end
 
 function shader_menu(group, target)
 	local rt = {
+	{
+		label = "Lookup Texture...",
+		submenu = function()
+			local res = glob_resource("color_lut/*.png");
+			if (res == nil or #res == 0) then
+				return {
+					label = "No results matching: color_lut/*.png",
+					handler = function() end
+				};
+			else
+				local rt = {};
+				for k,v in ipairs(res) do
+					table.insert(rt, {
+						label = v,
+						value = "color_lut/" .. v
+					});
+					rt.handler = load_new_lut;
+				end
+				return rt;
+			end
+		end
+	}
 	};
 
 	for k, v in ipairs(group) do

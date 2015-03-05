@@ -37,6 +37,7 @@ struct {
 	size_t fmap_sz;
 	size_t ofs;
 	size_t bytes_perline;
+	size_t ent_size;
 
 	int pipe_in;
 	int pipe_out;

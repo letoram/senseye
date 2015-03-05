@@ -214,7 +214,8 @@ local pc_menu = {
 		handler = function(wnd)
 			local props = image_storage_properties(wnd.parent.canvas);
 			delete_image(wnd.model);
-			local pc = build_pointcloud(props.width * props.height);
+			local pc = build_pointcloud(props.width * props.height, 2);
+			force_image_blend(pc, BLEND_ADD);
 			image_sharestorage(wnd.parent.canvas, pc);
 			show_image(pc);
 			wnd.model = pc;
@@ -290,7 +291,8 @@ local plane_menu = {
 
 function spawn_pointcloud(wnd)
 	local props = image_storage_properties(wnd.canvas);
-	local pc = build_pointcloud(props.width * props.height);
+	local pc = build_pointcloud(props.width * props.height, 2);
+	force_image_blend(pc, BLEND_ADD);
 	local new = modelwnd(wnd, pc, shaders_3dview_pcloud[1]);
 	new.shader_group = shaders_3dview_pcloud;
 	new.popup = merge_menu(pc_menu, model_menu);
