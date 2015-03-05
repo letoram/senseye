@@ -245,6 +245,10 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 		delete_image(ctx.message);
 	end
 
+	if (type(msg) == "string") then
+		msg = render_text(menu_text_fontstr .. string.gsub(msg, "\\", "\\\\"));
+	end
+
 	local props = image_surface_properties(msg);
 	local bg = color_surface(props.width + 10, props.height + 5, 64, 64, 64);
 	blend_image(bg, 0.8);
@@ -463,7 +467,8 @@ local function input_stub()
 end
 
 local function input_dispatch(wnd, sym, active)
-	if (wnd.wm.meta and wnd.parent and wnd.parent.dispatch[sym]) then
+	if (wnd.wm.meta and wnd.parent and wnd.dispatch[sym] == nil
+		and wnd.parent.dispatch[sym]) then
 		wnd = wnd.parent;
 	end
 

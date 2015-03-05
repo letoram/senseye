@@ -15,6 +15,7 @@
 --  merge_menu(m1, m2)  combine two popup menus into one
 --  table.remove_match  find one occurence of (tbl, match) and remove
 --  repos_window(wnd)   handle for automated positioning
+--  copy_surface(vid)   readback and create a new raw surface
 --
 
 -- some more complex window setups are kept separately
@@ -331,13 +332,6 @@ local function add_zoom_handler(wnd, zoomh)
 	update_zoom(wnd);
 end
 
--- sample n pixels in a clamped square around around into overlay string,
--- x, y is the primary value and should be highlighted as such
--- then (clamped) +- sw, +- sh taking packing into account
-local function get_hexstr(tbl, w, h, x, y, sw, sh, pack)
---		local r, g, b, a = tbl:get(x, y, 3);
-end
-
 function lookup_motion(wnd, vid, x, y)
 	if (not wnd.wm.meta) then
 		return;
@@ -351,10 +345,6 @@ function lookup_motion(wnd, vid, x, y)
 			local x, y = mouse_xy();
 			x = x - props.x;
 			y = y - props.y;
---			wnd.message_recv:set_message( get_hexstr(tbl,
---				w, h, x, y, wnd.message_recv.msg_w * 2,
---				wnd.message_recv.msg_h, wnd.pack_sz )
---			);
 		end
 		);
 	end
@@ -601,6 +591,13 @@ local views_sub = {
 		label = "Histogram",
 		name = "view_histogram",
 		handler = spawn_histogram
+	},
+	{
+		label = "Pattern Finder",
+		name = "view_patfind",
+		handler = function(wnd)
+			spawn_patfind(wnd, copy_surface(wnd.canvas));
+		end
 	}
 };
 
@@ -678,6 +675,25 @@ local function dump_full(wnd)
 	local name = gen_dumpname(wnd.basename, "raw");
 	save_screenshot(name, FORMAT_RAW32, wnd.ctrl_id);
 	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+end
+
+function copy_surface(vid)
+	local newimg = BADID;
+
+	image_access_storage(vid, function(tbl, w, h)
+		local out = {};
+		for y=1,h do
+			for x=1,w do
+				local r,g, b = tbl:get(x-1, y-1, 3);
+				table.insert(out, r);
+				table.insert(out, g);
+				table.insert(out, b);
+			end
+		end
+		newimg = raw_surface(w, h, 3, out);
+	end);
+
+	return newimg;
 end
 
 local function dump_noalpha(wnd)

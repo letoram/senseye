@@ -46,6 +46,7 @@ function senseye()
 	system_load("composition_surface.lua")();
 	system_load("popup_menu.lua")();
 	system_load("gconf.lua")();
+	system_load("patfind.lua")();
 	system_load("wndshared.lua")();
 	system_load("shaders.lua")();
 	system_load("translators.lua")();
@@ -190,6 +191,10 @@ function convert_type(wnd, th, basemenu)
 	wnd.basename = th.name;
 	wnd.name = wnd.name .. "_" .. th.name;
 	wnd.map = th.map;
+	wnd.alert = function(wnd, source_id)
+		wnd.tick = nil;
+		wnd.pending = 0;
+	end
 
 	if (th.source_listener) then
 		wnd.source_handler = def_sourceh;

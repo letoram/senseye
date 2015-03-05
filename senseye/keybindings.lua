@@ -30,6 +30,10 @@ BINDINGS["STEP_BACKWARD"] = "s"
 BINDINGS["STRAFE_LEFT"] = "a"
 BINDINGS["STRAFE_RIGHT"] = "d"
 
+-- pattern finder
+BINDINGS["PFIND_INC"] = "RIGHT" -- increase match threshold
+BINDINGS["PFIND_DEC"] = "LEFT" -- decrease match threshold
+
 -- sensor specific
 BINDINGS["PSENSE_PLAY_TOGGLE"] = " "
 BINDINGS["PSENSE_STEP_FRAME"]  = "RIGHT"
