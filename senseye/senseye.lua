@@ -134,7 +134,6 @@ local function add_subwindow(parent, id)
 	wnd:set_parent(parent, ANCHOR_UR);
 	nudge_image(wnd.anchor, 2, 0);
 	image_shader(wnd.canvas, shaders_2dview[1].shid);
-	wnd.popup_meta = data_meta_popup;
 	wnd.shader_group = shaders_2dview;
 	wnd.shind = 1;
 	target_flags(id, TARGET_VSTORE_SYNCH);

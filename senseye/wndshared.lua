@@ -744,7 +744,9 @@ subwnd_menu = {
 	},
 	{
 		label = "Translation...",
-		submenu = wnd_xl
+		submenu = function()
+			return data_meta_popup[1].submenu();
+		end
 	},
 	{
 		label = "Dump...",
