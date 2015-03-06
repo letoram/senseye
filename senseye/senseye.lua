@@ -46,7 +46,6 @@ function senseye()
 	system_load("composition_surface.lua")();
 	system_load("popup_menu.lua")();
 	system_load("gconf.lua")();
-	system_load("patfind.lua")();
 	system_load("wndshared.lua")();
 	system_load("shaders.lua")();
 	system_load("translators.lua")();

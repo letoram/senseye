@@ -263,6 +263,10 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	link_image(msg, bg);
 	link_image(bg, ctx.border and ctx.border or ctx.canvas, anchor);
 
+	if (anchor == ANCHOR_LL) then
+		move_image(bg, 0, -1 * (props.height+5));
+	end
+
 	ctx.message = bg;
 	if (expiration) then
 		expire_image(bg, expiration);

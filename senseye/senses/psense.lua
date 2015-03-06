@@ -41,9 +41,9 @@ local dpack_sub = {
 };
 
 local pack_sztbl = {
-	1,
 	4,
-	3
+	3,
+	1
 };
 
 local alpha_sub = {
@@ -195,7 +195,8 @@ function psense_decode_streaminfo(wnd, status)
 	wnd.pack_cur = string.byte(status.lang, 1) - base;
 	wnd.map_cur  = string.byte(status.lang, 2) - base;
 	wnd.size_cur = string.byte(status.lang, 3) - base;
-	wnd.pack_sz  = pack_sztbl[wnd.pack_cur];
+	wnd.pack_sz  = pack_sztbl[wnd.pack_cur+1];
+
 	if (wnd.pack_sz == nil) then
 		wnd:message("Warning: received broken streaminfo");
 	end

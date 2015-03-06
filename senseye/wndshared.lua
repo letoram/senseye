@@ -21,6 +21,8 @@
 -- some more complex window setups are kept separately
 system_load("histogram.lua")();
 system_load("modelwnd.lua")();
+system_load("distgram.lua")();
+system_load("patfind.lua")();
 
 local function wnd_reset(wnd)
 	wnd.zoom_range = 1.0;
@@ -591,6 +593,11 @@ local views_sub = {
 		label = "Histogram",
 		name = "view_histogram",
 		handler = spawn_histogram
+	},
+	{
+		label = "Distance Tracker",
+		name = "view_distgram",
+		handler = spawn_distgram
 	},
 	{
 		label = "Pattern Finder",
