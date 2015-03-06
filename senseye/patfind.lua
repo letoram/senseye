@@ -84,21 +84,17 @@ local function set_calc(nw, abuf, canv)
 				nw.in_signal = false;
 			end
 		end
-
--- #in pattern and not already in? set border to green and in
--- and pause (and possibly notepad trigger).
--- out pattern and in pattern? set border to red
-
 	end);
 end
 
 --
 -- New window that shares the same storage as the data window
--- + a manual copy at creation that will be used as reference
--- match_frag shader provides the delta comparison, wrap these
--- in a calctarget and on step, add deviances and compare against
--- set trigger. If the match is sufficient, signal / show that
--- we have a match and pause the parent.
+-- + a reference image that will be checked against on every
+-- new data-frame. If the combined delta (which varies with
+-- the shader that defines the delta method) exceeds a certain
+-- threshold we are 'in signal' (which will take a deviation in
+-- offset larger than a fraction of a window to be considered
+-- 'out of signal'.
 --
 function spawn_patfind(wnd, refimg)
 	local props = image_storage_properties(wnd.canvas);

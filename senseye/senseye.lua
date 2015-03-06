@@ -50,6 +50,12 @@ function senseye()
 	system_load("wndshared.lua")();
 	system_load("shaders.lua")();
 	system_load("translators.lua")();
+
+	if (API_VERSION_MAJOR <= 0 and API_VERSION_MINOR < 9) then
+		return shutdown("Arcan Lua API version is too old, " ..
+			"please upgrade your arcan installation");
+	end
+
 --
 -- load sense- specific user interfaces (name matches the
 -- identification string that the connected frameserver sensor
@@ -311,6 +317,19 @@ end
 function new_connection(source, status)
 -- need to distinguish between a translator (data interpreter)
 -- and a sensor (data provider) as they have different usr-int schemes
+	if (status.kind == "connected") then
+		local vid = target_alloc(status.key, new_connection);
+
+		if (not valid_vid(vid)) then
+			warning("connection limit reached, non-auth connections disabled.");
+			return;
+		end
+
+		wndcnt = wndcnt + 1;
+		image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
+		return;
+	end
+
 	if (status.kind ~= "registered") then
 		delete_image(source);
 		warning("connection attempted from uncooperative client." .. status.kind);
@@ -330,16 +349,6 @@ function new_connection(source, status)
 			delete_image(source);
 		end
 	end
-
-	local vid = target_alloc(connection_path, new_connection);
-
-	if (not valid_vid(vid)) then
-		warning("connection limit reached, non-auth connections disabled.");
-		return;
-	end
-
-	wndcnt = wndcnt + 1;
-	image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
 end
 
 function senseye_clock_pulse()
