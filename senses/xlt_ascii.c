@@ -72,11 +72,17 @@ static size_t find_lf(enum linefeed_mode mode, size_t buf_sz, uint8_t* buf)
 {
 	size_t pos = 0;
 
-	while (pos < buf_sz){
-		if (mode == LF_ACCEPT_LF && buf[pos++] == '\n')
-			return pos;
-		else if (mode == LF_ACCEPT_CRLF && buf[pos] == '\r' && buf[pos++] == '\n')
-			;
+	if (mode == LF_ACCEPT_LF){
+		while(pos < buf_sz)
+			if (buf[pos++] == '\n')
+				return pos;
+	}
+	else if (mode == LF_ACCEPT_CRLF){
+		while(pos < buf_sz-1)
+			if (buf[pos] == '\r' && buf[pos+1] == '\n')
+				return pos + 2;
+			else
+				pos++;
 	}
 
 	return pos;
@@ -148,8 +154,10 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 /* then draw / sample at offset */
 		for (size_t row = fonth+2; row < out->addr->h - fonth; row += fonth + 2){
 			size_t nch = find_lf(actx->lfm, buf_sz, buf);
-			for (size_t col = actx->col; col < nch; col++)
-				draw_ch(out, buf[col], col, row);
+			size_t ind = actx->col;
+				for (size_t col = 2;
+					col < out->addr->w - fontw && ind < nch; col += fontw + 2)
+				draw_ch(out, buf[ind++], col, row);
 
 			buf += nch;
 			buf_sz -= nch;

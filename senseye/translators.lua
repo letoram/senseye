@@ -84,7 +84,7 @@ function activate_translator(wnd, value)
 
 	neww.input_sym = function(self, sym)
 		if (sym ~= "LEFT" and sym ~= "RIGHT" and sym ~= "UP"
-			and sym ~= "DOWN") then
+			and sym ~= "DOWN" and sym ~= "TAB") then
 			return;
 		end
 
