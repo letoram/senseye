@@ -145,7 +145,7 @@ static void* process(void* inarg)
 			}
 			if (sess->input && ev.category == EVENT_IO)
 				if (sess->input(&sess->out, &ev))
-					update_buffers(sess, true);
+					update_buffers(sess, false);
 		}
 		else
 			;

@@ -115,7 +115,6 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 /* based on CRLF mode and desired left row / column, forward buf */
 	struct ascii_user* actx = out->user;
-
 	if (newdata)
 		actx->row = actx->col = 0;
 
