@@ -463,18 +463,20 @@ function window_shared(wnd)
 		wnd.zoom_drag = false;
 
 		if (wnd.dynamic_zoom and wnd.dz) then
-			if (wnd.zoom_ofs[1] > 0) then
+			if (wnd.in_zoom) then
 				wnd.zoom_ofs[1] = 0.0;
 				wnd.zoom_ofs[2] = 0.0;
 				wnd.zoom_ofs[3] = 1.0;
 				wnd.zoom_ofs[4] = 1.0;
 				wnd:update_zoom();
+				wnd.in_zoom = false;
 			else
 				local x, y, w, h = get_positions(wnd.dz, wnd.width, wnd.height);
 				wnd.zoom_ofs[1] = x / wnd.width;
 				wnd.zoom_ofs[2] = y / wnd.height;
 				wnd.zoom_ofs[3] = w / wnd.width;
 				wnd.zoom_ofs[4] = h / wnd.height;
+				wnd.in_zoom = true;
 				wnd:update_zoom();
 			end
 

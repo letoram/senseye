@@ -109,7 +109,7 @@ function senseye()
 	local lp = target_alloc(connection_path, new_connection);
 	if (not valid_vid(lp)) then
 		return
-			shutdown("couldn't allocate connection_path (" .. connection_path ")");
+			shutdown("couldn't allocate connection_path (" .. connection_path .. ")");
 	end
 	image_tracetag(lp, connection_path .. "conn_" .. tonumber(wndcnt));
 end
