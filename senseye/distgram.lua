@@ -123,20 +123,28 @@ local gen_lut = {
 	gen_distimg_pack4
 };
 
-local function disttbl_motion(wnd, vid, x, y)
-	local rprops = image_surface_resolve_properties(wnd.canvas);
-	local newx = (x-rprops.x > wnd.width) and wnd.width or (x-rprops.x);
-	move_image(wnd.cursor, newx, 0);
-	resize_image(wnd.cursor, 1, rprops.height);
-	x = (x - rprops.x) / wnd.width;
-	local slot = math.floor(x * 255);
+local function goto_slot(wnd, id)
+	id = id < 0 and 0 or id;
+	id = id > 255 and 255 or id;
+
+	wnd.slot = id;
+	local xp = (wnd.width / 256) * id;
+	move_image(wnd.cursor, xp, 0);
+
+	local sz = wnd.width >= 256 and wnd.width / 256 or 1;
+	resize_image(wnd.cursor, sz, wnd.height);
 
 	local labelstr = string.format("%sbyte(%d) - %s", menu_text_fontstr,
-		slot, (wnd.distances == nil or wnd.distances[slot] == nil)
-		and "not found" or (tostring(wnd.distances[slot] .. " bytes")));
+		wnd.slot, (wnd.distances == nil or wnd.distances[wnd.slot] == nil)
+		and "not found" or (tostring(wnd.distances[wnd.slot] .. " bytes")));
 
 	local msg = render_text(labelstr);
 	wnd:set_message(msg);
+end
+
+local function disttbl_motion(wnd, vid, x, y)
+	local rprops = image_surface_resolve_properties(wnd.canvas);
+	goto_slot(wnd, math.floor((x - rprops.x) / wnd.width * 255));
 end
 
 function spawn_distgram(wnd)
@@ -157,7 +165,7 @@ function spawn_distgram(wnd)
 	defocus_window(nw);
 	switch_shader(nw, nw.canvas, shaders_1dplot[1]);
 	nw.motion = disttbl_motion;
-	nw:resize(wnd.width, wnd.height);
+	nw:resize(256, 256);
 
 	local cursor = color_surface(1, wnd.height, 0, 255, 0);
 	blend_image(cursor, 0.8);
@@ -167,12 +175,21 @@ function spawn_distgram(wnd)
 	image_mask_set(cursor, MASK_UNPICKABLE);
 	table.insert(nw.autodelete, cursor);
 	nw.cursor = cursor;
+	nw.slot = 0;
 
 	nw.update_disttbl = function()
 		if (gen_lut[wnd.pack_sz]) then
 			gen_lut[wnd.pack_sz](nw, nw.canvas,
 				wnd.canvas, nw.sample_x, nw.sample_y);
 		end
+	end
+
+	nw.dispatch["RIGHT"] = function()
+		goto_slot(nw, nw.slot + 1);
+	end
+
+	nw.dispatch["LEFT"] = function()
+		goto_slot(nw, nw.slot - 1);
 	end
 
 	nw.source_handler = function(nw, source, status)
