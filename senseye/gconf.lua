@@ -9,8 +9,8 @@ local defaults = {
 	hlight_g = 1.0;
 	hlight_b = 0.0;
 	map_default = 10,
-	pack_default = 23,
-	alpha_default = 32,
+	pack_default = 20,
+	alpha_default = 30,
 	sample_default = 256,
 };
 
