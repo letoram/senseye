@@ -17,6 +17,26 @@ local histo_popup = {
 	}
 };
 
+local function goto_position(nw, slot)
+	slot = slot < 0 and 0 or slot;
+	slot = slot > 255 and 255 or slot;
+	nw.hgram_slot = slot;
+
+	local sz = nw.width > 256 and nw.width / 256 or 1;
+	resize_image(nw.cursor, sz, nw.height);
+	move_image(nw.cursor, slot * math.floor(nw.width / 256), 0);
+
+	local slotstr = tostring(slot);
+
+	if (nw.lockv) then
+		slotstr = slotstr .. ":" .. tostring(nw.lockv);
+	else
+		nw.parent:highlight((slot-0.1)/255, (slot+1)/255);
+	end
+
+	nw:set_message(slotstr);
+end
+
 function spawn_histogram(wnd)
 -- create composition buffer, intermediate buffer and histogram
 -- buffer. Setup a calctarget that imposes the histogram unto to
@@ -77,31 +97,14 @@ function spawn_histogram(wnd)
 	image_mask_set(cursor, MASK_UNPICKABLE);
 	table.insert(nw.autodelete, cursor);
 	nw.hgram_lock = false;
-	local cursor_label = null_surface(1, 1);
+	nw.cursor_label = null_surface(1, 1);
+	nw.cursor = cursor;
 
 	nw.motion = function(wnd, vid, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
 		local newx = (x-rprops.x > wnd.width) and wnd.width or (x-rprops.x);
-		move_image(cursor, newx, 0);
 		x = (x - rprops.x) / wnd.width;
-		nw.hgram_slot = math.floor(x * 255);
-
-		local lockstr = nw.hgram_lock and ", lock: " .. tostring(nw.lockv) or "";
-
-		delete_image(cursor_label);
-		cursor_label = render_text(menu_text_fontstr ..
-			" " .. tostring(nw.hgram_slot) .. lockstr);
-		show_image(cursor_label);
-		image_inherit_order(cursor_label, true);
-		link_image(cursor_label, cursor);
-		move_image(cursor_label, 0, 10);
-
-		if (not nw.hgram_lock and nw.parent.highlight) then
-			nw.parent:highlight((nw.hgram_slot-0.5) / 255.0,
-				(nw.hgram_slot+0.5) / 255.0);
-		end
-
-		resize_image(cursor, 1, rprops.height);
+		goto_position(wnd, math.floor(x * 255), y - rprops.y);
 	end
 
 -- overload the default click-handler and use default click for
@@ -119,6 +122,23 @@ function spawn_histogram(wnd)
 			nw.parent:highlight((nw.hgram_slot-0.5) / 255.0,
 				(nw.hgram_slot+0.5) / 255.0);
 		end
+	end
+
+	nw.rclick = function(wnd, vid, x, y)
+		nw.lockv = nil;
+		goto_position(nw, nw.hgram_slot);
+	end
+
+	nw.zoom_position = function(self, wnd, x, y, r, g, b, a)
+		local pos = 1;
+		if (wnd.pack_sz == 1) then
+			pos = r;
+		elseif (wnd.pack_sz == 3) then
+			pos = math.floor((r + g + b) / 3.0);
+		elseif (wnd.pack_sz == 4) then
+			pos = math.floor((r + g + b + a) / 4.0);
+		end
+		goto_position(nw, pos);
 	end
 
 	nw.zoom_link = function(self, wnd, txcos)

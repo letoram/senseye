@@ -33,6 +33,21 @@ local function wnd_reset(wnd)
 	wnd:update_zoom();
 end
 
+local function zoom_position(wnd, x, y)
+	wnd:select();
+	if (wnd.zoomh) then
+		for i,v in ipairs(wnd.zoomh) do
+			if (v.zoom_position) then
+				local r, g, b, a;
+				image_access_storage(wnd.canvas, function(tbl, w, h)
+					r, g, b, a = tbl:get(x, y, 4);
+				end);
+				v:zoom_position(wnd, x, y, r, g, b, a);
+			end
+		end
+	end
+end
+
 local function wnd_gather(wnd)
 	local off_x = 0;
 	local off_y = 0;
@@ -359,8 +374,10 @@ end
 
 local function motion_2d(wnd, vid, x, y)
 	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
+		local x, y = translate_2d(wnd, BADID, x, y);
+		zoom_position(wnd, x, y);
+
 		if (wnd.map) then
-			local x, y = translate_2d(wnd, BADID, x, y);
 			local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
 			wnd:set_message(img);
 		end
@@ -519,15 +536,7 @@ function window_shared(wnd)
 	wnd.click = function(wnd, tbl, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
 		x, y = translate_2d(wnd, BADID, x, y);
-
-		wnd:select();
-		if (wnd.wm.meta and wnd.zoomh) then
-			for i,v in ipairs(wnd.zoomh) do
-				if (v.zoom_position) then
-					v:zoom_position(wnd, x, y);
-				end
-			end
-		end
+		zoom_position(wnd, x, y);
 	end
 
 	wnd.rclick = function(wnd, tbl)

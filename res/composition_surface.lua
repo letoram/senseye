@@ -252,7 +252,7 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	end
 
 	local props = image_surface_properties(msg);
-	local bg = color_surface(props.width + 10, props.height + 5, 64, 64, 64);
+	local bg = color_surface(props.width + 10, props.height + 5, 0, 0, 0);
 	blend_image(bg, 0.8);
 	image_mask_clear(msg, MASK_OPACITY);
 	image_tracetag(bg, "compsurf_wnd_msgbg");

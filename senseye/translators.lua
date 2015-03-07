@@ -37,7 +37,7 @@ function activate_translator(wnd, value)
 		neww.in_handler = true;
 
 		if (status.kind == "resized") then
-			neww:resize(status.width, status.height);
+			neww:resize(status.width, status.height)
 		end
 
 		neww.in_handler = false;
@@ -60,7 +60,7 @@ function activate_translator(wnd, value)
 	neww.fullscreen_disabled = true;
 	neww:set_parent(wnd, ANCHOR_LL);
 	neww.reposition = repos_window;
-	neww.translator_out = tgtgtt;
+	neww.translator_out = tgt;
 	neww.ctrl_id = vid;
 	neww:select();
 	neww.old_resize = neww.resize;
@@ -96,6 +96,15 @@ function activate_translator(wnd, value)
 		target_input(tgt, iotbl);
 	end
 
+-- need this to protect from I/O storms where high-samplerate
+-- devices fill the queue in the target
+	neww.tick = function()
+		if (neww.input_queue ~= nil) then
+			target_input(tgt, neww.input_queue);
+			neww.input_queue = nil;
+		end
+	end
+
 -- we treat these as "click" events in that the set the base
 -- buffer ofset in the output segment
 	neww.zoom_position = function(self, wnd, px, py)
@@ -108,7 +117,7 @@ function activate_translator(wnd, value)
 			pressure = 1,
 			size = 1
 		};
-		target_input(tgt, iotbl);
+		neww.input_queue = iotbl;
 	end
 
 	wnd:add_zoom_handler(neww);
