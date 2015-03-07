@@ -51,6 +51,12 @@ local function modelwnd(wnd, model, shader)
 	nw.fullscreen_input = function(wnd, iotbl)
 	end
 
+	wnd.zoom_link = function(wnd, parent, txcos)
+		image_set_txcos(model, txcos);
+	end
+
+	wnd.parent:add_zoom_handler(wnd);
+
 	nw.fullscreen_input_sym = function(wnd, sym)
 		if ((sym == BINDINGS["PSENSE_STEP_FRAME"] or
 			sym == BINDINGS["PSENSE_STEP_BACKWARD"]) and
@@ -123,106 +129,7 @@ local function modelwnd(wnd, model, shader)
 	return nw;
 end
 
---
--- The scaletarget indirection is needed for linking sampling
--- coordinate buffers to the parent. It creates a null surface
--- with a shared storage to which the zoom- texture coordinates
--- are applied.
---
-
-local function drop_scaletarget(wnd)
-	if (valid_vid(wnd.scaletarget)) then
-		table.remove_match(wnd.autodelete, wnd.scaletarget);
-		delete_image(wnd.scaletarget);
-	end
-end
-
-local function setup_scaletarget(wnd, vid)
-	drop_scaletarget(wnd);
-	local props = image_storage_properties(vid);
-	wnd.scaletarget = alloc_surface(props.width, props.height);
-	wnd.scalebuf = null_surface(props.width, props.height);
-
-	switch_shader(wnd, wnd.scalebuf, shaders_2dview[1]);
-
-	show_image(wnd.scalebuf);
-	image_sharestorage(vid, wnd.scalebuf);
-
-	define_rendertarget(wnd.scaletarget, {wnd.scalebuf},
-		RENDERTARGET_DETACH, RENDERTARGET_NOSCALE);
-
-	table.insert(wnd.autodelete, wnd.scaletarget);
-	rendertarget_forceupdate(wnd.scaletarget);
-	return buf;
-end
-
-local function deactivate_link(wnd)
-	wnd.zoom_link = nil;
-	drop_scaletarget(wnd);
-	wnd.parent:drop_zoom_handler(wnd);
-
-	wnd.update_zoom = wnd.parent_zoom;
-	image_sharestorage(wnd.parent.canvas, wnd.model);
-	wnd.scaletarget = nil;
-	wnd.parent_zoom = nil;
-
-	local img, lines = render_text(menu_text_fontstr .. "link disabled");
-	wnd:set_message(img);
-end
-
---
--- There is a current and weird bug for the link that provides
--- a notably different alpha channel in the linked version than
--- what is in the normal one. Reason for this is unknown stil.
---
-local function activate_link(wnd)
-	wnd.zoom_link = function(wnd, parent, txcos)
-		image_set_txcos(wnd.scalebuf, txcos);
-		rendertarget_forceupdate(wnd.scaletarget);
-		rendertarget_forceupdate(wnd.rendertarget);
-	end
-
-	setup_scaletarget(wnd, wnd.parent.canvas);
-	image_sharestorage(wnd.scaletarget, wnd.model);
-
-	wnd.parent:add_zoom_handler(wnd);
-	local img, lines = render_text(menu_text_fontstr .. "link enabled");
-	wnd:set_message(img);
-end
-
-local link_menu = {
-	{
-			label = "Toggle",
-			name = "link_toggle",
-			handler = function(wnd)
-				if (wnd.zoom_link) then
-					deactivate_link(wnd);
-				else
-					activate_link(wnd);
-				end
-			end
-	}
-};
-
 local pc_menu = {
--- rebuild needed to manually support rebuilding the internal representation
--- if the underlying storage changes from the user specifying different
--- packing schemes
-	{
-		label = "Rebuild",
-		name = "pc_submenu_rebuild",
-		handler = function(wnd)
-			local props = image_storage_properties(wnd.parent.canvas);
-			delete_image(wnd.model);
-			local pc = build_pointcloud(props.width * props.height, 2);
-			force_image_blend(pc, BLEND_ADD);
-			image_sharestorage(wnd.parent.canvas, pc);
-			show_image(pc);
-			wnd.model = pc;
-			rendertarget_attach(wnd.rendertarget, pc, RENDERTARGET_DETACH);
-			switch_shader(wnd, wnd.model, shaders_3dview_pcloud[wnd.shind]);
-		end
-	},
 --
 -- one might want to change the sample- set (texture coordinates) in
 -- the parent window and have them reflected
@@ -249,12 +156,7 @@ local model_menu = {
 			forward3d_model(wnd.camera, -4.0);
 			wnd.spinning = nil;
 		end
-	},
-	{
-		label = "Sample Coordinates...",
-		name = "model_link",
-		submenu = link_menu
-	},
+	}
 };
 
 local plane_menu = {

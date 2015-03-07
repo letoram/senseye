@@ -11,7 +11,6 @@
 --  check_listeners(wnd)hook to map to window manager for cleanup
 --  setup_dispatch(tbl) add basic input dispatch to table
 --  window_shared(wnd)  add basic popups etc. to window
---  lookup_motion(wnd)  add overlay that shows agecant hex values on motion
 --  merge_menu(m1, m2)  combine two popup menus into one
 --  table.remove_match  find one occurence of (tbl, match) and remove
 --  repos_window(wnd)   handle for automated positioning
@@ -273,8 +272,19 @@ end
 local function update_zoom(wnd)
 	local s1 = wnd.zoom_ofs[1];
 	local t1 = wnd.zoom_ofs[2];
-	local s2 = wnd.zoom_ofs[3] + wnd.zoom_ofs[1];
-	local t2 = wnd.zoom_ofs[4] + wnd.zoom_ofs[2];
+	local s2 = wnd.zoom_ofs[3];
+	local t2 = wnd.zoom_ofs[4];
+
+	local step_s = (s2 - s1) / wnd.width;
+	local step_t = (t2 - t1) / wnd.height;
+
+-- align against grid to lessen precision effects in linked windows
+	s1 = s1 - math.fmod(s1, step_s);
+	t1 = t1 - math.fmod(t1, step_t);
+	s2 = s2 + math.fmod(s2, step_s);
+	t2 = t2 + math.fmod(t2, step_t);
+	t2 = t2 > 1.0 and 1.0 or t2;
+	s2 = s2 > 1.0 and 1.0 or s2;
 
 	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
 	image_set_txcos(wnd.canvas, txcos);
@@ -334,21 +344,27 @@ local function add_zoom_handler(wnd, zoomh)
 	update_zoom(wnd);
 end
 
-function lookup_motion(wnd, vid, x, y)
-	if (not wnd.wm.meta) then
-		return;
+local function clamp_zoom(wnd)
+	local zs = 1.0 / wnd.zoom_range;
+	if (wnd.zoom_ofs[3] > 1.0) then
+		wnd.zoom_ofs[1] = 1.0 - zs;
+		wnd.zoom_ofs[3] = 1.0;
 	end
+	if (wnd.zoom_ofs[4] > 1.0) then
+		wnd.zoom_ofs[2] = 1.0 - zs;
+		wnd.zoom_ofs[4] = 1.0;
+	end
+end
 
--- by default, this is just the window itself (disabled when translation
--- is toggled) but
-	if (wnd.message_recv) then
-		image_access_storage(wnd.canvas, function(tbl, w, h)
-			local props = image_surface_resolve_properties(wnd.canvas);
-			local x, y = mouse_xy();
-			x = x - props.x;
-			y = y - props.y;
+local function motion_2d(wnd, vid, x, y)
+	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
+		if (wnd.map) then
+			local x, y = translate_2d(wnd, BADID, x, y);
+			local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
+			wnd:set_message(img);
 		end
-		);
+	else
+		wnd.motion_beg = nil;
 	end
 end
 
@@ -356,32 +372,78 @@ end
 -- sort out position and dimensions for a canvas clipped dynamic selection
 --
 local function get_positions(dz, maxw, maxh)
-	local p1, p2, w, h;
+	local x1, y1, x2, y2;
 
 	if (dz[1] < dz[3]) then
-		p1 = dz[1];
-		w = dz[3] - dz[1];
+		x1 = dz[1];
+		x2 = dz[3];
 	else
-		p1 = dz[3];
-		w = dz[1] - dz[3];
+		x1 = dz[3];
+		x2 = dz[1];
 	end
 
 	if (dz[2] < dz[4]) then
-		p2 = dz[2];
-		h = dz[4] - dz[2];
+		y1 = dz[2];
+		y2 = dz[4];
 	else
-		p2 = dz[4];
-		h = dz[2] - dz[4];
+		y1 = dz[4];
+		y2 = dz[2];
 	end
 
-	p1 = p1 <= 0 and 0 or p1;
-	p2 = p2 <= 0 and 0 or p2;
-	w = p1+w > maxw and maxw - p1 or w;
-	h = p2+h > maxh and maxh - p2 or h;
-	w = w <= 0 and 1 or w;
-	h = h <= 0 and 1 or h;
+	y2 = y2 > maxh and maxh or y2;
+	x2 = x2 > maxw and maxw or x2;
+	x1 = x1 < 0 and 0 or x1;
+	y1 = y1 < 0 and 0 or y1;
+	x2 = x2 == x1 and x1 + 1 or x2;
+	y2 = y2 == y1 and y1 + 1 or y2;
 
-	return p1, p2, w, h;
+	return x1, y1, x2, y2;
+end
+
+--
+-- two ways of zooming, uniform (which permits drag->pan)
+-- and custom which is reset when repeated
+--
+local function wnd_drag(wnd, vid, x, y)
+	if (wnd.wm.meta and not wnd.dz) then
+		return wnd.prev_drag(wnd, vid, x, y);
+	end
+
+-- pan and clamp
+	if (wnd.zoom_range > 1.0) then
+		local zs = 1.0 / wnd.zoom_range;
+		local step_s = zs / wnd.width;
+		local step_t = zs / wnd.height;
+		wnd.zoom_ofs[1] = wnd.zoom_ofs[1] + x * step_s;
+		wnd.zoom_ofs[2] = wnd.zoom_ofs[2] + y * step_t;
+		wnd.zoom_ofs[1] = wnd.zoom_ofs[1] < 0.0 and 0.0 or wnd.zoom_ofs[1];
+		wnd.zoom_ofs[2] = wnd.zoom_ofs[2] < 0.0 and 0.0 or wnd.zoom_ofs[2];
+		wnd.zoom_ofs[3] = wnd.zoom_ofs[1] + zs;
+		wnd.zoom_ofs[4] = wnd.zoom_ofs[2] + zs;
+		wnd:clamp_zoom(wnd);
+		wnd:update_zoom();
+	elseif wnd.dynamic_zoom then
+		if (wnd.dz) then
+			wnd.dz[3] = wnd.dz[3] + x;
+			wnd.dz[4] = wnd.dz[4] + y;
+			local x1,y1,x2,y2 = get_positions(wnd.dz, wnd.width, wnd.height);
+			move_image(wnd.dzv, x1, y1);
+			resize_image(wnd.dzv, x2-x1, y2-y1);
+		else
+			local props = image_surface_resolve_properties(wnd.canvas);
+			local mx, my = mouse_xy();
+			mx = mx - props.x;
+			my = my - props.y;
+			wnd.dz = {mx, my, mx+1, my+1};
+			wnd.dzv = color_surface(1, 1, 255, 255, 255);
+			image_tracetag(wnd.dzv, "wnd_dynamic_zoom");
+			link_image(wnd.dzv, wnd.canvas);
+			image_inherit_order(wnd.dzv, true);
+			order_image(wnd.dzv, 1);
+			blend_image(wnd.dzv, 0.8);
+			move_image(wnd.dzv, wnd.dz[1], wnd.dz[2]);
+		end
+	end
 end
 
 --
@@ -391,6 +453,7 @@ function window_shared(wnd)
 	wnd.update_zoom = update_zoom;
 	wnd.add_zoom_handler = add_zoom_handler;
 	wnd.drop_zoom_handler = drop_zoom_handler;
+	wnd.clamp_zoom = clamp_zoom;
 
 -- chain- override destroy to deregister any zoom handlers
 	local destroy = wnd.destroy;
@@ -410,58 +473,11 @@ function window_shared(wnd)
 	wnd.zoom_range = 1.0;
 	image_texfilter(wnd.canvas, FILTER_NONE);
 
-	local prev_drag = wnd.drag;
-	wnd.drag = function(wnd, vid, x, y)
-		if (wnd.wm.meta and not wnd.dz) then
-			return prev_drag(wnd, vid, x, y);
-		end
+	wnd.motion = motion_2d;
 
--- pan and clamp
-		if (wnd.zoom_range > 1.0) then
-			local step = 1.0 / wnd.zoom_range;
-			local ns = wnd.zoom_ofs[1];
-			local nt = wnd.zoom_ofs[2];
-
-			ns = ns + (0.01 * x / wnd.zoom_range);
-			nt = nt + (0.01 * y / wnd.zoom_range);
-
-			ns = step + ns > 1.0 and 1.0 - step or ns;
-			ns = ns < 0.0 and 0.0 or ns;
-
-			nt = step + nt > 1.0 and 1.0 - step or nt;
-			nt = nt < 0.0 and 0.0 or nt;
-
-			wnd.zoom_ofs[1] = ns;
-			wnd.zoom_ofs[2] = nt;
-
-			wnd:update_zoom();
-		elseif wnd.dynamic_zoom then
-			if (wnd.dz) then
-				wnd.dz[3] = wnd.dz[3] + x;
-				wnd.dz[4] = wnd.dz[4] + y;
-				local x, y, w, h = get_positions(wnd.dz, wnd.width, wnd.height);
-				move_image(wnd.dzv, x, y);
-				resize_image(wnd.dzv, w, h);
-			else
-				local props = image_surface_resolve_properties(wnd.canvas);
-				local mx, my = mouse_xy();
-				mx = mx - props.x;
-				my = my - props.y;
-				wnd.dz = {mx, my, mx+1, my+1};
-				wnd.dzv = color_surface(1, 1, 255, 255, 255);
-				image_tracetag(wnd.dzv, "wnd_dynamic_zoom");
-				link_image(wnd.dzv, wnd.canvas);
-				image_inherit_order(wnd.dzv, true);
-				order_image(wnd.dzv, 1);
-				blend_image(wnd.dzv, 0.8);
-				move_image(wnd.dzv, wnd.dz[1], wnd.dz[2]);
-			end
-		end
-	end
-
+	wnd.prev_drag = wnd.drag;
+	wnd.drag = wnd_drag;
 	wnd.drop = function(wnd, vid, x, y)
-		wnd.zoom_drag = false;
-
 		if (wnd.dynamic_zoom and wnd.dz) then
 			if (wnd.in_zoom) then
 				wnd.zoom_ofs[1] = 0.0;
@@ -471,11 +487,11 @@ function window_shared(wnd)
 				wnd:update_zoom();
 				wnd.in_zoom = false;
 			else
-				local x, y, w, h = get_positions(wnd.dz, wnd.width, wnd.height);
-				wnd.zoom_ofs[1] = x / wnd.width;
-				wnd.zoom_ofs[2] = y / wnd.height;
-				wnd.zoom_ofs[3] = w / wnd.width;
-				wnd.zoom_ofs[4] = h / wnd.height;
+				local x1, y1, x2, y2 = get_positions(wnd.dz, wnd.width, wnd.height);
+				wnd.zoom_ofs[1] = x1 / wnd.width;
+				wnd.zoom_ofs[2] = y1 / wnd.height;
+				wnd.zoom_ofs[3] = x2 / wnd.width;
+				wnd.zoom_ofs[4] = y2 / wnd.height;
 				wnd.in_zoom = true;
 				wnd:update_zoom();
 			end
@@ -541,8 +557,11 @@ function window_shared(wnd)
 			w.zoom_range = w.zoom_range / 2.0;
 			w.zoom_range = w.zoom_range < 1.0 and 1.0 or w.zoom_range;
 		end
-		w.zoom_ofs[3] = (1.0 / wnd.zoom_range);
-		w.zoom_ofs[4] = (1.0 / wnd.zoom_range);
+
+		local zs = 1.0 / wnd.zoom_range;
+		wnd.zoom_ofs[3] = wnd.zoom_ofs[1] + zs;
+		wnd.zoom_ofs[4] = wnd.zoom_ofs[2] + zs;
+		clamp_zoom(wnd);
 		w:update_zoom();
 	end
 
@@ -635,24 +654,6 @@ controlwnd_menu = {
 		handler = wnd_reset
 	},
 };
-
-local function motion_2d(wnd, vid, x, y)
-	if (wnd.map) then
-		local x, y = translate_2d(wnd, BADID, x, y);
-		local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
-		wnd:set_message(img);
-	end
-end
-
-local subwnd_toggle = function(wnd)
-	if (wnd.motion == motion_2d) then
-		wnd.motion = function() end;
-		wnd.message_recv = wnd;
-	else
-		wnd.motion = motion_2d;
-		wnd.message_recv = nil;
-	end
-end
 
 local wnd_xl = {
 	{

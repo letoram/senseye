@@ -6,6 +6,7 @@
 
 BINDINGS = {}
 BINDINGS["META"]          = "RSHIFT"
+BINDINGS["META_DETAIL"]   = "p" -- update position and motion markers
 
 -- window-shared
 BINDINGS["FULLSCREEN"]    = "F1"

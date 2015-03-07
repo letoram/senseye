@@ -250,7 +250,6 @@ return {
 	init = function(wnd)
 		wnd.ofs = 0;
 		wnd.size_cur = 3; -- default packing mode is 2
-		wnd.motion = lookup_motion;
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
 		wnd.dynamic_zoom = true;
 		target_graphmode(wnd.ctrl_id, gconfig_get("map_default"));

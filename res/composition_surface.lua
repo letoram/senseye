@@ -236,13 +236,15 @@ end
 -- set prerendered msg vid in message slot
 --
 local function compsurf_wnd_message(ctx, msg, expiration, anchor)
-	assert(ctx);
-	assert(msg);
-
 	anchor = anchor == nil and ANCHOR_LL or anchor;
 
 	if (valid_vid(ctx.message)) then
 		delete_image(ctx.message);
+		ctx.message = nil;
+	end
+
+	if (msg == nil) then
+		return;
 	end
 
 	if (type(msg) == "string") then

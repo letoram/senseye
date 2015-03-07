@@ -386,6 +386,11 @@ function senseye_input(iotbl)
 -- propagate meta-key state (for resize / drag / etc.)
 		if (sym == BINDINGS["META"]) then
 			wm.meta = iotbl.active and true or nil;
+		elseif (sym == BINDINGS["META_DETAIL"]) then
+			wm.meta_detail = iotbl.active and true or nil;
+			if (iotbl.active == false and wm.selected) then
+				wm.selected:set_message(nil);
+			end
 		end
 
 -- wm input takes care of other management as well, i.e.

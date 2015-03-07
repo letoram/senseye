@@ -48,6 +48,10 @@ local shtbl = {
 	bfrag_shid, frag_shid
 };
 
+local shdrstr = {
+	"binary", "clamped diff"
+};
+
 local function update_threshold(wnd, val)
 	val = val < 1 and 1 or val;
 	val = val > 99 and 99 or val;
@@ -154,7 +158,8 @@ function spawn_patfind(wnd, refimg)
 
 	nw.dispatch[BINDINGS["CYCLE_SHADER"]] = function(wnd)
 		nw.shid = (nw.shid + 1) > #shtbl and 1 or nw.shid+1;
-		image_shader(canv, nw.shid);
+		image_shader(canv, shtbl[nw.shid]);
+		wnd.parent:set_message("shader set to: " .. shdrstr[nw.shid]);
 	end
 
 	nw.dispatch[BINDINGS["PFIND_INC"]] = function(wnd)
