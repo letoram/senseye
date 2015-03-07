@@ -22,6 +22,7 @@ system_load("histogram.lua")();
 system_load("modelwnd.lua")();
 system_load("distgram.lua")();
 system_load("patfind.lua")();
+system_load("alphamap.lua")();
 
 local function wnd_reset(wnd)
 	wnd.zoom_range = 1.0;
@@ -609,6 +610,11 @@ local views_sub = {
 		label = "Point Cloud",
 		name = "view_pointcloud",
 		handler = spawn_pointcloud
+	},
+	{
+		label = "Alpha Map",
+		name = "view_alpa",
+		handler = spawn_alphamap
 	},
 	{
 		label = "Histogram",
