@@ -36,6 +36,16 @@ enum color_mode {
 	COLOR_GROUP
 };
 
+enum interp_mode {
+	INTERP_NORMAL = 0,
+	INTERP_GSTAT
+};
+
+const char* interp_lut[] = {
+	"normal",
+	"gstat"
+};
+
 static cs_arch arch = CS_ARCH_ARM;
 static cs_mode mode = CS_MODE_THUMB;
 static cs_opt_value syntax = CS_OPT_SYNTAX_DEFAULT;
@@ -46,8 +56,10 @@ static bool detail = CS_OPT_OFF;
  * per-sesion options
  */
 struct cs_ctx {
-	int local_ofs;
+	int disass_ofs;
 	csh handle;
+	enum interp_mode mode;
+	uint64_t pos;
 	bool active;
 };
 
@@ -109,6 +121,25 @@ static inline shmif_pixel position_color()
 	}
 }
 
+static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
+{
+	if (ev->io.datatype == EVENT_IDATATYPE_DIGITAL && out->user){
+		struct cs_ctx* ctx = out->user;
+		if (strcmp(ev->label, "RIGHT") == 0)
+			ctx->disass_ofs++;
+		else if (strcmp(ev->label, "LEFT") == 0)
+			ctx->disass_ofs = ctx->disass_ofs> 0 ? ctx->disass_ofs- 1 : 0;
+		else if (strcmp(ev->label, "TAB") == 0)
+			ctx->mode = ctx->mode == 1 ? 0 : 1;
+		else
+			return false;
+	}
+	else
+		return false;
+
+	return true;
+}
+
 static inline void flush(struct arcan_shmif_cont* c,
 	char* buf, size_t* ofs, size_t* xp, size_t y, shmif_pixel col)
 {
@@ -128,7 +159,8 @@ static char hlut[16] = {'0', '1', '2', '3', '4', '5',
 	'6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
 static inline void draw_mnenmonic(
-	struct arcan_shmif_cont* cont, cs_insn* m, size_t* xpos, size_t* yofs)
+	struct arcan_shmif_cont* cont, struct cs_ctx* inh,
+	cs_insn* m, size_t* xpos, size_t* yofs)
 {
 	size_t csz = cont->addr->w / fontw;
 	if (csz == 0)
@@ -160,13 +192,21 @@ static inline void draw_mnenmonic(
 				*xpos = 0;
 				*yofs += fonth + 2;
 			break;
+			case 'P' :
+				if (position_color() != col)
+					FLUSH();
+				col = position_color();
+				ofs += snprintf(&buf[ofs], csz - ofs,
+					"%.4"PRIx64" ", m->address - inh->pos);
+				if (ofs > csz-1)
+					ofs = csz - 1;
 			case 'p' :
 				if (position_color() != col)
 					FLUSH();
 
 				col = position_color();
 				ofs += snprintf(&buf[ofs], csz - ofs, "%.8"PRIx64" ", m->address);
-				if (ofs >= csz-1)
+				if (ofs > csz-1)
 					ofs = csz-1;
 			break;
 
@@ -212,16 +252,38 @@ step:
 #undef FLUSH
 }
 
+static void draw_header(struct arcan_shmif_cont* out,
+	struct cs_ctx* actx, uint64_t pos)
+{
+	size_t buf_sz = (out->addr->w - 4) / (fontw+2);
+	if (buf_sz <= 1)
+		return;
+
+	char chbuf[buf_sz];
+	snprintf(chbuf, buf_sz, "%s @ %"PRIx64" +%d",
+		interp_lut[actx->mode], pos, actx->disass_ofs);
+	draw_box(out, 0, 0, out->addr->w, fonth+2, RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_text(out, chbuf, 2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+}
+
+static void group_disass(struct arcan_shmif_cont* c, cs_insn* in, size_t cnt)
+{
+/* sweep all instructions,
+ * get statistics for each group,
+ * draw as group label + frequency
+ */
+}
+
 static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	struct arcan_shmif_cont* out, uint64_t pos, size_t buf_sz, uint8_t* buf)
 {
 	if (!buf)
 		return false;
 
-	if (!in->user){
-		in->user = malloc(sizeof(struct cs_ctx));
-		memset(in->user, '\0', sizeof(struct cs_ctx));
-		struct cs_ctx* inh = in->user;
+	if (!out->user){
+		out->user = malloc(sizeof(struct cs_ctx));
+		memset(out->user, '\0', sizeof(struct cs_ctx));
+		struct cs_ctx* inh = out->user;
 		cs_err err = cs_open(arch, mode, &inh->handle);
 
 		inh->active = true;
@@ -240,34 +302,42 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 		arcan_shmif_resize(out, 256, 256);
 	}
 
-	struct cs_ctx* inh = in->user;
+	struct cs_ctx* inh = out->user;
 	if (!inh->active)
 		return false;
 
+	if (newdata)
+		inh->disass_ofs = 0;
+
+	if (buf_sz > inh->disass_ofs){
+		buf_sz -= inh->disass_ofs;
+		buf += inh->disass_ofs;
+	}
+
 	cs_insn* insn;
-
-	if (buf_sz > inh->local_ofs){
-		buf_sz -= inh->local_ofs;
-		buf += inh->local_ofs;
-	}
-
-	draw_box(out, 0, 0, out->addr->w, out->addr->h, col_bg);
-	size_t row = 2, xp = 0;
-
 	size_t count = cs_disasm(inh->handle, buf, buf_sz, pos, 0, &insn);
-	if (count){
-		for (size_t i = 0; i < count && row < out->addr->h - fonth; i++)
-			draw_mnenmonic(out, &insn[i], &xp, &row);
-
-		cs_free(insn, count);
-	}
-	else{
+	if (!count){
 		char txtbuf[64];
 		snprintf(txtbuf, 64, "Failed disassembly @%"PRIx64, pos);
 		draw_box(out, 0, 0, 256, fonth + 6, col_bg);
-		draw_text(out, txtbuf, 2, row += fonth + 2, col_err);
+		draw_text(out, txtbuf, 2, fonth + 4, col_err);
+		goto done;
 	}
 
+	draw_box(out, 0, 0, out->addr->w, out->addr->h, col_bg);
+
+	if (inh->mode == INTERP_NORMAL){
+		size_t row = 4 + fonth, xp = 0;
+		inh->pos = pos;
+		for (size_t i = 0; i < count && row < out->addr->h - fonth; i++)
+			draw_mnenmonic(out, inh, &insn[i], &xp, &row);
+	}
+	else
+		group_disass(out, insn, count);
+
+done:
+	cs_free(insn, count);
+	draw_header(out, inh, pos);
 	return true;
 }
 
@@ -386,8 +456,8 @@ static int usage()
 		"-t,--tab=     \tset tab column width (pixels)\n"
 		"-f,--format=  \toutput format string "
 			"(default: %%c%%t%%r;%%n)\n"
-			"\t%%p: pos, %%x: raw hex %%c: opcode, %%r: operands\n"
-			"\t%%n: linefeed, %%t column-align \n\n"
+			"\t%%p: pos, %%P: rel-pos, %%x: raw hex %%c: opcode, \n"
+			"\t%%r: operands %%n: linefeed, %%t column-align \n\n"
 	);
 
 	printf("Supported architectures:\n\t");
@@ -458,6 +528,6 @@ int main(int argc, char** argv)
 	arch = archs[aind].arch;
 	mode = archs[aind].mode;
 
-	return xlt_setup(archs[aind].name, populate, NULL, XLT_DYNSIZE) == true ?
+	return xlt_setup(archs[aind].name, populate, input, XLT_DYNSIZE) == true ?
 		EXIT_SUCCESS : EXIT_FAILURE;
 }
