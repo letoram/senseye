@@ -19,7 +19,7 @@ local match_bfrag = [[
 		bool b1 = any(greaterThan(c1, vec3(0.0)));
 		bool b2 = any(greaterThan(c2, vec3(0.0)));
 
-		if (b1 == b2)
+		if (b1 && b2)
 			gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 		else
 			gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);

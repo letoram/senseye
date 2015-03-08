@@ -12,6 +12,7 @@
 -- (destroy / rebuild if the dimensions are stored) then we hint/blit
 -- the active subset on window
 --
+
 function activate_translator(wnd, value)
 	local props = image_storage_properties(wnd.ctrl_id);
 	local interim = null_surface(props.width, props.height);
@@ -34,13 +35,9 @@ function activate_translator(wnd, value)
 
 -- then the output that's connected to the new window
 	local vid = target_alloc(value, function(source, status)
-		neww.in_handler = true;
-
 		if (status.kind == "resized") then
-			neww:resize(status.width, status.height)
+			neww:resize(status.width, status.height, true)
 		end
-
-		neww.in_handler = false;
 	end, wnd.size_cur
 	);
 
@@ -51,26 +48,20 @@ function activate_translator(wnd, value)
 		return;
 	end
 
-	target_displayhint(tgt, props.width, props.height);
+--	target_displayhint(tgt, props.width, props.height);
 
 -- hook the output to a new window, and make sure the output buffer
 -- gets tracked and deleted properly as well
 	neww = wnd.wm:add_window(vid, {});
+	window_shared(neww);
 	neww.name = neww.name .. "_translator_" .. tostring(value);
 	neww.fullscreen_disabled = true;
+	target_displayhint(tgt, 256, 256);
 	neww:set_parent(wnd, ANCHOR_LL);
 	neww.reposition = repos_window;
 	neww.translator_out = tgt;
 	neww.ctrl_id = vid;
 	neww:select();
-	neww.old_resize = neww.resize;
-	neww.resize = function(wnd, w, h, interm)
-		if (neww.in_handler) then --feedback loop protection
-			neww:old_resize(w, h);
-			return;
-		end
-		target_displayhint(tgt, w, h);
-	end
 
 	scale_image(vid, 1.0, 1.0);
 	image_tracetag(vid, string.format("translator:%d - output", value));
@@ -103,6 +94,33 @@ function activate_translator(wnd, value)
 			target_input(tgt, neww.input_queue);
 			neww.input_queue = nil;
 		end
+	end
+
+	local old_drop = neww.drop;
+	local old_resize = neww.resize;
+
+	neww.resize = function(wnd, w, h, from_handler)
+		if (from_handler) then
+			return old_resize(wnd, w, h);
+		end
+
+		if (wnd.dragmode == nil) then
+			target_displayhint(tgt, w, h);
+			return;
+		else
+			return old_resize(wnd, w, h);
+		end
+	end
+
+-- temporary workaround to the feedback loop problem we have
+-- with the buggy arcan -> resizefeed not updating scaling factors
+-- correctly
+	neww.old_drop = neww.drop;
+	neww.drop = function(wnd, vid, x, y)
+		if (wnd.dragmode ~= nil) then
+			target_displayhint(tgt, wnd.width, wnd.height);
+		end
+		old_drop(wnd, vid, x, y);
 	end
 
 -- we treat these as "click" events in that the set the base

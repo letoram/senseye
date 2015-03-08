@@ -378,9 +378,17 @@ local function clamp_zoom(wnd)
 	end
 end
 
+local function resize_zone(wnd)
+	local props = image_surface_resolve_properties(wnd.canvas);
+	local mx, my = mouse_xy();
+	local lx = mx - props.x;
+	local ly = my - props.y;
+	return (lx > wnd.width * 0.6667 and ly > wnd.height * 0.6667);
+end
+
 local function motion_2d(wnd, vid, x, y)
 	if (wnd.wm.meta) then
-		mouse_switch_cursor("move");
+		mouse_switch_cursor(resize_zone(wnd) and "scale" or "move");
 	end
 
 	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
@@ -426,13 +434,32 @@ local function get_positions(dz, maxw, maxh)
 	return x1, y1, x2, y2;
 end
 
+local function wnd_resize(wnd, vid, x, y)
+	local neww = wnd.width + x;
+	local newh = wnd.height + y;
+	neww = neww <= 0 and 1 or neww;
+	newh = newh <= 0 and 1 or newh;
+	if (neww ~= wnd.width or newh ~= wnd.height) then
+		wnd:resize(neww, newh);
+	end
+end
+
 --
 -- two ways of zooming, uniform (which permits drag->pan)
 -- and custom which is reset when repeated
 --
 local function wnd_drag(wnd, vid, x, y)
 	if (wnd.wm.meta and not wnd.dz) then
-		return wnd.prev_drag(wnd, vid, x, y);
+		if (wnd.dragmode) then
+			return wnd:dragmode(vid, x, y);
+		else
+			if (resize_zone(wnd)) then
+				wnd.dragmode = wnd_resize;
+				mouse_switch_cursor("scale");
+				return wnd:dragmode(vid, x, y);
+			end
+			return wnd.prev_drag(wnd, vid, x, y);
+		end
 	end
 
 -- pan and clamp
@@ -508,6 +535,7 @@ function window_shared(wnd)
 	wnd.prev_drag = wnd.drag;
 	wnd.drag = wnd_drag;
 	wnd.drop = function(wnd, vid, x, y)
+		wnd.dragmode = nil;
 		if (wnd.dynamic_zoom and wnd.dz) then
 			if (wnd.in_zoom) then
 				wnd.zoom_ofs[1] = 0.0;

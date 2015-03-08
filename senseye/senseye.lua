@@ -82,12 +82,11 @@ function senseye()
 	end
 
 -- uncomment for non-native cursor (would be visible in video recording)
---	show_image(cursimg);
---  mouse_setup(cursimg, 1000, 1, true);
-
-	cursimg = load_image("cursor.png");
-	mouse_setup_native(cursimg, 1, 1);
+-- mouse_setup(load_image("cursor.png"), cursimg, 1000, 1, true);
+	mouse_setup_native(load_image("cursor.png"), 1, 1);
 	mouse_add_cursor("move", load_image("cursor_move.png"), 13, 13);
+	mouse_add_cursor("scale", load_image("cursor_scale.png"), 13, 13);
+
 --
 -- create a window manager for the composition surface
 --
