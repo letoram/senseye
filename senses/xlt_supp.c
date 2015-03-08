@@ -24,6 +24,16 @@ struct xlt_session {
 	xlt_input input;
 	enum xlt_flags flags;
 
+	struct {
+		size_t ofs;
+		bool got_input;
+	} pending_input;
+
+	struct {
+		bool got_dh;
+		size_t width, height;
+	} pending_update;
+
 	struct arcan_shmif_cont in;
 	struct arcan_shmif_cont out;
 };
@@ -82,77 +92,108 @@ static inline void update_buffers(
 	}
 }
 
+/*
+ * 2-phase commit expensive events (touch x / y + resize)
+ */
+static void event_commit(struct xlt_session* s)
+{
+	if (s->pending_update.got_dh){
+		s->pending_update.got_dh = false;
+		arcan_shmif_resize(&s->out,
+			s->pending_update.width, s->pending_update.height);
+	}
+
+	if (s->pending_input.got_input){
+		if (s->pending_input.ofs > s->unpack_sz){
+			fprintf(stderr, "request to set invalid base "
+				"offset (%zu vs %zu) ignored\n", s->pending_input.ofs, s->unpack_sz);
+		}
+		else{
+			s->base_ofs = s->pending_input.ofs;
+			update_buffers(s, false);
+		}
+		s->pending_input.got_input = false;
+	}
+}
+
+static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
+{
+	if (ev->category == EVENT_TARGET){
+		if (ev->tgt.kind == TARGET_COMMAND_EXIT)
+			return false;
+
+/* really weird packing sizes are ignored / clamped */
+	else if (ev->tgt.kind == TARGET_COMMAND_GRAPHMODE){
+		sess->pack_sz = ev->tgt.ioevs[0].iv;
+		if (sess->pack_sz <= 0){
+			fprintf(stderr, "translator: invalid packing size (%d) received.\n",
+				(int)sess->pack_sz);
+		}
+		if (sess->pack_sz > 4){
+			fprintf(stderr, "translator: unaccepted packing size (%zu), "
+				"will clamp to 4 bytes, expect corruption.\n", sess->pack_sz);
+				sess->pack_sz = 4;
+			}
+		}
+		else if (ev->tgt.kind == TARGET_COMMAND_DISPLAYHINT){
+			if ((sess->flags & XLT_DYNSIZE)){
+				size_t width = ev->tgt.ioevs[0].iv;
+				size_t height = ev->tgt.ioevs[1].iv;
+				arcan_shmif_resize(&sess->out, width, height);
+				update_buffers(sess, false);
+			}
+		}
+		else if (ev->tgt.kind == TARGET_COMMAND_SEEKTIME){
+/* use to set local window offset, or hint of global position? */
+		}
+		else if (ev->tgt.kind == TARGET_COMMAND_STEPFRAME){
+			if (ev->tgt.ioevs[0].iv > 0 || sess->buf == NULL){
+				sess->vpts = sess->in.addr->vpts;
+				populate(sess);
+				update_buffers(sess, true);
+			}
+			else
+				update_buffers(sess, false);
+		}
+		else
+			;
+	}
+	else if (ev->category == EVENT_IO){
+		if (ev->io.datatype == EVENT_IDATATYPE_TOUCH){
+			sess->pending_input.ofs = (ev->io.input.touch.y *
+				sess->in.addr->w + ev->io.input.touch.x) * sess->pack_sz;
+			sess->pending_input.got_input = true;
+		}
+		if (sess->input && ev->category == EVENT_IO)
+			if (sess->input(&sess->out, ev))
+				update_buffers(sess, false);
+	}
+	else
+		;
+
+	return true;
+}
+
 static void* process(void* inarg)
 {
 	struct xlt_session* sess = inarg;
 	arcan_event ev;
 
+/* two phase flush so that some events that can come in piles,
+ * (input / displayhint) only apply the latest one */
 	while (arcan_shmif_wait(&sess->in, &ev) != 0){
 		flush_output_events(sess);
+		if (!dispatch_event(sess, &ev))
+			goto end;
 
-		if (ev.category == EVENT_TARGET){
-			if (ev.tgt.kind == TARGET_COMMAND_EXIT)
-				break;
-/* really weird packing sizes are ignored / clamped */
-			else if (ev.tgt.kind == TARGET_COMMAND_GRAPHMODE){
-				sess->pack_sz = ev.tgt.ioevs[0].iv;
-				if (sess->pack_sz <= 0){
-					fprintf(stderr, "translator: invalid packing size (%d) received.\n",
-						(int)sess->pack_sz);
-				}
-				if (sess->pack_sz > 4){
-					fprintf(stderr, "translator: unaccepted packing size (%zu), "
-						"will clamp to 4 bytes, expect corruption.\n", sess->pack_sz);
-					sess->pack_sz = 4;
-				}
-			}
-			else if (ev.tgt.kind == TARGET_COMMAND_DISPLAYHINT){
-				if ((sess->flags & XLT_DYNSIZE)){
-					size_t width = ev.tgt.ioevs[0].iv;
-					size_t height = ev.tgt.ioevs[1].iv;
-					arcan_shmif_resize(&sess->out, width, height);
-					update_buffers(sess, false);
-				}
-			}
-			else if (ev.tgt.kind == TARGET_COMMAND_SEEKTIME){
-/* use to set local window offset, or hint of global position? */
-			}
-			else if (ev.tgt.kind == TARGET_COMMAND_STEPFRAME){
-				if (ev.tgt.ioevs[0].iv > 0 || sess->buf == NULL){
-					sess->vpts = sess->in.addr->vpts;
-					populate(sess);
-					update_buffers(sess, true);
-				}
-				else
-					update_buffers(sess, false);
-			}
-			else
-				;
-		}
-		else if (ev.category == EVENT_IO){
-			if (ev.io.datatype == EVENT_IDATATYPE_TOUCH){
-				size_t ofs = (ev.io.input.touch.y *
-					sess->in.addr->w + ev.io.input.touch.x) * sess->pack_sz;
+		while(arcan_shmif_poll(&sess->in, &ev) != 0)
+			if (!dispatch_event(sess, &ev))
+				goto end;
 
-				if (ofs > sess->unpack_sz){
-					fprintf(stderr, "request to set invalid base "
-						"offset (%zu vs %zu) ignored\n", ofs, sess->unpack_sz);
-				}
-				else{
-					sess->base_ofs = ofs;
-					update_buffers(sess, false);
-				}
-			}
-			if (sess->input && ev.category == EVENT_IO)
-				if (sess->input(&sess->out, &ev))
-					update_buffers(sess, false);
-		}
-		else
-			;
-
-/* on EVENT_IO, use that to move working offset in buffer */
+		event_commit(sess);
 	}
 
+end:
 	fprintf(stderr, "translator: lost translation process\n");
 	arcan_shmif_drop(&sess->in);
 	arcan_shmif_drop(&sess->out);
