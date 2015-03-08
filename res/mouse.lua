@@ -273,29 +273,24 @@ function mouse_destroy()
 	end
 end
 
---
--- Load / Prepare cursor, read default acceleration and
--- filtering settings.
--- cvid : video id of image to use as cursor (will take control of id)
--- clayer : which ordervalue for cursor to have
--- pickdepth : how many vids beneath cvid should be concidered?
--- cachepick : avoid unecessary
--- hidden : start in hidden state or not
---
 function mouse_setup(cvid, clayer, pickdepth, cachepick, hidden)
-	mstate.cursor = cvid;
 	mstate.hidden = false;
 	mstate.x = math.floor(VRESW * 0.5);
 	mstate.y = math.floor(VRESH * 0.5);
 
+	mstate.cursor = null_surface(1, 1);
+	image_mask_set(mstate.cursor, MASK_UNPICKABLE);
+	mouse_add_cursor("default", cvid, 0, 0);
+	mouse_switch_cursor();
+
 	if (hidden ~= nil and hidden ~= true) then
 	else
-		show_image(cvid);
+		show_image(mstate.cursor);
 	end
 
-	move_image(cvid, mstate.x, mstate.y);
+	move_image(mstate.cursor, mstate.x, mstate.y);
 	mstate.pickdepth = pickdepth;
-	order_image(cvid, clayer);
+	order_image(mstate.cursor, clayer);
 	image_mask_set(cvid, MASK_UNPICKABLE);
 	if (cachepick) then
 		mouse_pickfun = cached_pick;
