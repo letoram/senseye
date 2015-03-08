@@ -314,12 +314,13 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 		buf += inh->disass_ofs;
 	}
 
+	draw_box(out, 0, 0, out->addr->w, out->addr->h, col_bg);
+
 	cs_insn* insn;
 	size_t count = cs_disasm(inh->handle, buf, buf_sz, pos, 0, &insn);
 	if (!count){
 		char txtbuf[64];
 		snprintf(txtbuf, 64, "Failed disassembly @%"PRIx64, pos);
-		draw_box(out, 0, 0, 256, fonth + 6, col_bg);
 		draw_text(out, txtbuf, 2, fonth + 4, col_err);
 		goto done;
 	}
