@@ -162,11 +162,12 @@ static inline void draw_mnenmonic(
 	struct arcan_shmif_cont* cont, struct cs_ctx* inh,
 	cs_insn* m, size_t* xpos, size_t* yofs)
 {
-	size_t csz = cont->addr->w / fontw;
-	if (csz == 0)
+	if (cont->addr->w / fontw == 0)
 		return;
 
-	char buf[csz];
+/* anything above this in one pass will force flush */
+	size_t csz = 64;
+	char buf[64];
 	size_t ofs = 0;
 
 	char* pos = fmtstr;
@@ -175,7 +176,10 @@ static inline void draw_mnenmonic(
 
 #define FLUSH() flush(cont, buf, &ofs, xpos, *yofs, col)
 
-	while(*pos && ofs < csz-1){
+	while(*pos){
+		if (ofs > (csz >> 1))
+			FLUSH();
+
 		if (*pos == '%'){
 			inctx = true;
 			goto step;
@@ -318,6 +322,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 	cs_insn* insn;
 	size_t count = cs_disasm(inh->handle, buf, buf_sz, pos, 0, &insn);
+
 	if (!count){
 		char txtbuf[64];
 		snprintf(txtbuf, 64, "Failed disassembly @%"PRIx64, pos);
