@@ -139,6 +139,12 @@ local function npot(val)
 	return val < 32 and 32 or val;
 end
 
+local function drop_rmeta(wnd)
+	if (wnd.wm.meta_detail) then
+		wnd:set_message();
+	end
+end
+
 --
 -- Main keybindings and functions for features like zoom and window management
 --
@@ -373,6 +379,10 @@ local function clamp_zoom(wnd)
 end
 
 local function motion_2d(wnd, vid, x, y)
+	if (wnd.wm.meta) then
+		mouse_switch_cursor("move");
+	end
+
 	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
 		local x, y = translate_2d(wnd, BADID, x, y);
 		zoom_position(wnd, x, y);
@@ -381,8 +391,6 @@ local function motion_2d(wnd, vid, x, y)
 			local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
 			wnd:set_message(img);
 		end
-	else
-		wnd.motion_beg = nil;
 	end
 end
 
@@ -491,6 +499,10 @@ function window_shared(wnd)
 	wnd.zoom_range = 1.0;
 	image_texfilter(wnd.canvas, FILTER_NONE);
 
+	wnd.out = function()
+		drop_rmeta(wnd);
+		mouse_switch_cursor();
+	end
 	wnd.motion = motion_2d;
 
 	wnd.prev_drag = wnd.drag;

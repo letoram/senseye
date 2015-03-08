@@ -28,6 +28,15 @@ if (not valid_vid(global_lookup)) then
 	global_lookup = raw_surface(256, 1, 3, default_lut);
 end
 
+--
+-- get x, y, z coordinates that match the tranformation done by the
+-- vertex shader, needed in order to get correlation between marker
+-- and point-cloud view
+--
+local function pc_xl_disp(x, y, r, g, b, a)
+
+end
+
 shaders_2dview = {
 	{
 		name = "Normal",
@@ -204,12 +213,14 @@ shaders_3dview_pcloud = {
 	description = [[displacement, intensity determines z- val]],
 	fragment = pc_lut_f,
 	vertex = pc_disp_v,
+	translate = pc_xl_disp,
 	lookup = true,
 	},
 	{
 	name = "triple",
 	description = [[triple, first byte x, second y, third z]],
 	vertex = pc_triple_v,
+	translate = pc_xl_triple,
 	fragment = pc_lut_f,
 	lookup = true,
 	}
@@ -279,7 +290,6 @@ function switch_shader(wnd, target, shtbl)
 	end
 
 	if (target == nil) then
-		print("wnd.model:", wnd.model);
 		target = wnd.model ~= nil and wnd.model or wnd.canvas;
 	end
 

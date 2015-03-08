@@ -85,8 +85,9 @@ function senseye()
 --	show_image(cursimg);
 --  mouse_setup(cursimg, 1000, 1, true);
 
-	cursimg = load_image("cursor.png", 0, 10, 16);
-	mouse_setup_native(cursimg);
+	cursimg = load_image("cursor.png");
+	mouse_setup_native(cursimg, 1, 1);
+	mouse_add_cursor("move", load_image("cursor_move.png"), 13, 13);
 --
 -- create a window manager for the composition surface
 --
@@ -386,8 +387,14 @@ function senseye_input(iotbl)
 -- propagate meta-key state (for resize / drag / etc.)
 		if (sym == BINDINGS["META"]) then
 			wm.meta = iotbl.active and true or nil;
+			if (not iotbl.active) then
+				mouse_switch_cursor();
+			end
+
 		elseif (sym == BINDINGS["META_DETAIL"]) then
 			wm.meta_detail = iotbl.active and true or nil;
+			mouse_switch_cursor();
+
 			if (iotbl.active == false and wm.selected) then
 				wm.selected:set_message(nil);
 			end

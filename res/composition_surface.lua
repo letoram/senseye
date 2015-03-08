@@ -125,6 +125,13 @@ local function forward_children(wm, wnd)
 	end
 end
 
+-- visual queue that the window is not currently used,
+-- primarily for popup purposes
+local function compsurf_wnd_activate(wnd)
+end
+local function compsurf_wnd_deactivate(wnd)
+end
+
 local function compsurf_wnd_select(wnd)
 	if (wnd.wm.selected == wnd) then
 		return
@@ -254,7 +261,9 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	local props = image_surface_properties(msg);
 	local bg = color_surface(props.width + 10, props.height + 5, 0, 0, 0);
 	blend_image(bg, 0.8);
+	image_mask_set(bg, MASK_UNPICKABLE);
 	image_mask_clear(msg, MASK_OPACITY);
+	image_mask_set(msg, MASK_UNPICKABLE);
 	image_tracetag(bg, "compsurf_wnd_msgbg");
 
 	show_image(msg);
@@ -483,6 +492,12 @@ local function input_dispatch(wnd, sym, active)
 	end
 end
 
+local function compsurf_wnd_activate(wnd)
+end
+
+local function compsurf_wnd_inactivate(wnd)
+end
+
 local function compsurf_wnd_hide(wnd)
 	hide_image(wnd.anchor);
 end
@@ -506,6 +521,8 @@ local function compsurf_add_window(ctx, surf, opts)
 		move = compsurf_wnd_move,
 		hide = compsurf_wnd_hide,
 		show = compsurf_wnd_show,
+		inactivate = compsurf_wnd_inactivate,
+		activate = compsurf_wnd_activate,
 		abs_xy = resolve_abs_xy,
 		set_parent = compsurf_wnd_parent,
 		set_bar = compsurf_wnd_bar,
@@ -562,7 +579,7 @@ local function compsurf_add_window(ctx, surf, opts)
 	show_image({wnd.canvas, wnd.anchor});
 
 	mouse_addlistener(wnd, {"click", "rclick", "drag", "drop",
-		"dblclick", "over", "press", "release",
+		"dblclick", "over", "out", "press", "release",
 		"hover", "motion"}
 	);
 

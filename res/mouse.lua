@@ -1,7 +1,54 @@
 --
--- Copyright 2014, Björn Ståhl
+-- Copyright 2014-2015, Björn Ståhl
 -- License: 3-Clause BSD.
 -- Reference: http://arcan-fe.com
+--
+-- all functions are prefixed with mouse_
+--
+-- setup (takes control of vid):
+--  setup_native(vid, hs_x, hs_y) or
+--  setup(vid, layer, pickdepth, cachepick, hidden)
+--   layer : order value
+--   pickdepth : number of stacked vids to check (typically 1)
+--   cachepick : cache results to reduce picking calls
+--   hidden : start in hidden state
+--
+-- input:
+--  button_input(ind, active)
+--  input(x, y, state, mask_all_events)
+--  absinput(x, y)
+--
+-- output:
+--  mouse_xy()
+--
+-- tuning:
+--  autohide() - true or false ; call to flip state, returns new state
+--  acceleration(x_scale_factor, y_scale_factor) ;
+--  dblclickrate(rate or nil) opt:rate ; get or set rate
+--
+-- state change:
+--  hide, show
+--  add_cursor(label, vid, hs_dx, hs_dy)
+--  constrain(min_x, min_y, max_x, max_y)
+--  switch_cursor(label) ; switch active cursor to label
+--
+-- use:
+--  addlistener(tbl, {event1, event2, ...})
+--   possible events: drag, drop, click, over, out
+--    dblclick, rclick, press, release, motion
+--
+--   tbl- fields:
+--    own (function, req, callback(tbl, vid)
+--     return true/false for ownership of vid
+--
+--    + matching functions for set of events
+--
+--  droplistener(tbl)
+--  tick(steps)
+--   + input (above)
+--
+-- debug:
+--  increase debuglevel > 2 and outputs activity
 --
 
 --
@@ -36,11 +83,11 @@ local mstate = {
 -- mouse event is triggered
 	accel_x      = 1,
 	accel_y      = 1,
-	dblclickstep = 12,  -- maximum number of ticks between clicks for dblclick
+	dblclickstep = 12, -- maximum number of ticks between clicks for dblclick
 	drag_delta   = 8,  -- wiggle-room for drag
 	hover_ticks  = 30, -- time of inactive cursor before hover is triggered
 	hover_thresh = 12, -- pixels movement before hover is released
-	click_timeout= 8;  -- maximum number of ticks before a press-release pair isn't a tick
+	click_timeout= 14; -- maximum number of ticks before we won't emit click
 	click_cnt    = 0,
 	counter      = 0,
 	hover_count  = 0,
@@ -48,7 +95,16 @@ local mstate = {
 	y_ofs        = 0,
 	last_hover   = 0,
 	x = 0,
-	y  = 0
+	y = 0,
+	min_x = 0,
+	min_y = 0,
+	max_x = VRESW,
+	max_y = VRESH,
+	hotspot_dx = 0,
+	hotspot_dy = 0
+};
+
+local cursors = {
 };
 
 local function mouse_cursorupd(x, y)
@@ -205,6 +261,12 @@ function mouse_destroy()
 	mstate.y_ofs = 0;
 	mstate.last_hover = 0;
 	toggle_mouse_grab(MOUSE_GRABOFF);
+
+	for k,v in pairs(cursors) do
+		delete_image(v.vid);
+	end
+	cursors = {};
+
 	if (valid_vid(mstate.cursor)) then
 		delete_image(mstate.cursor);
 		mstate.cursor = BADID;
@@ -244,18 +306,24 @@ function mouse_setup(cvid, clayer, pickdepth, cachepick, hidden)
 	mouse_cursorupd(0, 0);
 end
 
-function mouse_setup_native(resimg)
+function mouse_setup_native(resimg, hs_x, hs_y)
+	mstate.native = true;
+	if (hs_x == nil) then
+		hs_x = 0;
+		hs_y = 0;
+	end
+
+-- wash out any other dangling properties in resimg
 	local tmp = null_surface(1, 1);
 	local props = image_surface_properties(resimg);
-
 	image_sharestorage(resimg, tmp);
-	cursor_setstorage(resimg);
 	delete_image(resimg);
-	mstate.cursor_vid = tmp;
-	mstate.native = true;
 
-	mstate.x = math.floor(VRESW * 0.5);
-	mstate.y = math.floor(VRESH * 0.5);
+	mouse_add_cursor("default", tmp, hs_x, hs_y);
+	mouse_switch_cursor("default");
+
+	mstate.x = math.floor(mstate.max_x * 0.5);
+	mstate.y = math.floor(mstate.max_y * 0.5);
 	mstate.pickdepth = 1;
 	mouse_pickfun = cached_pick;
 
@@ -350,7 +418,7 @@ local function lmbhandler(hists, press)
 		mstate.lmb_global_release();
 
 		for key, val in pairs(hists) do
-			local res = linear_find_vid(mstate.handlers.press, val, "release");
+			local res = linear_find_vid(mstate.handlers.release, val, "release");
 			if (res) then
 				if (res:release(val, mstate.x, mstate.y)) then
 					break;
@@ -420,7 +488,10 @@ function mouse_button_input(ind, active)
 		return;
 	end
 
-	local hists = mouse_pickfun(mstate.x, mstate.y, mstate.pickdepth, 1);
+	local hists = mouse_pickfun(
+		mstate.x + mstate.hotspot_x,
+		mstate.y + mstate.hotspot_y, mstate.pickdepth, 1);
+
 	if (DEBUGLEVEL > 2) then
 		local res = {};
 		print("button matches:");
@@ -590,9 +661,6 @@ function mouse_dumphandlers()
 	warning("/mouse_dumphandlers()");
 end
 
---
--- Removes tbl from all callback tables
---
 function mouse_droplistener(tbl)
 	for key, val in pairs( mstate.handlers ) do
 		for ind, vtbl in ipairs( val ) do
@@ -604,18 +672,83 @@ function mouse_droplistener(tbl)
 	end
 end
 
+function mouse_add_cursor(label, img, hs_x, hs_y)
+	if (label == nil or type(label) ~= "string") then
+		if (valid_vid(img)) then
+			delete_image(img);
+		end
+		return warning("mouse_add_cursor(), missing label or wrong type");
+	end
+
+	if (cursors[label] ~= nil) then
+		delete_image(cursors[label].vid);
+	end
+
+	if (not valid_vid(img)) then
+		return warning(string.format(
+			"mouse_add_cursor(%s), missing image", label));
+	end
+
+	local props = image_storage_properties(img);
+	cursors[label] = {
+		vid = img,
+		hotspot_x = hs_x,
+		hotspot_y = hs_y,
+		width = props.width,
+		height = props.height
+	};
+end
+
+function mouse_switch_cursor(label)
+	if (label == nil or cursors[label] == nil) then
+		label = "default";
+	end
+
+	if (label == mstate.active_label) then
+		return;
+	end
+
+	if (cursors[label] == nil) then
+		if (mstate.native) then
+			cursor_setstorage(WORLDID);
+		else
+			hide_image(mstate.cursor);
+		end
+		return;
+	end
+
+	local ct = cursors[label];
+	mstate.active_label = label;
+
+	if (mstate.native) then
+		cursor_setstorage(ct.vid);
+		resize_cursor(ct.width, ct.height);
+	else
+		image_sharestorage(ct.vid, mstate.cursor);
+		resize_image(mstate.cursor, ct.width, ct.height);
+	end
+
+	mstate.hotspot_x = ct.hotspot_x;
+	mstate.hotspot_y = ct.hotspot_y;
+end
+
 function mouse_hide()
 	if (mstate.native) then
-		cursor_setstorage(WORLDID);
+		mouse_switch_cursor(nil);
 	else
 		instant_image_transform(mstate.cursor);
 		blend_image(mstate.cursor, 0.0, 20, INTERP_EXPOUT);
 	end
 end
 
+function mouse_autohide()
+	mstate.autohide = not mstate.autohide;
+	return mstate.autohide;
+end
+
 function mouse_show()
 	if (mstate.native) then
-		cursor_setstorage(mstate.cursor_vid);
+		mouse_switch_cursor(mstate.active_label);
 	else
 		instant_image_transform(mstate.cursor);
 		blend_image(mstate.cursor, 1.0, 20, INTERP_EXPOUT);

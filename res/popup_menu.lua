@@ -53,8 +53,26 @@ local function menu_input(wm, popup, iv, cascade)
 				print(debug.traceback());
 			end
 			popup:destroy(cascade);
+			lp:activate();
 			lp:select();
 		end
+	end
+end
+
+function popup_inactivate(wnd)
+	local cover = fill_surface(wnd.width, wnd.height, 0, 0, 0);
+	link_image(cover, wnd.anchor);
+	image_inherit_order(cover, true);
+	order_image(cover, 3);
+	blend_image(cover, 0.5, 5);
+	wnd.popup_cover = cover;
+end
+
+function popup_activate(wnd)
+	if (valid_vid(wnd.popup_cover)) then
+		instant_image_transform(wnd.popup_cover);
+		expire_image(wnd.popup_cover, 5);
+		blend_image(wnd.popup_cover, 0.0, 5);
 	end
 end
 
@@ -106,6 +124,8 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	popup:select();
 	popup.noblend = true;
 	popup.previous = prev;
+	popup.inactivate = popup_inactivate;
+	popup.activate = popup_activate;
 	popup.name = popup.name .. "_popup";
 
 	popup:resize(props.width + 10, props.height);
@@ -115,7 +135,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 		popup:move(x - 5, y - 5, true); -- true makes sure we don't flow outside win
 	else
 		local px, py = prev:abs_xy(prev.x, prev.y);
-		local px = px + prev.width + prev.borderw + 2;
+		local px = px + math.ceil(prev.width * 0.5 - 0.5); --- 5; -- + prev.borderw + 2;
 		py = py + image_surface_properties(prev.cursor).y + 5;
 		popup:move(px, py, true);
 	end
@@ -138,7 +158,9 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 			elseif (#mnu == 0) then
 				return;
 			end
-			spawn_popupmenu(wm, mnu, target, cpop);
+
+			popup:inactivate();
+			local pm = spawn_popupmenu(wm, mnu, target, cpop);
 
 		elseif (menutbl[index].value) then
 			menutbl.handler(target, menutbl[index].value, rv);
@@ -194,10 +216,10 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	local mh = {
 		name = "capture_mh",
 		capture = capt,
-		click = function(vid)
+		press = function(vid)
+			mouse_state().click_cnt = 0;
 			menu_input(wm, popup, "ESCAPE");
 		end,
-		rclick = click,
 		own = function(wnd, vid)
 			return vid == wnd.capture;
 		end
@@ -205,5 +227,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 	popup:step(0);
 	popup.capt_mh = mh;
-	mouse_addlistener(mh, {"click", "rclick"});
+	mouse_addlistener(mh, {"press", "rclick"});
+
+	return popup;
 end
