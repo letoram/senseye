@@ -101,7 +101,7 @@ shaders_2dview = {
 							if (lut[i][j] == -1.0)
 								return;
 
-							if (abs(lut[i][j]/256.0 - intens) < 0.001){
+							if (abs(lut[i][j]/255.0 - intens) < 0.001){
 								gl_FragColor = texture2D(map_tu1, vec2(float(i*4+j)/256.0, 0));
 								return;
 							}
@@ -386,13 +386,14 @@ function switch_shader(wnd, target, shtbl)
 end
 
 function update_highlight_shader(values)
+	local vtbl = {};
 	for i=1,16 do
-		shaders_2dview[2].uniforms.lut.values[i] =
-			values[i] ~= nil and values[i] or -1;
+		vtbl[i] = values[i] ~= nil and values[i] or -1;
 	end
+
+	shaders_2dview[2].uniforms.lut.values = vtbl;
 	shader_uniform(shaders_2dview[2].shid, "lut",
-		shaders_2dview[2].uniforms.lut.typev, NOPERSIST,
-		unpack(shaders_2dview[2].uniforms.lut.values));
+		shaders_2dview[2].uniforms.lut.typev, NOPERSIST, unpack(vtbl));
 end
 
 local function load_new_lut(wnd, val, id)

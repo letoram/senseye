@@ -26,7 +26,7 @@ local function goto_position(nw, slot)
 	resize_image(nw.cursor, sz, nw.height);
 	move_image(nw.cursor, slot * math.floor(nw.width / 256), 0);
 
-	local slotstr = string.format("0x%.2x", slot);
+	local slotstr = string.format("(0x%.2x) - ", slot);
 
 	if (nw.lockv) then
 		for i=1,#nw.lockv do
@@ -145,7 +145,7 @@ function spawn_histogram(wnd)
 		goto_position(nw, nw.hgram_slot);
 	end
 
-	nw.zoom_position = function(self, wnd, x, y, r, g, b, a)
+	nw.zoom_position = function(self, wnd, x, y, r, g, b, a, click)
 		local pos = 1;
 		if (wnd.pack_sz == 1) then
 			pos = r;
@@ -155,6 +155,11 @@ function spawn_histogram(wnd)
 			pos = math.floor((r + g + b + a) / 4.0);
 		end
 		goto_position(nw, pos);
+
+-- forward click so highlight stack works
+		if (click and wnd.wm.meta_detail) then
+			nw.click(wnd, wnd.canvas, x, y);
+		end
 	end
 
 	nw.zoom_link = function(self, wnd, txcos)

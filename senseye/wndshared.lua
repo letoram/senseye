@@ -33,8 +33,9 @@ local function wnd_reset(wnd)
 	wnd:update_zoom();
 end
 
-local function zoom_position(wnd, x, y)
+local function zoom_position(wnd, x, y, click)
 	wnd:select();
+
 	if (wnd.zoomh) then
 		for i,v in ipairs(wnd.zoomh) do
 			if (v.zoom_position) then
@@ -42,7 +43,7 @@ local function zoom_position(wnd, x, y)
 				image_access_storage(wnd.canvas, function(tbl, w, h)
 					r, g, b, a = tbl:get(x, y, 4);
 				end);
-				v:zoom_position(wnd, x, y, r, g, b, a);
+				v:zoom_position(wnd, x, y, r, g, b, a, click);
 			end
 		end
 	end
@@ -576,7 +577,7 @@ function window_shared(wnd)
 	wnd.click = function(wnd, tbl, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
 		x, y = translate_2d(wnd, BADID, x, y);
-		zoom_position(wnd, x, y);
+		zoom_position(wnd, x, y, true);
 	end
 
 	wnd.rclick = function(wnd, tbl)
