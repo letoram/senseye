@@ -13,20 +13,42 @@
 --
 -- The system used here is too rigid and is in the process of being reworked.
 
-
 -- we generate the default color lookup table programatically,
--- just a a gradient -- others can be loaded as images
-local default_lut = {};
-for i=0,255 do -- invisibles
-	default_lut[i*3+1] = 0;
-	default_lut[i*3+2] = i;
-	default_lut[i*3+3] = 0;
+-- just a a gradient with some signal colors for the first 16 slots
+-- others can be loaded as images
+
+local default_lut = {
+	0xff, 0xff, 0xff,
+	0xff, 0x00, 0x00,
+--	0x00, 0xff, 0x00 used for highlight so exclude here
+	0xff, 0xff, 0x00,
+	0x00, 0x00, 0xff,
+	0xff, 0x00, 0xff,
+	0x00, 0xff, 0xff,
+	0x99, 0x99, 0x99,
+	0x99, 0x00, 0x00,
+	0x00, 0x99, 0x00,
+	0x99, 0x99, 0x00,
+	0x00, 0x00, 0x99,
+	0x99, 0x00, 0x99,
+	0x00, 0x99, 0x99,
+	0x40, 0x40, 0x40,
+	0x40, 0x00, 0x00,
+	0x40, 0x40, 0x00,
+};
+
+for i=49,768,3 do
+	default_lut[i+0] = 0;
+	default_lut[i+1] = i-1;
+	default_lut[i+2] = 0;
 end
 
 local global_lookup = load_image("color_lut/ascii.png");
+
 if (not valid_vid(global_lookup)) then
 	global_lookup = raw_surface(256, 1, 3, default_lut);
 end
+default_lut = raw_surface(256, 1, 3, default_lut);
 
 --
 -- get x, y, z coordinates that match the tranformation done by the
@@ -53,24 +75,50 @@ shaders_2dview = {
 		]],
 		vertex = nil
 	},
+-- assumed histogram is [2] for update_highlight_shader function
 	{
 		name = "Histogram Highlight",
 		vertex = nil,
 		fragment = [[
 			uniform sampler2D map_tu0;
+			uniform sampler2D map_tu1;
+
 			uniform vec2 highlight_range;
+			uniform mat4 lut;
+
 			varying vec2 texco;
 
 			void main()
 			{
 				vec4 col = texture2D(map_tu0, texco);
 				float intens = (col.r + col.g + col.b) / 3.0;
-				if (intens < highlight_range.x || intens > highlight_range.y)
-					gl_FragColor = vec4(0.5 * intens, 0.5 * intens, 0.5 * intens, 1.0);
+				gl_FragColor = vec4(0.2*intens,0.2*intens,0.2*intens,1.0);
+
+/* matrix packed with values to highlight */
+				if (intens < highlight_range.x || intens > highlight_range.y){
+					for (int i = 0; i < 4; i++)
+						for (int j = 0; j < 4; j++){
+							if (lut[i][j] == -1.0)
+								return;
+
+							if (abs(lut[i][j]/256.0 - intens) < 0.001){
+								gl_FragColor = texture2D(map_tu1, vec2(float(i*4+j)/256.0, 0));
+								return;
+							}
+						}
+				}
+/* range takes priority */
 				else
 					gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
 			}
 		]],
+		uniforms = {
+			lut = {
+				typev = "ffffffffffffffff",
+				values = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}
+			};
+		},
+		lookup = default_lut
 	},
 	{
 		name = "Red/Green Split",
@@ -300,8 +348,24 @@ function switch_shader(wnd, target, shtbl)
 	wnd.shtbl = shtbl;
 
 	if (shtbl.lookup) then
+		local dst = global_lookup;
+
+		if (type(shtbl.lookup) == "string") then
+			shtbl.lookup = load_image_asych(shtbl.lookup);
+		end
+
+		if (type(shtbl.lookup) == "number") then
+			dst = shtbl.lookup;
+		end
+
 		image_framesetsize(target, 2, FRAMESET_MULTITEXTURE);
-		set_image_as_frame(target, global_lookup, 1);
+		set_image_as_frame(target, dst, 1);
+	end
+
+	if (shtbl.uniforms) then
+		for k,v in pairs(shtbl.uniforms) do
+			shader_uniform(shtbl.shid, k, v.typev, NOPERSIST, unpack(v.values));
+		end
 	end
 
 	local msg = render_text(menu_text_fontstr .. "Shader: " .. shtbl.name);
@@ -319,6 +383,16 @@ function switch_shader(wnd, target, shtbl)
 			set_image_as_frame(wnd.wm.fullscreen_vid, global_lookup, 1);
 		end
 	end
+end
+
+function update_highlight_shader(values)
+	for i=1,16 do
+		shaders_2dview[2].uniforms.lut.values[i] =
+			values[i] ~= nil and values[i] or -1;
+	end
+	shader_uniform(shaders_2dview[2].shid, "lut",
+		shaders_2dview[2].uniforms.lut.typev, NOPERSIST,
+		unpack(shaders_2dview[2].uniforms.lut.values));
 end
 
 local function load_new_lut(wnd, val, id)

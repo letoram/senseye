@@ -26,14 +26,15 @@ local function goto_position(nw, slot)
 	resize_image(nw.cursor, sz, nw.height);
 	move_image(nw.cursor, slot * math.floor(nw.width / 256), 0);
 
-	local slotstr = tostring(slot);
+	local slotstr = string.format("0x%.2x", slot);
 
 	if (nw.lockv) then
-		slotstr = slotstr .. ":" .. tostring(nw.lockv);
-	else
-		nw.parent:highlight((slot-0.1)/255, (slot+1)/255);
+		for i=1,#nw.lockv do
+			slotstr = slotstr .. ":" .. string.format("0x%.2x", nw.lockv[i]);
+		end
 	end
 
+	nw.parent:highlight((slot-0.1)/255, (slot+1)/255);
 	nw:set_message(slotstr);
 end
 
@@ -107,8 +108,8 @@ function spawn_histogram(wnd)
 		goto_position(wnd, math.floor(x * 255), y - rprops.y);
 	end
 
--- overload the default click-handler and use default click for
--- meta but forward highlight- value to parent
+-- left-click builds a list of clicked values, rclick resets it.
+-- used with highlight- shader to find byte sequences visually.
 	local oldclick = nw.click;
 	nw.click = function(wnd, vid, x, y)
 		if (wnd.wm.meta) then
@@ -116,7 +117,21 @@ function spawn_histogram(wnd)
 		end
 
 		nw.hgram_lock = not nw.hgram_lock;
-		nw.lockv = nw.hgram_slot;
+		if (nw.lockv) then
+			local found = false;
+			for i=1,#nw.lockv do
+				if (nw.lockv[i] == nw.hgram_slot) then
+					found = true;
+					break;
+				end
+			end
+			if (not found) then
+				table.insert(nw.lockv, nw.hgram_slot);
+			end
+		else
+			nw.lockv = {nw.hgram_slot};
+		end
+		update_highlight_shader(nw.lockv);
 
 		if (nw.parent.highlight) then
 			nw.parent:highlight((nw.hgram_slot-0.5) / 255.0,
@@ -126,6 +141,7 @@ function spawn_histogram(wnd)
 
 	nw.rclick = function(wnd, vid, x, y)
 		nw.lockv = nil;
+		update_highlight_shader({});
 		goto_position(nw, nw.hgram_slot);
 	end
 
