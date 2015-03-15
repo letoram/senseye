@@ -8,11 +8,19 @@
 
 local histo_popup = {
 	{
-		label = "Switch Normalization Mode",
-		name = "ph_zoom_norm",
+		label = "Toggle Pattern Matching",
+		name = "ph_ptn_find",
 		handler = function(wnd)
-			wnd.normalize = not wnd.normalize;
-			wnd.pending = 1;
+			if (wnd.ref_histo == nil) then
+				wnd.log_histo = true;
+				wnd.pending = 1;
+				wnd.thresh = gconfig_get("hmatch_pct");
+				wnd:set_message(string.format(
+					"Matching against current histogram (%%%d)", wnd.thresh));
+			else
+				wnd:set_message("Matching disabled");
+				wnd.ref_histo = nil;
+			end
 		end
 	}
 };
@@ -38,6 +46,26 @@ local function goto_position(nw, slot)
 	nw:set_message(slotstr);
 end
 
+local function pop_htable(tbl, dst)
+	for i=0,255 do
+		local r,g,b = tbl:frequency(i, HISTOGRAM_MERGE_NOALPHA, true);
+		dst[i] = r;
+	end
+end
+
+--
+-- should probably be enhanced in the "picture tuner" to cover
+-- a gaussian blur or similar noise filtering
+--
+local function match_htable(h1, h2)
+-- missing, comparison function. Possible candidates:
+-- chisquare (perfect, 0.0, total: relative to hgram size), sum((h1[n]-h2[n])^2/(h1[n]+h2[n])),
+-- correl (-1 .. 1), sum( hp1[n] * hp1[n] ) / sqrt( sum(hp1^2 * hp2^2) ) and
+-- hp is h[n] - (1/256)*sum(h[n])
+-- intersect ( 0.. 1) sum(min(h1[n], h2[n]))
+	return 1.0;
+end
+
 function spawn_histogram(wnd)
 -- create composition buffer, intermediate buffer and histogram
 -- buffer. Setup a calctarget that imposes the histogram unto to
@@ -49,28 +77,51 @@ function spawn_histogram(wnd)
 	image_sharestorage(wnd.ctrl_id, csurf);
 	show_image(csurf);
 
---
 -- anchor a new window to the data source window, and setup
 -- some of the required event handlers (reposition, ...)
---
 	local nw = wnd.wm:add_window(hgram, {});
 	nw.reposition = repos_window;
 	nw:set_parent(wnd, ANCHOR_LR);
 	nw:resize(wnd.width, wnd.height);
 	local destroy = nw.destroy;
-	nw.normalize = true;
+
+	force_image_blend(csurf, BLEND_NONE);
 
 	define_calctarget(ibuf, {csurf}, RENDERTARGET_DETACH,
 		RENDERTARGET_NOSCALE, 0, function(tbl, w, h)
-		tbl:histogram_impose(hgram, HISTOGRAM_MERGE_NOALPHA, nw.normalize);
+		tbl:histogram_impose(hgram, HISTOGRAM_MERGE_NOALPHA, true);
+-- same as in patfind.lua, only alert when going out->in
+		if (nw.ref_histo ~= nil) then
+			local ctbl = {};
+			pop_htable(tbl, ctbl);
+			local pct = match_htable(nw.ref_histo, ctbl);
+			if (pct >= nw.thresh) then
+				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
+				if (nw.in_signal) then
+				else
+					nw.in_signal = true;
+					nw.signal_pos = nw.parent.ofs;
+					nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
+					nw.parent:alert("histogram match", 1);
+				end
+			else
+				nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
+				nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
+			end
+
+		elseif (nw.log_histo == true) then
+			nw.ref_histo = {};
+			pop_htable(tbl, nw.ref_histo);
+			nw.log_histo = false;
+			nw.in_signal = true;
+			nw:set_border(2, 0, 255, 0);
+		end
 	end);
 
---
 -- this might seem a bit odd, but since both uploads and
 -- readbacks are asynchronous by default (and we don't want
 -- the stalls imposed for synchronous transfers) we defer
 -- histogram updates and lock them to the logical clock.
---
 	nw.pending = 1;
 	nw.tick = function()
 		if (nw.pending > 0) then
@@ -85,11 +136,9 @@ function spawn_histogram(wnd)
 		end
 	end
 
---
 -- highlight cursor that follows mouse motion and indicates
 -- the currently selected column (which is scaled and tracked
 -- as hgram_slot)
---
 	local cursor = color_surface(1, wnd.height, 0, 255, 0);
 	blend_image(cursor, 0.8);
 	link_image(cursor, nw.canvas);

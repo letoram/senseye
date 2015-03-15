@@ -15,7 +15,7 @@ local function modelwnd(wnd, model, shader)
 
 -- 2. create an offscreen rendertarget for our 3d pipeline, and add a camera
 	local rtgt = alloc_surface(VRESW, VRESH);
-	define_rendertarget(rtgt, {model}, RENDERTARGET_DETACH,
+	define_rendertarget(rtgt, {model, box}, RENDERTARGET_DETACH,
 		RENDERTARGET_NOSCALE, RENDERTARGET_FULL);
 
 	local camera = null_surface(1, 1);
@@ -195,11 +195,22 @@ function spawn_pointcloud(wnd)
 	local props = image_storage_properties(wnd.canvas);
 	local pc = build_pointcloud(props.width * props.height, 2);
 	force_image_blend(pc, BLEND_ADD);
+
 	local new = modelwnd(wnd, pc, shaders_3dview_pcloud[1]);
 	new.shader_group = shaders_3dview_pcloud;
 	new.popup = merge_menu(pc_menu, model_menu);
 	new.name = new.name .. "_pointcloud";
 	new.shind = 1;
+
+-- 2. attach a marker that is usually hidden but can be used to show
+-- parent window selection
+	local box = build_3dbox(0.0001, 0.0001, 0.0001, 0.0001);
+	local text = fill_surface(2, 2, 255, 255, 255);
+	image_sharestorage(text, box);
+	delete_image(text);
+	show_image(box);
+	rotate3d_model(box, 45, 45, 45, 1000);
+	rendertarget_attach(new.rendertarget, box, RENDERTARGET_DETACH);
 end
 
 local function spawn_plane(wnd)

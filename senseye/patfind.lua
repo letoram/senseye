@@ -82,11 +82,8 @@ local function set_calc(nw, abuf, canv)
 				nw.parent:alert(string.format("pattern %d match", nw.ptind));
 			end
 		else
-				nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
-
-			if (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs) then
-				nw.in_signal = false;
-			end
+			nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
+			nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
 		end
 	end);
 end

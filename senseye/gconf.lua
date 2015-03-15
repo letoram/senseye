@@ -12,6 +12,7 @@ local defaults = {
 	pack_default = 20,
 	alpha_default = 30,
 	sample_default = 256,
+	hmatch_pct = 90,
 };
 
 function gconfig_set(key, val)

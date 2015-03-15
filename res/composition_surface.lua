@@ -40,8 +40,8 @@ if (SHADER_LANGUAGE == "GLSL120") then
 	void main()
 	{
 		vec3 col = texture2D(map_diffuse, texco).rgb;
-		float margin_s = border / obj_output_sz.x;
-		float margin_t = border / obj_output_sz.y;
+		float margin_s = 0.5 * (border / obj_output_sz.x);
+		float margin_t = 0.5 * (border / obj_output_sz.y);
 
 		if ( texco.s <= 1.0 - margin_s && texco.s >= margin_s &&
 			texco.t <= 1.0 - margin_t && texco.t >= margin_t )
