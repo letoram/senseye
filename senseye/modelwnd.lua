@@ -208,8 +208,8 @@ function spawn_pointcloud(wnd)
 	local text = fill_surface(2, 2, 255, 255, 255);
 	image_sharestorage(text, box);
 	delete_image(text);
-	show_image(box);
-	rotate3d_model(box, 45, 45, 45, 1000);
+--	show_image(box);
+--	rotate3d_model(box, 45, 45, 45, 1000);
 	rendertarget_attach(new.rendertarget, box, RENDERTARGET_DETACH);
 end
 
