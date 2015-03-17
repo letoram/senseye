@@ -6,22 +6,163 @@
 -- part of the calctarget feature, here we primarily
 -- map UI resources and do buffer setup.
 
+local function chi_square(h1, h2)
+	local sum = 0;
+
+	for i=0,255 do
+		local delta = (h1[i] - h2[i]) / h1[i];
+		local add = h1[i] + h2[i];
+
+		if (delta > 0 and add > 0) then
+			sum = sum + ( delta * delta ) / add;
+		end
+	end
+
+	return 1.0 - (sum / 255);
+end
+
+local function bhattacharyya(h1, h2)
+	local bcf = 0;
+	local sum_1 = 0;
+	local sum_2 = 0;
+
+	for i=0,255 do
+		bcf = bcf + math.sqrt(h1[i] * h2[i]);
+		sum_1 = sum_1 + h1[i];
+		sum_2 = sum_2 + h2[i];
+	end
+
+	local rnd = math.floor(sum_1 + 0.5);
+	local bcf = bcf > rnd and rnd or bcf;
+
+	return 1.0 - math.sqrt(rnd - bcf);
+end
+
+local function intersection(h1, h2)
+	local sum = 0;
+	for i=0,255 do
+		sum = sum + (h1[i] > h2[i] and h2[i] or h1[i]);
+	end
+	return sum;
+end
+
+local function correlation(h1, h2)
+	local cf_sum = 0;
+	local h1_sum = 0;
+	local h2_sum = 0;
+	local h1p_sum = 0;
+	local h2p_sum = 0;
+
+	for i=0, 255 do
+		cf_sum = h1[i] * h2[i];
+		h1_sum = h1_sum + h1[i];
+		h2_sum = h2_sum + h2[i];
+		h1p_sum = h1[i] * h1[i];
+		h2p_sum = h2[i] * h2[i];
+	end
+
+	local rv = (cf_sum - h1_sum * h2_sum / 256) /
+		math.sqrt(
+			(h1p_sum - (h1_sum * h1_sum) / 256) *
+			(h2p_sum - (h2_sum * h2_sum) / 256)
+		);
+
+	return 1 - math.abs(rv);
+end
+
+local match_func = {
+	{
+		label = "Chi- Square",
+		name = "match_chisqr",
+		handler = function(wnd)
+			wnd.match_fun = chi_square;
+			wnd.parent:set_message("Chi- Square matching");
+		end
+	},
+	{
+		label = "Bhattacharyya",
+		name = "match_bhatt",
+		handler = function(wnd)
+			wnd.match_fun = bhattacharyya;
+			wnd.parent:set_message("Bhattacharyya matching");
+		end
+	},
+	{
+		label = "Intersection",
+		name = "match_intersect",
+		handler = function(wnd)
+			wnd.match_fun = intersection;
+			wnd.parent:set_message("Intersection matching");
+		end,
+	},
+	{
+		label = "Correlation",
+		name = "match_correl",
+		handler = function(wnd)
+			wnd.match_fun = correlation;
+			wnd.parent:set_message("Correlation matching");
+		end
+	}
+};
+
+local match_val = {};
+
+for k,v in ipairs({1,2,5,10,20,30,40,50}) do
+	table.insert(match_val, {
+		label = string.format("%d %%", v),
+		value = v,
+		name = "match_thresh"
+	});
+end
+
+match_val.handler = function(wnd, value, rv)
+	wnd.thresh = value;
+	wnd.parent:set_message(string.format(
+		"Trigger tolerance at %d%% deviation", value));
+	if (rv) then
+		gconfig_set("match_default", value);
+	end
+end
+
+-- need to track and toggle synchronous matching behavior
+-- to reduce the risk of race conditions at the expense
+-- of being vulnerable to clients stalling us.
 local histo_popup = {
 	{
-		label = "Toggle Pattern Matching",
+		label = "Toggle Matching...",
 		name = "ph_ptn_find",
 		handler = function(wnd)
 			if (wnd.ref_histo == nil) then
 				wnd.log_histo = true;
 				wnd.pending = 1;
+				if (wnd.scanners ~= nil) then
+					wnd.scanners = wnd.scanners + 1;
+				else
+					wnd.scanners = 1;
+					target_synchronous(wnd.parent.ctrl_id, 1);
+				end
 				wnd.thresh = gconfig_get("hmatch_pct");
-				wnd:set_message(string.format(
-					"Matching against current histogram (%%%d)", wnd.thresh));
+				wnd.parent:set_message(string.format(
+					"Matching > (%d%%)", wnd.thresh), 100);
 			else
-				wnd:set_message("Matching disabled");
+				wnd.parent:set_message("Matching disabled");
 				wnd.ref_histo = nil;
+				wnd.scanners = wnd.scanners - 1;
+				if (wnd.scanners == 0) then
+					target_synchronous(wnd.ctrl_id, 0);
+				end
 			end
 		end
+	},
+	{
+		label = "Matching Function...",
+		name = "ph_ptn_match",
+		submenu = match_func
+	},
+	{
+		label = "Trigger Deviation...",
+		name = "ph_ptn_trig",
+		submenu = match_val
 	}
 };
 
@@ -46,25 +187,26 @@ local function goto_position(nw, slot)
 	nw:set_message(slotstr);
 end
 
+-- just extract the values, scale and normalize to 1
 local function pop_htable(tbl, dst)
-	for i=0,255 do
-		local r,g,b = tbl:frequency(i, HISTOGRAM_MERGE_NOALPHA, true);
-		dst[i] = r;
+	local sum = 0;
+	for i=0, 255 do
+		dst[i] = tbl:frequency(i, HISTOGRAM_MERGE_NOLPHA, false);
+		sum = sum + dst[i];
+	end
+
+	if (sum > 0) then
+		for i=0,255 do
+			dst[i] = dst[i] / sum;
+		end
 	end
 end
 
---
--- should probably be enhanced in the "picture tuner" to cover
--- a gaussian blur or similar noise filtering
---
-local function match_htable(h1, h2)
 -- missing, comparison function. Possible candidates:
 -- chisquare (perfect, 0.0, total: relative to hgram size), sum((h1[n]-h2[n])^2/(h1[n]+h2[n])),
 -- correl (-1 .. 1), sum( hp1[n] * hp1[n] ) / sqrt( sum(hp1^2 * hp2^2) ) and
 -- hp is h[n] - (1/256)*sum(h[n])
 -- intersect ( 0.. 1) sum(min(h1[n], h2[n]))
-	return 1.0;
-end
 
 function spawn_histogram(wnd)
 -- create composition buffer, intermediate buffer and histogram
@@ -94,13 +236,16 @@ function spawn_histogram(wnd)
 		if (nw.ref_histo ~= nil) then
 			local ctbl = {};
 			pop_htable(tbl, ctbl);
-			local pct = match_htable(nw.ref_histo, ctbl);
+			local pct = 100 * nw.match_fun(nw.ref_histo, ctbl);
+
 			if (pct >= nw.thresh) then
 				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
 				if (nw.in_signal) then
+					print("alert in sig");
 				else
 					nw.in_signal = true;
 					nw.signal_pos = nw.parent.ofs;
+					print("switch to in sig");
 					nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
 					nw.parent:alert("histogram match", 1);
 				end
@@ -149,6 +294,7 @@ function spawn_histogram(wnd)
 	nw.hgram_lock = false;
 	nw.cursor_label = null_surface(1, 1);
 	nw.cursor = cursor;
+	nw.match_fun = chi_square;
 
 	nw.motion = function(wnd, vid, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);
