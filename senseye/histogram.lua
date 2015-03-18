@@ -149,7 +149,7 @@ local histo_popup = {
 				wnd.ref_histo = nil;
 				wnd.scanners = wnd.scanners - 1;
 				if (wnd.scanners == 0) then
-					target_synchronous(wnd.ctrl_id, 0);
+					target_synchronous(wnd.parent.ctrl_id, 0);
 				end
 			end
 		end
@@ -240,18 +240,16 @@ function spawn_histogram(wnd)
 
 			if (pct >= nw.thresh) then
 				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
-				if (nw.in_signal) then
-					print("alert in sig");
-				else
+				if (not nw.in_signal) then
 					nw.in_signal = true;
 					nw.signal_pos = nw.parent.ofs;
-					print("switch to in sig");
 					nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
-					nw.parent:alert("histogram match", 1);
+					nw.parent:alert("histogram", nw.parent.ctrl_id, nw.signal_pos);
 				end
 			else
 				nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
-				nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
+				nw.in_signal = false;
+--				nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
 			end
 
 		elseif (nw.log_histo == true) then
@@ -294,7 +292,7 @@ function spawn_histogram(wnd)
 	nw.hgram_lock = false;
 	nw.cursor_label = null_surface(1, 1);
 	nw.cursor = cursor;
-	nw.match_fun = chi_square;
+	nw.match_fun = bhattacharyya;
 
 	nw.motion = function(wnd, vid, x, y)
 		local rprops = image_surface_resolve_properties(wnd.canvas);

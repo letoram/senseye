@@ -9,15 +9,19 @@
 local rtbl = system_load("senses/psense.lua")();
 
 rtbl.dispatch_sub[BINDINGS["PSENSE_STEP_FRAME"]] = function(wnd)
+	wnd.flip_suspend = true;
 	stepframe_target(wnd.ctrl_id, wnd.wm.meta and 2 or 1);
 end
 
 rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_BACKWARD"]] = function(wnd)
+	wnd.flip_suspend = true;
 	stepframe_target(wnd.ctrl_id, wnd.wm.meta and -2 or -1);
 end
 
 rtbl.dispatch_sub[BINDINGS["PSENSE_PLAY_TOGGLE"]] = function(wnd)
 	local meta = wnd.wm.meta;
+	wnd.flip_suspend = true;
+
 	if (wnd.tick) then
 		wnd.tick = nil;
 	else
@@ -41,6 +45,10 @@ local old_init = rtbl.init;
 rtbl.init = function(wnd)
 	old_init(wnd);
 
+	wnd.seek = function(wnd, ofs)
+		target_seek(wnd.ctrl_id, ofs);
+	end
+
 -- unpickable overlay that estimated the position of the
 -- currently presented datablock. This is based on an approximation
 -- of how many bytes each line in the preview window covers
@@ -59,6 +67,14 @@ rtbl.init = function(wnd)
 		local sfy = wnd.height / props.height;
 		y = (y - wnd.y);
 		y = y > 0 and y / sfy or 0;
+
+-- more state to keep track off when it comes to alerts and
+-- seeking that is not based on stepframe
+		if (wnd.children[1] and wnd.children[1].suspended) then
+			resume_target(wnd.children[1].ctrl_id);
+			wnd.children[1].suspended = false;
+			wnd.children[1].in_signal = false;
+		end
 		target_seek(wnd.ctrl_id, y);
 	end
 
@@ -94,5 +110,5 @@ rtbl.init = function(wnd)
 	end
 end
 
-rtbl.name = "fsense";
+rtbl.name = "fsense_data";
 return rtbl;

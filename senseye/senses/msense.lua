@@ -25,14 +25,21 @@ for k,v in ipairs(rtbl.popup_sub) do
 end
 
 rtbl.dispatch_sub[BINDINGS["MSENSE_REFRESH"]] = function(wnd)
+	wnd.flip_suspend = true;
 	stepframe_target(wnd.ctrl_id, 0);
 end
 
 rtbl.dispatch_sub[BINDINGS["PSENSE_STEP_FRAME"]] = function(wnd)
+	wnd.flip_suspend = true;
 	stepframe_target(wnd.ctrl_id, wnd.wm.meta and 2 or 1);
 end
 
 rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_BACKWARD"]] = function(wnd)
+	if (wnd.suspended) then
+		wnd.suspended = false;
+		target_resume(wnd.ctrl_id);
+	end
+
 	stepframe_target(wnd.ctrl_id, wnd.wm.meta and -2 or -1);
 end
 

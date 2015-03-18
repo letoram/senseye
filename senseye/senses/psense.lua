@@ -5,10 +5,13 @@
 local disp = {};
 
 disp[BINDINGS["PSENSE_STEP_FRAME"]] = function(wnd)
+	wnd.flip_suspend = true;
 	stepframe_target(wnd.ctrl_id, 1);
 end
 
 disp[BINDINGS["PSENSE_PLAY_TOGGLE"]] = function(wnd)
+	wnd.flip_suspend = true;
+
 	if (wnd.tick) then
 		wnd.tick = nil;
 	else
@@ -246,9 +249,10 @@ return {
 	source_listener = fsrv_ev, -- need to listen to some events to track stream
 	map = coord_map, -- translate from position in window to stream
 	dispatch_sub = disp, -- sensor specific keybindings
-	popup_sub = pop, -- sensor specific popup
+	popup_sub = pop, -- sensor specific popup,
 	init = function(wnd)
 		wnd.ofs = 0;
+		wnd.seek = function() end
 		wnd.size_cur = 3; -- default packing mode is 2
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
 		wnd.dynamic_zoom = true;

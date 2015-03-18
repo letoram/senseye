@@ -79,7 +79,8 @@ local function set_calc(nw, abuf, canv)
 				nw.in_signal = true;
 				nw.signal_pos = nw.parent.ofs;
 				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
-				nw.parent:alert(string.format("pattern %d match", nw.ptind));
+				nw.parent:alert("pattern_" ..tostring(nw.ptind),
+					nw.parent.ctrl_id, nw.signal_pos);
 			end
 		else
 			nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);

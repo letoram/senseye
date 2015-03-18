@@ -153,6 +153,20 @@ function stepframe_target(src, id)
 		return defstep(src, id);
 	end
 
+-- this is deferred from all over the place to not have multiple
+-- histogram matching + picture matching colliding
+	if (wnd.flip_suspend) then
+		wnd.flip_suspend = false;
+		if (wnd.suspended) then
+			wnd.suspended = false;
+			resume_target(src);
+		end
+	end
+
+	if (wnd.suspended) then
+		return nil;
+	end
+
 	if (wnd.pending == nil) then
 		defstep(src, id);
 		return;
@@ -195,9 +209,16 @@ function convert_type(wnd, th, basemenu)
 	wnd.basename = th.name;
 	wnd.name = wnd.name .. "_" .. th.name;
 	wnd.map = th.map;
-	wnd.alert = function(wnd, source_id)
+
+-- this function can be intercepted in order to add additional
+-- handlers, e.g. taking note of interesting positions
+	wnd.alert = function(wnd, source_str, source_id, pos)
+		wnd:set_message(string.format("%s alert @ %x", source_str, pos), 100);
+		print(wnd.name);
+		wnd:seek(pos);
 		wnd.tick = nil;
 		wnd.pending = 0;
+		wnd.suspended = true; -- will require user-input to wake
 	end
 
 	if (th.source_listener) then
