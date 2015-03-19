@@ -6,21 +6,6 @@
 -- part of the calctarget feature, here we primarily
 -- map UI resources and do buffer setup.
 
-local function chi_square(h1, h2)
-	local sum = 0;
-
-	for i=0,255 do
-		local delta = (h1[i] - h2[i]) / h1[i];
-		local add = h1[i] + h2[i];
-
-		if (delta > 0 and add > 0) then
-			sum = sum + ( delta * delta ) / add;
-		end
-	end
-
-	return 1.0 - (sum / 255);
-end
-
 local function bhattacharyya(h1, h2)
 	local bcf = 0;
 	local sum_1 = 0;
@@ -46,39 +31,7 @@ local function intersection(h1, h2)
 	return sum;
 end
 
-local function correlation(h1, h2)
-	local cf_sum = 0;
-	local h1_sum = 0;
-	local h2_sum = 0;
-	local h1p_sum = 0;
-	local h2p_sum = 0;
-
-	for i=0, 255 do
-		cf_sum = h1[i] * h2[i];
-		h1_sum = h1_sum + h1[i];
-		h2_sum = h2_sum + h2[i];
-		h1p_sum = h1[i] * h1[i];
-		h2p_sum = h2[i] * h2[i];
-	end
-
-	local rv = (cf_sum - h1_sum * h2_sum / 256) /
-		math.sqrt(
-			(h1p_sum - (h1_sum * h1_sum) / 256) *
-			(h2p_sum - (h2_sum * h2_sum) / 256)
-		);
-
-	return 1 - math.abs(rv);
-end
-
 local match_func = {
-	{
-		label = "Chi- Square",
-		name = "match_chisqr",
-		handler = function(wnd)
-			wnd.match_fun = chi_square;
-			wnd.parent:set_message("Chi- Square matching");
-		end
-	},
 	{
 		label = "Bhattacharyya",
 		name = "match_bhatt",
@@ -94,14 +47,6 @@ local match_func = {
 			wnd.match_fun = intersection;
 			wnd.parent:set_message("Intersection matching");
 		end,
-	},
-	{
-		label = "Correlation",
-		name = "match_correl",
-		handler = function(wnd)
-			wnd.match_fun = correlation;
-			wnd.parent:set_message("Correlation matching");
-		end
 	}
 };
 
@@ -237,7 +182,6 @@ function spawn_histogram(wnd)
 			local ctbl = {};
 			pop_htable(tbl, ctbl);
 			local pct = 100 * nw.match_fun(nw.ref_histo, ctbl);
-
 			if (pct >= nw.thresh) then
 				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
 				if (not nw.in_signal) then
@@ -249,7 +193,6 @@ function spawn_histogram(wnd)
 			else
 				nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
 				nw.in_signal = false;
---				nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
 			end
 
 		elseif (nw.log_histo == true) then
@@ -333,9 +276,15 @@ function spawn_histogram(wnd)
 	end
 
 	nw.rclick = function(wnd, vid, x, y)
-		nw.lockv = nil;
-		update_highlight_shader({});
-		goto_position(nw, nw.hgram_slot);
+		wnd:select();
+
+		if (wnd.wm.meta) then
+			nw.lockv = nil;
+			update_highlight_shader({});
+			goto_position(nw, nw.hgram_slot);
+		else
+			spawn_popupmenu(wnd.wm, wnd.popup);
+		end
 	end
 
 	nw.zoom_position = function(self, wnd, x, y, r, g, b, a, click)
