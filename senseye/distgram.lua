@@ -185,11 +185,13 @@ function spawn_distgram(wnd)
 	end
 
 	nw.dispatch["RIGHT"] = function()
-		goto_slot(nw, nw.slot + 1);
+		goto_slot(nw, nw.slot + (nw.wm.meta_detail and 10 or (
+			nw.wm.meta_detail and 30 or 1)));
 	end
 
 	nw.dispatch["LEFT"] = function()
-		goto_slot(nw, nw.slot - 1);
+		goto_slot(nw, nw.slot + (nw.wm.meta_detail and -10 or (
+			nw.wm.meta_detail and -30 or -1)));
 	end
 
 	nw.source_handler = function(nw, source, status)

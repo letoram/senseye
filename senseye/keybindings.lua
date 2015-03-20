@@ -13,6 +13,7 @@ BINDINGS["FULLSCREEN"]    = "F1"
 BINDINGS["ZOOM"]          = "F3" -- + META zooms out
 BINDINGS["RESIZE_X2"]     = "F2" -- + META shrinks
 BINDINGS["PLAYPAUSE"]     = " "
+BINDINGS["SELECT"]        = "RETURN"
 BINDINGS["DESTROY"]       = "BACKSPACE" -- requires meta
 BINDINGS["CYCLE_SHADER"]  = "c"
 BINDINGS["TRANSLATORS"]   = "t" -- requires meta

@@ -304,6 +304,20 @@ function spawn_histogram(wnd)
 		end
 	end
 
+	nw.dispatch["RIGHT"] = function()
+		goto_position(nw, nw.hgram_slot + (nw.wm.meta and 10 or (
+			nw.wm.meta_detail and 30 or 1)));
+	end
+
+	nw.dispatch[BINDINGS["SELECT"]] = function()
+		nw:click(wnd.canvas, x, y);
+	end
+
+	nw.dispatch["LEFT"] = function()
+		goto_position(nw, nw.hgram_slot + (nw.wm.meta_detail and -10 or (
+			nw.wm.meta_detail and -30 or -1)));
+	end
+
 	nw.zoom_link = function(self, wnd, txcos)
 		image_set_txcos(csurf, txcos);
 		rendertarget_forceupdate(ibuf);

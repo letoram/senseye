@@ -214,7 +214,6 @@ function convert_type(wnd, th, basemenu)
 -- handlers, e.g. taking note of interesting positions
 	wnd.alert = function(wnd, source_str, source_id, pos)
 		wnd:set_message(string.format("%s alert @ %x", source_str, pos), 100);
-		print(wnd.name);
 		wnd:seek(pos);
 		wnd.tick = nil;
 		wnd.pending = 0;
@@ -422,9 +421,7 @@ function senseye_input(iotbl)
 
 -- wm input takes care of other management as well, i.e.
 -- data routing, locking etc. so just forward
-		if (iotbl.active) then
-			wm:input_sym(sym);
-		end
+		wm:input_sym(sym, iotbl.active);
 
 	else
 		wm:input(iotbl);
