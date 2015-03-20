@@ -37,7 +37,8 @@ local match_func = {
 		name = "match_bhatt",
 		handler = function(wnd)
 			wnd.match_fun = bhattacharyya;
-			wnd.parent:set_message("Bhattacharyya matching");
+			wnd.parent:set_message("Bhattacharyya matching",
+				gconfig_get("msg_timeout"));
 		end
 	},
 	{
@@ -45,14 +46,15 @@ local match_func = {
 		name = "match_intersect",
 		handler = function(wnd)
 			wnd.match_fun = intersection;
-			wnd.parent:set_message("Intersection matching");
+			wnd.parent:set_message("Intersection matching",
+				gconfig_get("msg_timeout"));
 		end,
 	}
 };
 
 local match_val = {};
 
-for k,v in ipairs({1,2,5,10,20,30,40,50}) do
+for k,v in ipairs({99, 98, 95, 90, 80, 70, 60}) do
 	table.insert(match_val, {
 		label = string.format("%d %%", v),
 		value = v,
@@ -61,9 +63,11 @@ for k,v in ipairs({1,2,5,10,20,30,40,50}) do
 end
 
 match_val.handler = function(wnd, value, rv)
+	value = value < 1 and 1 or value;
+	value = value > 100 and 100 or value;
 	wnd.thresh = value;
 	wnd.parent:set_message(string.format(
-		"Trigger tolerance at %d%% deviation", value));
+		"Trigger tolerance at %d%% deviation", value), gconfig_get("msg_timeout"));
 	if (rv) then
 		gconfig_set("match_default", value);
 	end
@@ -88,9 +92,9 @@ local histo_popup = {
 				end
 				wnd.thresh = gconfig_get("hmatch_pct");
 				wnd.parent:set_message(string.format(
-					"Matching > (%d%%)", wnd.thresh), 100);
+					"Matching > (%d%%)", wnd.thresh), gconfig_get("msg_timeout"));
 			else
-				wnd.parent:set_message("Matching disabled");
+				wnd.parent:set_message("Matching disabled", gconfig_get("msg_timeout"));
 				wnd.ref_histo = nil;
 				wnd.scanners = wnd.scanners - 1;
 				if (wnd.scanners == 0) then
@@ -145,6 +149,11 @@ local function pop_htable(tbl, dst)
 			dst[i] = dst[i] / sum;
 		end
 	end
+end
+
+local function force_update(nw)
+	rendertarget_forceupdate(nw.calc_target);
+	stepframe_target(nw.calc_target);
 end
 
 -- missing, comparison function. Possible candidates:
@@ -305,8 +314,13 @@ function spawn_histogram(wnd)
 	end
 
 	nw.dispatch["RIGHT"] = function()
-		goto_position(nw, nw.hgram_slot + (nw.wm.meta and 10 or (
-			nw.wm.meta_detail and 30 or 1)));
+		if (nw.ref_histo ~= nil) then
+			match_val.handler(nw, nw.thresh - 1);
+			nw:force_update();
+		else
+			goto_position(nw, nw.hgram_slot + (nw.wm.meta and 10 or (
+				nw.wm.meta_detail and 30 or 1)));
+		end
 	end
 
 	nw.dispatch[BINDINGS["SELECT"]] = function()
@@ -314,20 +328,26 @@ function spawn_histogram(wnd)
 	end
 
 	nw.dispatch["LEFT"] = function()
-		goto_position(nw, nw.hgram_slot + (nw.wm.meta_detail and -10 or (
-			nw.wm.meta_detail and -30 or -1)));
+		if (nw.ref_histo ~= nil) then
+			match_val.handler(nw, nw.thresh + 1);
+			nw:force_update();
+		else
+			goto_position(nw, nw.hgram_slot + (nw.wm.meta_detail and -10 or (
+				nw.wm.meta_detail and -30 or -1)));
+		end
 	end
 
 	nw.zoom_link = function(self, wnd, txcos)
 		image_set_txcos(csurf, txcos);
-		rendertarget_forceupdate(ibuf);
-		stepframe_target(ibuf);
+		nw:force_update();
 	end
 
 	table.insert(nw.parent.source_listener, nw);
 	table.insert(nw.autodelete, ibuf);
-	nw.parent:add_zoom_handler(nw);
 
+	nw.calc_target = ibuf;
+	nw.force_update = force_update;
+	nw.parent:add_zoom_handler(nw);
 	nw.popup = histo_popup;
 	nw.dispatch[BINDINGS["POPUP"]] = wnd.dispatch[BINDINGS["POPUP"]];
 

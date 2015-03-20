@@ -8,6 +8,7 @@ local defaults = {
 	hlight_r = 0.0;
 	hlight_g = 1.0;
 	hlight_b = 0.0;
+	msg_timeout = 100,
 	map_default = 10,
 	pack_default = 20,
 	alpha_default = 30,
