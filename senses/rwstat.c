@@ -340,9 +340,15 @@ static size_t ch_data(struct rwstat_ch* ch,
 
 /* add to remap buffer and histogram,
  * histogram need to be rebuilt for CLK_SLIDE but add > branch */
+	if (buf)
 	for (size_t i = 0; i < ntw; i++){
 		chp->hgram[ buf[i] ]++;
 		chp->buf[ chp->buf_ofs++ ] = buf[i];
+	}
+	else {
+		chp->hgram[0] += ntw;
+		memset(&chp->buf[ chp->buf_ofs ], '\0', ntw);
+		chp->buf_ofs += ntw;
 	}
 
 	if (chp->buf_ofs == chp->buf_sz){

@@ -627,7 +627,11 @@ local function compsurf_input(ctx, iotbl)
 	end
 end
 
-local function compsurf_input_sym(ctx, sym)
+local function compsurf_input_sym(ctx, sym, active)
+	if (not active) then
+		sym = "r" .. sym;
+	end
+
 	if (ctx.inp_lock) then
 		ctx.inp_lock(sym);
 		return;

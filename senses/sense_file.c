@@ -65,57 +65,41 @@ void control_event(struct senseye_cont* cont, arcan_event* ev)
 	}
 }
 
-/*
- * invoked whenever the ofset has been changed from the primary segment
- */
-static uint8_t bss_block[1024];
-static void force_refresh(struct rwstat_ch* ch)
+static void refresh_data(struct rwstat_ch* ch, size_t pos)
 {
-	int ign;
-	size_t lofs;
-
 	size_t nb = ch->row_size(ch);
-	size_t bsz = nb * ch->context(ch)->addr->h;
+	struct arcan_shmif_cont* cont = ch->context(ch);
+	size_t ntw = nb * cont->addr->h;
 
-	pthread_mutex_lock(&fsense.flock);
-	if (fsense.ofs > fsense.fmap_sz - bsz)
-		fsense.ofs = fsense.fmap_sz - bsz;
-	lofs = fsense.ofs;
-	pthread_mutex_unlock(&fsense.flock);
-
-	size_t left = ch->left(ch);
-	if (left > fsense.fmap_sz - lofs){
-		ch->data(ch, fsense.fmap, fsense.fmap_sz - lofs, &ign);
-		while (ign != 1)
-			ch->data(ch, bss_block, 1024, &ign);
-	}
-	else
-		ch->data(ch, fsense.fmap + fsense.ofs, left, &ign);
-
-	struct arcan_event outev = {
-		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
-		.ext.framestatus.framenumber = (lofs+1) / fsense.bytes_perline,
-		.ext.framestatus.pts = bsz / fsense.bytes_perline
-	};
-	arcan_shmif_enqueue(fsense.cont->context(fsense.cont), &outev);
-
-	ch->wind_ofs(ch, fsense.ofs);
-}
-
-static void refresh_data(struct rwstat_ch* ch, size_t pos, size_t ntw)
-{
 	struct arcan_event outev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
 		.ext.framestatus.framenumber = (pos + 1) / fsense.bytes_perline,
 		.ext.framestatus.pts = ntw / fsense.bytes_perline
 	};
-
 	arcan_shmif_enqueue(fsense.cont->context(fsense.cont), &outev);
-	int ign;
+
 	ch->wind_ofs(ch, pos);
-	ch->data(ch, fsense.fmap + pos, ntw, &ign);
+
+	int ign;
+	size_t left = fsense.fmap_sz - pos;
+	if (ntw > left){
+		ch->data(ch, fsense.fmap + pos, left, &ign);
+		ch->data(ch, NULL, ntw - left, &ign);
+	}
+	else
+		ch->data(ch, fsense.fmap + pos, ntw, &ign);
+}
+
+static size_t fix_ofset(struct rwstat_ch* ch, ssize_t ofs)
+{
+	if (ofs > (ssize_t) fsense.fmap_sz)
+		ofs = fsense.fmap_sz;
+
+	if (ofs < 0)
+		ofs = 0;
+
+	return ofs;
 }
 
 void* data_loop(void* th_data)
@@ -133,6 +117,8 @@ void* data_loop(void* th_data)
 
 	short pollev = POLLIN | POLLERR | POLLHUP | POLLNVAL;
 	ch->event(ch, &ev);
+	ch->switch_clock(ch, RW_CLK_BLOCK);
+
 	while (1){
 		struct pollfd fds[2] = {
 			{	.fd = fsense.pipe_in, .events = pollev },
@@ -144,9 +130,12 @@ void* data_loop(void* th_data)
 /* non-blocking, just flush */
 		read(fsense.pipe_in, &sv, 4);
 
-/* parent marked seek, force step, switch to block mode */
-		if ( (fds[0].revents & POLLIN) )
-			force_refresh(ch);
+		if ( (fds[0].revents & POLLIN) ){
+			pthread_mutex_lock(&fsense.flock);
+			size_t lofs = fsense.ofs;
+			pthread_mutex_unlock(&fsense.flock);
+			refresh_data(ch, lofs);
+		}
 
 		arcan_event ev;
 		while (arcan_shmif_poll(cont, &ev) != 0){
@@ -172,66 +161,42 @@ void* data_loop(void* th_data)
 			}
 			break;
 
+			case TARGET_COMMAND_SEEKTIME:{
+				pthread_mutex_lock(&fsense.flock);
+					ssize_t lofs = fsense.ofs;
+					lofs = (ev.tgt.ioevs[0].iv != 0 ?
+						lofs + ev.tgt.ioevs[0].iv : ev.tgt.ioevs[1].fv);
+					lofs = fix_ofset(ch, lofs);
+				pthread_mutex_unlock(&fsense.flock);
+				refresh_data(ch, lofs);
+			}
+
 			case TARGET_COMMAND_STEPFRAME:{
 				size_t nb = ch->row_size(ch);
-				size_t bsz = nb * cont->addr->h;
 
-				if (ev.tgt.ioevs[0].iv == -1){
-					ch->switch_clock(ch, RW_CLK_BLOCK);
+				if (ev.tgt.ioevs[0].iv == -1 || ev.tgt.ioevs[0].iv == 1){
 					pthread_mutex_lock(&fsense.flock);
-
-					if (fsense.ofs < nb)
-						fsense.ofs = 0;
-					else
-						fsense.ofs -= nb;
+					fsense.ofs = fix_ofset(ch, fsense.ofs +
+						ch->row_size(ch) * ev.tgt.ioevs[0].iv);
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
 
-					refresh_data(ch, lofs, bsz);
+					refresh_data(ch, lofs);
 				}
 				else if (ev.tgt.ioevs[0].iv == 0){
-					ch->switch_clock(ch, RW_CLK_BLOCK);
 					pthread_mutex_lock(&fsense.flock);
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
-					refresh_data(ch, lofs, bsz);
+					refresh_data(ch, lofs);
 				}
-				else if (ev.tgt.ioevs[0].iv == 1){
-					ch->switch_clock(ch, RW_CLK_BLOCK);
+				else if (ev.tgt.ioevs[0].iv == -2 || ev.tgt.ioevs[0].iv == 2){
+					size_t bsz = nb * ch->context(ch)->addr->h;
 					pthread_mutex_lock(&fsense.flock);
-					fsense.ofs += nb;
-					if (fsense.ofs + bsz > fsense.fmap_sz)
-						fsense.ofs = fsense.fmap_sz - bsz;
+					fsense.ofs = fix_ofset(ch, fsense.ofs +
+						bsz * (ev.tgt.ioevs[0].iv == -2 ? -1 : 1));
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
-
-					refresh_data(ch, lofs, bsz);
-				}
-				else if (ev.tgt.ioevs[0].iv == -2){
-					ch->switch_clock(ch, RW_CLK_BLOCK);
-					pthread_mutex_lock(&fsense.flock);
-					if (fsense.ofs < bsz)
-						fsense.ofs = 0;
-					else
-						fsense.ofs -= bsz;
-					size_t lofs = fsense.ofs;
-
-					if (lofs + bsz > fsense.fmap_sz)
-						lofs = fsense.fmap_sz - bsz;
-
-					pthread_mutex_unlock(&fsense.flock);
-					refresh_data(ch, lofs, bsz);
-				}
-				else if (ev.tgt.ioevs[0].iv == 2){
-					size_t bsz = nb * cont->addr->h;
-					ch->switch_clock(ch, RW_CLK_BLOCK);
-					pthread_mutex_lock(&fsense.flock);
-					fsense.ofs += bsz;
-					if (fsense.ofs > fsense.fmap_sz - bsz)
-						fsense.ofs = fsense.fmap_sz - bsz;
-					size_t lofs = fsense.ofs;
-					pthread_mutex_unlock(&fsense.flock);
-					refresh_data(ch, lofs, bsz);
+					refresh_data(ch, lofs);
 				}
 			}
 			default:
@@ -317,7 +282,7 @@ int main(int argc, char* argv[])
 	fcntl(sigpipe[1], F_SETFL, O_NONBLOCK);
 
 	pthread_mutex_init(&fsense.flock, NULL);
-	fsense.fmap_sz = buf.st_size;
+	fsense.fmap_sz = buf.st_size - 1;
 	pthread_t pth;
 	pthread_create(&pth, NULL, data_loop, ch);
 
