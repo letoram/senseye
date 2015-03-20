@@ -17,6 +17,7 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <getopt.h>
 
 #include <arcan_shmif.h>
 #include <poll.h>
@@ -33,6 +34,8 @@
 struct {
 	uint8_t* fmap;
 	pthread_mutex_t flock;
+	bool wrap;
+
 	struct senseye_cont* cont;
 	size_t fmap_sz;
 	size_t ofs;
@@ -85,7 +88,10 @@ static void refresh_data(struct rwstat_ch* ch, size_t pos)
 	size_t left = fsense.fmap_sz - pos;
 	if (ntw > left){
 		ch->data(ch, fsense.fmap + pos, left, &ign);
-		ch->data(ch, NULL, ntw - left, &ign);
+		if (fsense.wrap)
+			ch->data(ch, fsense.fmap, ntw - left, &ign);
+		else
+			ch->data(ch, NULL, ntw - left, &ign);
 	}
 	else
 		ch->data(ch, fsense.fmap + pos, ntw, &ign);
@@ -93,8 +99,12 @@ static void refresh_data(struct rwstat_ch* ch, size_t pos)
 
 static size_t fix_ofset(struct rwstat_ch* ch, ssize_t ofs)
 {
-	if (ofs > (ssize_t) fsense.fmap_sz)
-		ofs = fsense.fmap_sz;
+	if (ofs > (ssize_t) fsense.fmap_sz){
+		if (fsense.wrap)
+			ofs = 0;
+		else
+			ofs = fsense.fmap_sz;
+	}
 
 	if (ofs < 0)
 		ofs = 0;
@@ -224,18 +234,67 @@ static void update_preview(struct arcan_shmif_cont* c, uint8_t* buf, size_t s)
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 }
 
+static int usage()
+{
+	printf("Usage: sense_file [options] filename\n"
+		"\t-W,--wrap \tenable wrapping at EOF\n"
+		"\t-w=,--width= \tpreview window width (default: 128)\n"
+		"\t-h=,--heigth= \tpreview window height (default: 512)\n"
+		"\t-?=,--help= \tthis text\n"
+	);
+
+	return EXIT_SUCCESS;
+}
+
+static const struct option longopts[] = {
+	{"wrap",   no_argument,       NULL, 'w'},
+	{"width",  required_argument, NULL, 'w'},
+	{"height", required_argument, NULL, 'h'},
+	{"help",   required_argument, NULL, '?'},
+	{NULL, no_argument, NULL, 0}
+};
+
 int main(int argc, char* argv[])
 {
 	struct senseye_cont cont;
 	struct arg_arr* aarr;
 	size_t base = 256;
+	size_t p_w = 128;
+	size_t p_h = 512;
+	int ch;
 
-	if (2 != argc){
-		printf("usage: fsense filename\n");
-		return EXIT_FAILURE;
+	while((ch = getopt_long(argc, argv, "Ww:h:?", longopts, NULL)) >= 0)
+	switch(ch){
+	case '?' :
+		return usage();
+	break;
+	case 'W' :
+		fsense.wrap = true;
+	break;
+	case 'w' :
+		p_w = strtol(optarg, NULL, 10);
+		if (p_w == 0 || p_w > PP_SHMPAGE_MAXW){
+			printf("invalid -w,--width arguments, %zu "
+				"larger than permitted: %zu\n", p_w, (size_t) PP_SHMPAGE_MAXW);
+			return EXIT_FAILURE;
+		}
+	break;
+	case 'h' :
+		p_h = strtol(optarg, NULL, 10);
+		if (p_h == 0 || p_h > PP_SHMPAGE_MAXH){
+			printf("invalid -h,--height arguments, %zu "
+				"larger than permitted: %zu\n", p_h, (size_t ) PP_SHMPAGE_MAXH);
+			return EXIT_FAILURE;
+		}
+	break;
 	}
 
-	int fd = open(argv[1], O_RDONLY);
+	if (optind >= argc){
+		printf("Error: missing filename\n");
+		return usage();
+	}
+
+	int fd = open(argv[optind], O_RDONLY);
 	struct stat buf;
 	if (-1 == fstat(fd, &buf)){
 		fprintf(stderr, "couldn't stat file, check permissions and file state.\n");
@@ -247,9 +306,9 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (buf.st_size < base * base && buf.st_size < 128 * 512){
+	if (buf.st_size < base * base && buf.st_size < p_w * p_h){
 		fprintf(stderr, "file too small, expecting "
-			"*at least* %zu and %zu bytes.\n", base*base, (size_t) (128 * 512));
+			"*at least* %zu and %zu bytes.\n", base*base, (size_t) (p_w * p_h));
 		return EXIT_FAILURE;
 	}
 
@@ -262,11 +321,11 @@ int main(int argc, char* argv[])
 	if (!senseye_connect(NULL, stderr, &cont, &aarr))
 		return EXIT_FAILURE;
 
-	if (!arcan_shmif_resize(cont.context(&cont), 128, 512))
+	if (!arcan_shmif_resize(cont.context(&cont), p_w, p_h))
 		return EXIT_FAILURE;
 
-	struct senseye_ch* ch = senseye_open(&cont, argv[1], base);
-	if (!ch){
+	struct senseye_ch* chan = senseye_open(&cont, argv[1], base);
+	if (!chan){
 		fprintf(stderr, "couldn't map data channel, parent rejected.\n");
 		return EXIT_FAILURE;
 	}
@@ -284,7 +343,7 @@ int main(int argc, char* argv[])
 	pthread_mutex_init(&fsense.flock, NULL);
 	fsense.fmap_sz = buf.st_size - 1;
 	pthread_t pth;
-	pthread_create(&pth, NULL, data_loop, ch);
+	pthread_create(&pth, NULL, data_loop, chan);
 
 	update_preview(cont.context(&cont), fsense.fmap, buf.st_size);
 	fsense.cont = &cont;
