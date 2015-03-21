@@ -279,7 +279,7 @@ local function compsurf_wnd_message(ctx, msg, expiration, anchor)
 	end
 
 	ctx.message = bg;
-	if (expiration) then
+	if (expiration ~= -1 and expiration ~= nil) then
 		expire_image(bg, expiration);
 	end
 end

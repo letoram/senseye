@@ -18,6 +18,36 @@ rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_BACKWARD"]] = function(wnd)
 	stepframe_target(wnd.ctrl_id, wnd.wm.meta and -2 or -1);
 end
 
+rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_SIZE_BYTE"]] = function(wnd)
+	local iotbl = {kind = "digital", active = true, label = "STEP_BYTE"};
+	wnd:set_message("Small step set to byte", DEFAULT_TIMEOUT);
+	target_input(wnd.ctrl_id, iotbl);
+end
+
+rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_SIZE_ROW"]] = function(wnd)
+	local iotbl = {kind = "digital", active = true, label = "STEP_ROW"};
+	wnd:set_message("Small step set to row", DEFAULT_TIMEOUT);
+	target_input(wnd.ctrl_id, iotbl);
+end
+
+rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_SIZE_HALFPAGE"]] = function(wnd)
+	local iotbl = {kind = "digital", active = true, label = "STEP_HALFPAGE"};
+	wnd:set_message("Meta step set to half-page", DEFAULT_TIMEOUT);
+	target_input(wnd.ctrl_id, iotbl);
+end
+
+rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_SIZE_PAGE"]] = function(wnd)
+	local iotbl = {kind = "digital", active = true, label = "STEP_PAGE"};
+	wnd:set_message("Meta step set to full-page", DEFAULT_TIMEOUT);
+	target_input(wnd.ctrl_id, iotbl);
+end
+
+rtbl.dispatch_sub[BINDINGS["FSENSE_STEP_ALIGN_512"]] = function(wnd)
+	local iotbl = {kind = "digital", active = true, label = "STEP_ALIGN_512"};
+	wnd:set_message("Align back to 512b boundary", DEFAULT_TIMEOUT);
+	target_input(wnd.ctrl_id, iotbl);
+end
+
 rtbl.dispatch_sub[BINDINGS["PSENSE_PLAY_TOGGLE"]] = function(wnd)
 	local meta = wnd.wm.meta;
 	wnd.flip_suspend = true;

@@ -139,7 +139,7 @@ local function goto_slot(wnd, id)
 		and "not found" or (tostring(wnd.distances[wnd.slot] .. " bytes")));
 
 	local msg = render_text(labelstr);
-	wnd:set_message(msg);
+	wnd:set_message(msg, -1);
 end
 
 local function disttbl_motion(wnd, vid, x, y)

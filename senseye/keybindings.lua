@@ -1,12 +1,18 @@
 --
 -- Default keybindings for most features. To disable a specific
 -- binding, remap it to some nonsense- keysym (right-hand value)
--- as other parts of the codebase expects the index keys to exist.
+-- but parts of the codebase expects the index keys to exist.
+--
+
+--
+-- to switch between mouse on left hand side vs. right hand side,
+-- the most important changes, workflow wise, is to move META and
+-- META_DETAIL around.
 --
 
 BINDINGS = {}
-BINDINGS["META"]          = "RSHIFT"
-BINDINGS["META_DETAIL"]   = "p" -- update position and motion markers
+BINDINGS["META"]          = "LSHIFT"
+BINDINGS["META_DETAIL"]   = "z" -- update position and motion markers
 
 -- window-shared
 BINDINGS["FULLSCREEN"]    = "F1"
@@ -44,7 +50,8 @@ BINDINGS["FSENSE_STEP_BACKWARD"] = "LEFT"
 BINDINGS["FSENSE_STEP_SIZE_BYTE"] = "1"
 BINDINGS["FSENSE_STEP_SIZE_ROW"] = "2"
 BINDINGS["FSENSE_STEP_SIZE_HALFPAGE"] = "3"
-BINDINGS["FSENSE_STEP_ALIGN"] = "a"
+BINDINGS["FSENSE_STEP_SIZE_PAGE"] = "4"
+BINDINGS["FSENSE_STEP_ALIGN_512"] = "a"
 
 BINDINGS["MSENSE_MAIN_UP"] = "UP"
 BINDINGS["MSENSE_MAIN_DOWN"] = "DOWN"

@@ -17,7 +17,7 @@ varying vec2 texco;
 void main()
 {
 	vec4 col = texture2D(map_tu0, texco);
-	gl_FragColor = vec4(col.a, 0.0, 0.0, 1.0);
+	gl_FragColor = vec4(0.0, col.a, 0.0, 1.0);
 }
 ]], "alpha_tor");
 

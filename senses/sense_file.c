@@ -40,7 +40,9 @@ struct {
 	size_t fmap_sz;
 	size_t ofs;
 	size_t bytes_perline;
-	size_t ent_size;
+
+	size_t small_step;
+	size_t large_step;
 
 	int pipe_in;
 	int pipe_out;
@@ -153,6 +155,29 @@ void* data_loop(void* th_data)
 			if (rwstat_consume_event(ch, &ev))
 				continue;
 
+			if (ev.category == EVENT_IO){
+				if (strcmp(ev.label, "STEP_BYTE") == 0){
+					fsense.small_step = 1;
+				}
+				else if (strcmp(ev.label, "STEP_ROW") == 0){
+					fsense.small_step = 0;
+				}
+				else if (strcmp(ev.label, "STEP_HALFPAGE") == 0){
+					fsense.large_step = 1;
+				}
+				else if (strcmp(ev.label, "STEP_PAGE") == 0){
+					fsense.large_step = 0;
+				}
+				else if (strcmp(ev.label, "STEP_ALIGN_512") == 0){
+					pthread_mutex_lock(&fsense.flock);
+					if (fsense.ofs % 512 != 0){
+						fsense.ofs = fix_ofset(ch, fsense.ofs - (fsense.ofs % 512));
+						refresh_data(ch, fsense.ofs);
+					}
+					pthread_mutex_unlock(&fsense.flock);
+				}
+			}
+
 			if (ev.category == EVENT_TARGET)
 			switch(ev.tgt.kind){
 			case TARGET_COMMAND_EXIT:
@@ -180,12 +205,10 @@ void* data_loop(void* th_data)
 			}
 
 			case TARGET_COMMAND_STEPFRAME:{
-				size_t nb = ch->row_size(ch);
-
 				if (ev.tgt.ioevs[0].iv == -1 || ev.tgt.ioevs[0].iv == 1){
 					pthread_mutex_lock(&fsense.flock);
 					fsense.ofs = fix_ofset(ch, fsense.ofs +
-						ch->row_size(ch) * ev.tgt.ioevs[0].iv);
+						(fsense.small_step ? 1 : ch->row_size(ch)) * ev.tgt.ioevs[0].iv);
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
 
@@ -198,10 +221,10 @@ void* data_loop(void* th_data)
 					refresh_data(ch, lofs);
 				}
 				else if (ev.tgt.ioevs[0].iv == -2 || ev.tgt.ioevs[0].iv == 2){
-					size_t bsz = nb * ch->context(ch)->addr->h;
 					pthread_mutex_lock(&fsense.flock);
 					fsense.ofs = fix_ofset(ch, fsense.ofs +
-						bsz * (ev.tgt.ioevs[0].iv == -2 ? -1 : 1));
+						(ch->row_size(ch) * (ch->context(ch)->addr->h) >> fsense.large_step)
+						* (ev.tgt.ioevs[0].iv == -2 ? -1 : 1));
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
 					refresh_data(ch, lofs);

@@ -369,7 +369,7 @@ function switch_shader(wnd, target, shtbl)
 	end
 
 	local msg = render_text(menu_text_fontstr .. "Shader: " .. shtbl.name);
-	wnd:set_message(msg, 100);
+	wnd:set_message(msg, DEFAULT_TIMEOUT);
 
 -- repeat the process if there is a fullscreen window and that the
 -- window does not have a 3d model (as the shader is applied to the model

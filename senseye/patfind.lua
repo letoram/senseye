@@ -157,7 +157,8 @@ function spawn_patfind(wnd, refimg)
 	nw.dispatch[BINDINGS["CYCLE_SHADER"]] = function(wnd)
 		nw.shid = (nw.shid + 1) > #shtbl and 1 or nw.shid+1;
 		image_shader(canv, shtbl[nw.shid]);
-		wnd.parent:set_message("shader set to: " .. shdrstr[nw.shid]);
+		wnd.parent:set_message("Delta Method: " ..
+			shdrstr[nw.shid], DEFAULT_TIMEOUT);
 	end
 
 	nw.dispatch[BINDINGS["PFIND_INC"]] = function(wnd)

@@ -55,6 +55,8 @@ function senseye()
 			"please upgrade your arcan installation");
 	end
 
+	DEFAULT_TIMEOUT = gconfig_get("msg_timeout");
+
 --
 -- load sense- specific user interfaces (name matches the
 -- identification string that the connected frameserver sensor
@@ -213,7 +215,8 @@ function convert_type(wnd, th, basemenu)
 -- this function can be intercepted in order to add additional
 -- handlers, e.g. taking note of interesting positions
 	wnd.alert = function(wnd, source_str, source_id, pos)
-		wnd:set_message(string.format("%s alert @ %x", source_str, pos), 100);
+		wnd:set_message(string.format(
+			"%s alert @ %x", source_str, pos), DEFAULT_TIMEOUT);
 		wnd:seek(pos);
 		wnd.tick = nil;
 		wnd.pending = 0;

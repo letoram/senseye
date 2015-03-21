@@ -37,8 +37,7 @@ local match_func = {
 		name = "match_bhatt",
 		handler = function(wnd)
 			wnd.match_fun = bhattacharyya;
-			wnd.parent:set_message("Bhattacharyya matching",
-				gconfig_get("msg_timeout"));
+			wnd.parent:set_message("Bhattacharyya matching", DEFAULT_TIMEOUT);
 		end
 	},
 	{
@@ -46,8 +45,7 @@ local match_func = {
 		name = "match_intersect",
 		handler = function(wnd)
 			wnd.match_fun = intersection;
-			wnd.parent:set_message("Intersection matching",
-				gconfig_get("msg_timeout"));
+			wnd.parent:set_message("Intersection matching", DEFAULT_TIMEOUT);
 		end,
 	}
 };
@@ -67,7 +65,7 @@ match_val.handler = function(wnd, value, rv)
 	value = value > 100 and 100 or value;
 	wnd.thresh = value;
 	wnd.parent:set_message(string.format(
-		"Trigger tolerance at %d%% deviation", value), gconfig_get("msg_timeout"));
+		"Trigger tolerance at %d%% deviation", value), DEFAULT_TIMEOUT);
 	if (rv) then
 		gconfig_set("match_default", value);
 	end
@@ -94,7 +92,7 @@ local histo_popup = {
 				wnd.parent:set_message(string.format(
 					"Matching > (%d%%)", wnd.thresh), gconfig_get("msg_timeout"));
 			else
-				wnd.parent:set_message("Matching disabled", gconfig_get("msg_timeout"));
+				wnd.parent:set_message("Matching disabled", DEFAULT_TIMEOUT);
 				wnd.ref_histo = nil;
 				wnd.scanners = wnd.scanners - 1;
 				if (wnd.scanners == 0) then
@@ -133,7 +131,7 @@ local function goto_position(nw, slot)
 	end
 
 	nw.parent:highlight((slot-0.1)/255, (slot+1)/255);
-	nw:set_message(slotstr);
+	nw:set_message(slotstr, -1);
 end
 
 -- just extract the values, scale and normalize to 1

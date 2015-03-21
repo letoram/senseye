@@ -398,7 +398,7 @@ local function motion_2d(wnd, vid, x, y)
 
 		if (wnd.map) then
 			local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
-			wnd:set_message(img);
+			wnd:set_message(img, -1);
 		end
 	end
 end
@@ -770,7 +770,8 @@ local function dump_png(wnd)
 	local img = gen_dumpid(wnd);
 	save_screenshot(name, FORMAT_PNG_FLIP, img);
 	delete_image(img);
-	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+	wnd:set_message(render_text(
+		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
 end
 
 local function dump_full(wnd)
@@ -778,7 +779,8 @@ local function dump_full(wnd)
 	local img = gen_dumpid(wnd);
 	save_screenshot(name, FORMAT_RAW32, wnd.ctrl_id);
 	delete_image(img);
-	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+	wnd:set_message(render_text(
+		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
 end
 
 local function dump_noalpha(wnd)
@@ -794,7 +796,8 @@ local function dump_noalpha(wnd)
 	local img = gen_dumpid(wnd);
 	save_screenshot(name, fmt, img);
 	delete_image(img);
-	wnd:set_message(render_text(menu_text_fontstr .. name .. " saved"), 100);
+	wnd:set_message(render_text(
+		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
 end
 
 function copy_surface(vid)
