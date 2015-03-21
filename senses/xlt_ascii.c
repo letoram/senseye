@@ -2,9 +2,7 @@
  * Copyright 2014-2015, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
- * Description: mmaps a file and implements a preview- window and a main
- * data channel that build on the rwstats statistics code along with the
- * senseye arcan shmif wrapper.
+ * Description: Simple 7-bit ascii translator
  */
 
 #include "xlt_supp.h"

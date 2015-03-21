@@ -96,6 +96,7 @@ if (ENABLE_MSENSE)
 endif()
 add_executable(xlt_seqver xlt_seqver.c ${XLT_SOURCES})
 add_executable(xlt_verify xlt_verify.c ${XLT_SOURCES})
+add_executable(xlt_hex xlt_hex.c ${XLT_SOURCES})
 add_executable(xlt_dpipe xlt_dpipe.c ${XLT_SOURCES})
 add_executable(xlt_ascii xlt_ascii.c ${XLT_SOURCES})
 
