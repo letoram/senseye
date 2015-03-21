@@ -485,7 +485,8 @@ local function wnd_drag(wnd, vid, x, y)
 			resize_image(wnd.dzv, x2-x1, y2-y1);
 		else
 			local props = image_surface_resolve_properties(wnd.canvas);
-			local mx, my = mouse_xy();
+			local mx = mouse_state().press_x;
+			local my = mouse_state().press_y;
 			mx = mx - props.x;
 			my = my - props.y;
 			wnd.dz = {mx, my, mx+1, my+1};
