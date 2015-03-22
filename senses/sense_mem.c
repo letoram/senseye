@@ -177,6 +177,15 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		}
 	}
 
+	if (ev->category == EVENT_TARGET &&
+		ev->tgt.kind == TARGET_COMMAND_DISPLAYHINT){
+		size_t width = ev->tgt.ioevs[0].iv;
+		size_t height = ev->tgt.ioevs[1].iv;
+
+		arcan_shmif_resize(cont->context(), width, height);
+		refresh = true;
+	}
+
 	if (refresh)
 		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 }

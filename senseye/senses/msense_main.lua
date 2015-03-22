@@ -39,6 +39,13 @@ local rtbl = {
 	dispatch_sub = disp,
 	popup_sub = {},
 	init = function(wnd)
+		wnd.old_drop = wnd.drop;
+		wnd.drop = function(wnd, vid, x, y)
+			if (wnd.dragmode ~= nil) then
+				target_displayhint(wnd.ctrl_id, wnd.width, wnd.height);
+			end
+			wnd.old_drop(wnd, vid, x, y);
+		end
 	end
 };
 

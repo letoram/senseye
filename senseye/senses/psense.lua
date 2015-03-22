@@ -259,8 +259,6 @@ return {
 		target_graphmode(wnd.ctrl_id, gconfig_get("map_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("pack_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("alpha_default"));
-		target_displayhint(wnd.ctrl_id,
-			gconfig_get("sample_default"), gconfig_get("sample_default"));
 
 	end -- hook to set members before data comes
 };
