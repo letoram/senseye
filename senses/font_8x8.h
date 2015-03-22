@@ -169,8 +169,8 @@ static bool draw_box(struct arcan_shmif_cont* c, uint16_t x, uint16_t y,
 	if (x >= c->addr->w || y >= c->addr->h)
 		return false;
 
-	int ux = x + w >= c->addr->w ? c->addr->w-1 : x + w;
-	int uy = y + h >= c->addr->h ? c->addr->h-1 : y + h;
+	int ux = x + w > c->addr->w ? c->addr->w : x + w;
+	int uy = y + h > c->addr->h ? c->addr->h : y + h;
 
 	for (int cy = y; cy != uy; cy++)
 		for (int cx = x; cx != ux; cx++)
