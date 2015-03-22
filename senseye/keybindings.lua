@@ -22,7 +22,9 @@ BINDINGS["PLAYPAUSE"]     = " "
 BINDINGS["SELECT"]        = "RETURN"
 BINDINGS["DESTROY"]       = "BACKSPACE" -- requires meta
 BINDINGS["CYCLE_SHADER"]  = "c"
+BINDINGS["CYCLE_MAPPING"] = "m"
 BINDINGS["TRANSLATORS"]   = "t" -- requires meta
+BINDINGS["HELPERS"]       = "x" -- for aligning zoom properly
 
 -- global
 BINDINGS["POINTSZ_INC"]   = "F7"

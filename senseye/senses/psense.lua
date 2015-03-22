@@ -147,6 +147,11 @@ clock_sub.handler = function(wnd, value, rv)
 	end
 end
 
+disp[BINDINGS["CYCLE_MAPPING"]] = function(wnd)
+	wnd.map_cur = (wnd.map_cur + 1 >= #space_sub) and 0 or wnd.map_cur+1;
+	space_sub.handler(wnd, wnd.map_cur);
+end
+
 function color_sub()
 	return shader_menu(shaders_2dview, "canvas");
 end
