@@ -13,9 +13,11 @@ local function rot(n, x, y, rx, ry)
 			x = n-1 - x;
 			y = n-1 - y;
 		end
+
+		return y, x;
 	end
 
-	return y, x;
+	return x, y;
 end
 
 local function hilbert_d2xy(base, ofs)
@@ -28,7 +30,7 @@ local function hilbert_d2xy(base, ofs)
 
 	while s < base do
 		rx = band(1, math.floor((t / 2)));
-		ry = band(1, bxor(t, rx));
+		ry = band(1, bxor(rx, t));
 		x, y = rot(s, x, y, rx, ry);
 		x = x + s * rx;
 		y = y + s * ry;
@@ -50,6 +52,7 @@ local luts = {
 function hilbert_lookup(base, x, y)
 	if (luts[base] == nil) then
 		local d = {};
+
 		local np = base * base;
 		if (bxor == nil) then
 			warning("Couldn't generate hilbert LUT, bitoperators " ..
@@ -61,10 +64,13 @@ function hilbert_lookup(base, x, y)
 			return 0;
 		end
 
-		for i=0,np do
+		for i=0,np-1 do
 			local x, y = hilbert_d2xy(base, i);
 			d[y * base + x] = i;
+			write_rawresource(string.format("%d=>%d,%d\n", i, x, y));
 		end
+
+		close_rawresource();
 		d[0] = 0;
 		d[np] = base*base;
 		luts[base] = d;
@@ -72,3 +78,4 @@ function hilbert_lookup(base, x, y)
 	local rv = luts[base][y * base + x];
 	return rv;
 end
+
