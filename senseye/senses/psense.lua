@@ -181,11 +181,15 @@ local function coord_map(wnd, x, y)
 		local bofs = (y * wnd.base + x) * wnd.size_cur + wnd.ofs;
 		msg = string.format("ofs@0x%x+%d", bofs, wnd.size_cur);
 
- -- map_tuple, not enough data to map
-	elseif (wnd.map_cur == 1 or wnd.map_cur == 2) then
+	elseif (wnd.map_cur == 2) then
+		local hofs = hilbert_lookup(wnd.base, x, y);
+		local hofs = hofs and hofs or 0;
+		msg = string.format("ofs@0x%x+%d", wnd.ofs+hofs, wnd.size_cur);
+
+-- with tuple we lose information, can't reverse
+	elseif (wnd.map_cur == 1) then
 		msg = string.format("transfer@0x%x %d bytes/pixel",
 			wnd.ofs, wnd.size_cur);
-
 	else
 		msg = "unknown";
 	end

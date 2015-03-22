@@ -49,6 +49,9 @@ function senseye()
 	system_load("wndshared.lua")();
 	system_load("shaders.lua")();
 	system_load("translators.lua")();
+	system_load("hilbert.lua")();
+
+	print(hilbert_lookup(16, 10, 10));
 
 	if (API_VERSION_MAJOR <= 0 and API_VERSION_MINOR < 9) then
 		return shutdown("Arcan Lua API version is too old, " ..
@@ -84,7 +87,7 @@ function senseye()
 	end
 
 -- uncomment for non-native cursor (would be visible in video recording)
--- mouse_setup(load_image("cursor.png"), cursimg, 1000, 1, true);
+-- mouse_setup(load_image("cursor.png"), 1000, 1, true);
 	mouse_setup_native(load_image("cursor.png"), 1, 1);
 	mouse_add_cursor("move", load_image("cursor_move.png"), 13, 13);
 	mouse_add_cursor("scale", load_image("cursor_scale.png"), 13, 13);
