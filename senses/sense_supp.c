@@ -66,8 +66,7 @@ static void dispatch_event(arcan_event* ev,
 			chp->paused = true;
 		break;
 
-		case TARGET_COMMAND_DISPLAYHINT:
-		{
+		case TARGET_COMMAND_DISPLAYHINT:{
 			size_t base = ev->tgt.ioevs[0].iv;
 			if (base > 0 && (base & (base - 1)) == 0 &&
 				arcan_shmif_resize(&chp->cont, base, base))
@@ -92,7 +91,10 @@ static void dispatch_event(arcan_event* ev,
 		break;
 
 		default:
-			printf("unknown event : %d\n", ev->tgt.kind);
+#ifdef _DEBUG
+			printf("unhandled event : %s\n", arcan_shmif_eventstr(ev, NULL, 0));
+#endif
+		break;
 		}
 }
 

@@ -46,7 +46,9 @@ struct {
 
 	int pipe_in;
 	int pipe_out;
-} fsense = {0};
+} fsense = {
+	.bytes_perline = 1
+};
 
 /*
  * input mapping :
@@ -253,6 +255,8 @@ static void update_preview(struct arcan_shmif_cont* c, uint8_t* buf, size_t s)
 
 	fsense.bytes_perline = step_sz * c->addr->w;
 	arcan_shmif_signal(c, SHMIF_SIGVID);
+	int nonsense = 0;
+	write(fsense.pipe_out, &nonsense, sizeof(nonsense));
 }
 
 static int usage()
@@ -360,15 +364,15 @@ int main(int argc, char* argv[])
 	fsense.pipe_out = sigpipe[1];
 	fcntl(sigpipe[0], F_SETFL, O_NONBLOCK);
 	fcntl(sigpipe[1], F_SETFL, O_NONBLOCK);
-
 	pthread_mutex_init(&fsense.flock, NULL);
-	fsense.fmap_sz = buf.st_size - 1;
-	pthread_t pth;
-	pthread_create(&pth, NULL, data_loop, chan);
-
-	update_preview(cont.context(&cont), fsense.fmap, buf.st_size);
 	fsense.cont = &cont;
 	cont.dispatch = control_event;
+	fsense.fmap_sz = buf.st_size - 1;
+
+	update_preview(cont.context(&cont), fsense.fmap, buf.st_size);
+
+	pthread_t pth;
+	pthread_create(&pth, NULL, data_loop, chan);
 
 	while (senseye_pump(&cont)){
 	}

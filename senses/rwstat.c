@@ -529,7 +529,6 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 			free(ch->priv->buf);
 			free(ch->priv->alpha);
 	}
-
 	ch->priv->buf_sz = bsqr * ch->priv->pack_sz;
 	ch->priv->buf = malloc(ch->priv->buf_sz);
 	ch->priv->alpha = malloc(bsqr);
@@ -705,6 +704,7 @@ struct rwstat_ch* rwstat_addch(
 	res->priv->pack = pack;
 	res->priv->amode = RW_ALPHA_FULL;
 	res->resize(res, c->addr->w);
+	res->switch_packing(res, PACK_INTENS);
 	res->priv->status_dirty = true;
 
 	return res;

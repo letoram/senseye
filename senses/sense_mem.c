@@ -187,8 +187,10 @@ static size_t synch_copy(struct rwstat_ch* ch, int fd, uint8_t* buf, size_t nb)
 	pthread_mutex_lock(&msense.plock);
 
 	ssize_t nr = read(fd, buf, nb);
-	if (-1 == nr)
+	if (-1 == nr){
+		fprintf(stderr, "error reading from memory (%s)\n", strerror(errno));
 		nr = 0;
+	}
 
 	if (nr != nb)
 		memset(buf + nr, '\0', nb - nr);
@@ -228,13 +230,13 @@ void* data_loop(void* th_data)
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
 		if (rwstat_consume_event(ch, &ev)){
-			if (ch->left(ch) > buf_sz){
-				free(buf);
-				buf_sz = ch->left(ch);
-				buf = malloc(buf_sz);
-			}
-
 			continue;
+		}
+
+		if (ch->left(ch) > buf_sz){
+			free(buf);
+			buf_sz = ch->left(ch);
+			buf = malloc(buf_sz);
 		}
 
 		if (ev.category == EVENT_TARGET)
@@ -243,14 +245,22 @@ void* data_loop(void* th_data)
 			return NULL;
 		break;
 
+		case TARGET_COMMAND_DISPLAYHINT:{
+			size_t base = ev.tgt.ioevs[0].iv;
+			if (base > 0 && (base & (base - 1)) == 0 &&
+				arcan_shmif_resize(cont, base, base))
+				ch->resize(ch, base);
+		}
+
 		case TARGET_COMMAND_STEPFRAME:{
 			ssize_t nc;
 			if (ev.tgt.ioevs[0].iv == 0){
 seek0:
 				nc = synch_copy(ch, pch->fd, buf, buf_sz);
+
 				if (0 == nc)
-					fprintf(stderr, "Couldn't read from ofset (%llu)\n",
-						(unsigned long long) cofs);
+					fprintf(stderr, "Couldn't read from ofset (%llu: %s)\n",
+						(unsigned long long) cofs, strerror(errno));
 
 				if (-1 == lseek64(pch->fd, -nc, SEEK_CUR)){
 					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
