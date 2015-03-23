@@ -143,6 +143,10 @@ end
 local function drop_rmeta(wnd)
 	if (wnd.wm.meta_detail) then
 		wnd:set_message();
+		if (valid_vid(wnd.wm.meta_zoom)) then
+			delete_image(wnd.wm.meta_zoom);
+			wnd.wm.meta_zoom = BADID;
+		end
 	end
 end
 
@@ -387,17 +391,42 @@ local function resize_zone(wnd)
 	return (lx > wnd.width * 0.6667 and ly > wnd.height * 0.6667);
 end
 
+local function update_zoom_preview(wnd, x, y)
+	if (not valid_vid(wnd.wm.meta_zoom)) then
+		local ms = null_surface(80, 80);
+		image_sharestorage(wnd.canvas, ms);
+		link_image(ms, wnd.canvas);
+		show_image(ms);
+		image_inherit_order(ms, 1);
+		image_mask_set(ms, MASK_UNPICKABLE);
+		force_image_blend(ms, BLEND_NONE);
+		wnd.wm.meta_zoom = ms;
+	end
+
+	local lx, ly = translate_2d(wnd, BADID, x, y);
+	local props = image_storage_properties(wnd.canvas);
+	local ss = 1.0 / props.width;
+	local st = 1.0 / props.height;
+	local txcos = {
+		(lx-3)*ss, (ly-3)*st, (lx+4)*ss, (ly-3)*st,
+		(lx+4)*ss, (ly+4)*st, (lx-3)*ss, (ly+4)*st
+	};
+	image_set_txcos(wnd.wm.meta_zoom, txcos);
+	props = image_surface_resolve_properties(wnd.canvas);
+	move_image(wnd.wm.meta_zoom, x - props.x - 40, y - props.y - 40);
+end
+
 local function motion_2d(wnd, vid, x, y)
 	if (wnd.wm.meta) then
 		mouse_switch_cursor(resize_zone(wnd) and "scale" or "move");
 	end
 
 	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
-		local x, y = translate_2d(wnd, BADID, x, y);
-		zoom_position(wnd, x, y);
-
+		local lx, ly = translate_2d(wnd, BADID, x, y);
+		zoom_position(wnd, lx, ly);
+		update_zoom_preview(wnd, x, y);
 		if (wnd.map) then
-			local img, lines = render_text(menu_text_fontstr .. wnd:map(x, y));
+			local img, lines = render_text(menu_text_fontstr .. wnd:map(lx, ly));
 			wnd:set_message(img, -1);
 		end
 	end
@@ -450,6 +479,11 @@ end
 -- and custom which is reset when repeated
 --
 local function wnd_drag(wnd, vid, x, y)
+	if (wnd.wm.meta_detail) then
+		local mx, my = mouse_xy();
+		update_zoom_preview(wnd, mx, my);
+	end
+
 	if (wnd.wm.meta and not wnd.dz) then
 		if (wnd.dragmode) then
 			return wnd:dragmode(vid, x, y);

@@ -47,11 +47,9 @@ function senseye()
 	system_load("popup_menu.lua")();
 	system_load("gconf.lua")();
 	system_load("wndshared.lua")();
+	system_load("hilbert.lua")();
 	system_load("shaders.lua")();
 	system_load("translators.lua")();
-	system_load("hilbert.lua")();
-
-	print(hilbert_lookup(16, 10, 10));
 
 	if (API_VERSION_MAJOR <= 0 and API_VERSION_MINOR < 9) then
 		return shutdown("Arcan Lua API version is too old, " ..
@@ -422,6 +420,10 @@ function senseye_input(iotbl)
 
 			if (iotbl.active == false and wm.selected) then
 				wm.selected:set_message(nil);
+				if (valid_vid(wm.meta_zoom)) then
+					delete_image(wm.meta_zoom);
+					wm.meta_zoom = BADID;
+				end
 			end
 		end
 
