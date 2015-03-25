@@ -22,7 +22,7 @@ Compiling
 =====
 
 Senseye uses [Capstone engine](http://www.capstone-engine.org), so Capstone
-must be installed beforehand. See more instructions at 
+must be installed beforehand. See more instructions at
 http://capstone-engine.org/download.html, or build it from source like
 followings:
 
@@ -74,6 +74,7 @@ and optionally one or more translators.
 
     ./xlt_ascii &
     ./xlt_dpipe /usr/bin/file - &
+    ./xlt_hex &
     ./xlt_capstone -a x86-64 &
 
 Workflow
@@ -152,6 +153,10 @@ with user definable coloring, formatting etc.
 7-bit ASCII rendering of the incoming data, with some minor
 options to control line- feed behavior.
 
+*xlt_hex* provides the basic numeric 'hex' view that tend to be useful,
+incldies numerical representations of selected byte values,
+including coloring schemes, different lengths, floating point etc.
+
 *xlt_verify* and *xlt_seqver* are used for verification, testing
 and debugging purposes and can mostly be ignored. Verify just renders
 the data received again (which can help isolate corruption or
@@ -169,101 +174,8 @@ UI
 A better introduction to the UI will be posted in video form,
 there is too much experimentation going on still for that to
 be worthwhile. Some keybindings can be replaced by editing the
-keybindings.lua file.
-
-Default Keybindings (META is set to RIGHT SHIFT):
-
-_Data Windows_
-
-     F1 - Toggle Fullscreen
-     F2 - Grow Window x2 (+Meta, Shrink)
-     F3 - Zoom In (+Meta, Zoom Out)
-     META + BACKSPACE - Destroy Window
-     C - Cycle Active Shader
-     Click+Drag - Zoom in on Subset
-     Shift+Click - Set as focus offset for translators
-     META + RClick - Pull up translator menu
-
-_Global_
-
-     F7-F8 - Grow/Shrink Point Size (for pointclouds)
-     TAB - Toggle Popup (+ arrow keys to navigate)
-     ESCAPE - Drop Popup
-     META + LClick + Drag - Move Window
-
-_3D Window_
-
-     w,a,s,d - Navigate
-     Spacebar - Toggle autorotate
-     LClick + Drag - Rotate model
-     META + Button - Forward to parent window
-
-_Psense/Fsense_
-
-     Spacebar - Toggle Play/Pause
-
-_Fsense_
-
-     Left/Right - Step row (+Meta, block)
-
-_Msense_
-
-     Main Window: Arrow keys - move cursor up/down
-                  Enter key - try to sample and load the selected area
-
-     Data Window: r - refresh at current position
-                  Left/Right - Step page forward/backward
-
-_Histogram Window_
-
-    LClick - Set new parent highlight value
-
-Data Window Menu
-=====
-
-There are a few entries in the data menu that warrant some explanation.
-First, recall that all transfers from a sensor to senseye is performed
-over a shared memory mapping that is treated as a packed image, where
-the build-time default is a 32-bit red,green,blue,alpha interleaved buffer.
-
-_Packing_ (what is to be stored) controls how much data the sensor encodes
-in a _pixel_. In _intensity_ packing mode, RGB channels are all populated
-with the same byte. In _tight_ packing mode, all channels grab one byte each
-although the data window will render the data channel as opaque by default.
-In _Meta_ (which is the default), the RGB channels grab one byte each and
-then the alpha channel is populated with what the Metadata setting is
-currently.
-
-The _Metadata_ options specifies what additional data should be encoded in
-each transfer (which also depends on which channels that could be used
-based on the packing mode). By default, this is set to _Shannon Entropy_
-(though the block size that the entropy is calculated on is defined
-statically in the sensor currently) being encoded in the alpha channel.
-_Full_ simply means that the channel value will be ignored and set to
-full-bright (0xff). _Pattern Signal_ means that if the sensor has been
-configured to be able to do pattern matching or other kinds of metadata
-encoding in the alpha channel, it should be used. This is typically combined
-with a shader that has a coloring lookup-table ( palette ) attached.
-
-_Transfer Clock_ hints at the conditions required for an update. This is
-a hint in the sense that not every sensor will necessarily follow this.
-Using _psense_ as an example, _Buffer Limit_ clock means that a new transfer
-will be initiated when the complete buffer has been filled with new data,
-(or if the pipe terminates), while _Sliding Window_ means that as soon as
-we get new data, the transfer will be initiated.
-
-_Space Mapping_ finally, determines the order in which the packed bytes
-should be encoded in the image buffer. This greatly affects how the image
-will 'look' and different mapping schemes preserve or emphasize different
-properties. _Wrap_ is the easiest one in that the bytes will be stored in
-the order which they arrived. This is typically what the translators expect,
-as some packing operations are non-reversible (_Tuple_ for instance).
-_Wrap_ has the problem of the last pixel on each row being connected data-wise
-with the first pixel on the next row even though they will be spatially
-distant from eachother. _Hilbert_ mapping scheme instead uses a space filling
-fractal (the hilbert curve) which preserves locality better. _Tuple_ mapping
-uses the byte-values in the data-stream to determine position (first byte X,
-second byte Y) to highlight some specific relationships between a tuple of bytes.
+keybindings.lua file and you should probably check it out for
+a better view on how to avoid using the mouse for everything.
 
 Repository
 =====
@@ -272,11 +184,16 @@ _files that might be of interest)_
 
     senseye\
         senseye.lua      - main script
-        shaders.lua      - GLSL1.2 based shaders for mapping/displacement
-        keybindings.lua  - default keybindings
-        wndshared.lua    - navigation, default key bindings and navigation
         histogram.lua    - basic per-frame statistics
-        modelwnd.lua     - camera management, 3d mapping
+        alphamap.lua     - window for showing / highlighting metadata
+        distgram.lua     - track byte- distances
+        patfind.lua      - visual based pattern matching
+        translators.lua  - translator specific window management
+        modelwnd.lua     - camera management, 3d mapping, pointcloud
+        shaders.lua      - GLSL1.2 based shaders for mapping/displacement/color
+        gconf.lua        - configuration management
+        wndshared.lua    - navigation, window management (resizing, zooming,)
+        keybindings.lua  - default keybindings
     senses\
         code for the main sensors and translators, primarily data acquisition
         (sense_file,mem,pipe.c) with some minor statistics and
