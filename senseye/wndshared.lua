@@ -227,17 +227,17 @@ function setup_dispatch(dt)
 		end
 	end
 
--- just used for recording videos
--- dt["F9"] = function(wm)
---		local ns = null_surface(VRESW, VRESH);
---		image_sharestorage(WORLDID, ns);
---		image_set_txcos_default(ns, 1);
---		show_image(ns);
---		local buf = alloc_surface(VRESW, VRESH);
---		define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=30:noaudio", {ns}, {},
---			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
---	end
---
+	if (demo_mode) then
+			dt["F9"] = function(wm)
+				local ns = null_surface(VRESW, VRESH);
+				image_sharestorage(WORLDID, ns);
+				image_set_txcos_default(ns, 1);
+				show_image(ns);
+				local buf = alloc_surface(VRESW, VRESH);
+				define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=30:noaudio",
+					{ns}, {}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
+			end
+	end
 
 	dt[BINDINGS["POINTSZ_INC"]] = function(wm)
 		point_sz = point_sz + 0.5;
@@ -403,11 +403,11 @@ function table.remove_match(tbl, match)
 	for k,v in ipairs(tbl) do
 		if (v == match) then
 			table.remove(tbl, k);
-			return true;
+			return v;
 		end
 	end
 
-	return false;
+	return nil;
 end
 
 function table.remove_vmatch(tbl, match)
@@ -418,10 +418,11 @@ function table.remove_vmatch(tbl, match)
 	for k,v in pairs(tbl) do
 		if (v == match) then
 			tbl[k] = nil;
-			return true;
+			return v;
 		end
 	end
-	return false;
+
+	return nil;
 end
 
 local function drop_zoom_handler(wnd, zoomh)

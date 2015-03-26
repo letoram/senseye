@@ -54,9 +54,9 @@ function hilbert_lookup(base, x, y)
 		local d = {};
 
 		local np = base * base;
-		if (bxor == nil) then
+		if (bxor == nil and not warn_bitops) then
 			warning("Couldn't generate hilbert LUT, bitoperators " ..
-				"missing; built arcan with LuaJit enabled");
+				"missing; recompile arcan with LuaJit enabled");
 
 			for i=0,np do
 				d[i] = 0;

@@ -360,6 +360,7 @@ function switch_shader(wnd, target, shtbl)
 
 		image_framesetsize(target, 2, FRAMESET_MULTITEXTURE);
 		set_image_as_frame(target, dst, 1);
+		wnd.active_lut = dst;
 	end
 
 	if (shtbl.uniforms) then

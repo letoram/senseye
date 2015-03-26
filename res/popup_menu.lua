@@ -79,6 +79,10 @@ end
 function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	local list = {};
 
+	if (menutbl == nil) then
+		return;
+	end
+
 	if (target == nil) then
 		target = wm.selected;
 	end

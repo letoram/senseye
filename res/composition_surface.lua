@@ -152,6 +152,19 @@ local function compsurf_wnd_select(wnd)
 	table.remove(wm.windows, ind);
 	table.insert(wm.windows, wnd);
 
+-- handle "always on top" windows by always sorting last
+	local tmp = {};
+	for i=#wnd.wm.windows,1,-1 do
+		if (wnd.wm.windows[i].ontop) then
+			table.insert(tmp, wnd.wm.windows[i]);
+			table.remove(wnd.wm.windows, i);
+		end
+	end
+
+	for i,v in ipairs(tmp) do
+		table.insert(wnd.wm.windows, v);
+	end
+
 	for i, v in ipairs(wnd.wm.windows) do
 		order_image(v.anchor, 1 + i * 10);
 	end
@@ -507,9 +520,13 @@ local function compsurf_wnd_show(wnd)
 end
 
 local function compsurf_add_window(ctx, surf, opts)
+	local w = opts.width ~= nil and opts.width or ctx.def_ww;
+	local h = opts.height ~= nil and opts.height or ctx.def_wh;
+
 	local wnd = {
-		anchor = null_surface(ctx.def_ww, ctx.def_wh),
-		name = string.format("%s_wnd_%d", ctx.name, wseq),
+		anchor = null_surface(w, h),
+		name = opts.name and opts.name or
+			string.format("%s_wnd_%d", ctx.name, wseq),
 		wm = ctx,
 		canvas = surf,
 		children = {},
@@ -538,8 +555,8 @@ local function compsurf_add_window(ctx, surf, opts)
 -- track position / dimensions here to cut down on _properties calls
 		x = 0,
 		y = 0,
-		width = ctx.def_ww,
-		height = ctx.def_wh,
+		width = w,
+		height = h,
 		last_border_color = {255, 255, 255, 255},
 
 -- background "only" objects can fix the orderv.
@@ -550,6 +567,9 @@ local function compsurf_add_window(ctx, surf, opts)
 		dispatch = {},
 		input = input_stub,
 		input_sym = input_dispatch,
+
+-- always on top => re-order on new window
+		ontop = opts.ontop,
 
 -- default mouse handlers
 		own = compsurf_wnd_own,
@@ -578,17 +598,19 @@ local function compsurf_add_window(ctx, surf, opts)
 	resize_image(wnd.canvas, wnd.width, wnd.height);
 	show_image({wnd.canvas, wnd.anchor});
 
-	mouse_addlistener(wnd, {"click", "rclick", "drag", "drop",
-		"dblclick", "over", "out", "press", "release",
-		"hover", "motion"}
-	);
+	if (not opts.fixed) then
+		mouse_addlistener(wnd, {"click", "rclick", "drag", "drop",
+			"dblclick", "over", "out", "press", "release",
+			"hover", "motion"}
+		);
+	end
 
 	wseq = wseq + 1;
 
 	table.insert(ctx.windows, wnd);
 	ctx.src_lut[wnd.canvas] = wnd;
 
-	if (not ctx.selected) then
+	if (not ctx.selected and not opts.fixed) then
 		wnd:select();
 	end
 

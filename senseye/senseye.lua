@@ -13,9 +13,16 @@ wndcnt = 0;
 pending_lim = 4;
 
 --
+-- enable 'demo mode' with recording (if correct frameserver
+-- is built in) and key overlay
+--
+demo_mode = false;
+
+--
 -- global, used in all menus and messages
 --
-menu_text_fontstr = "\\fdefault.ttf,16\\#cccccc ";
+menu_fontsz = 16;
+menu_text_fontstr = string.format("\\fdefault.ttf,%d\\#cccccc ", menu_fontsz);
 
 --
 -- customized dispatch handlers based on registered sensor type
@@ -115,6 +122,13 @@ function senseye()
 			shutdown("couldn't allocate connection_path (" .. connection_path .. ")");
 	end
 	image_tracetag(lp, connection_path .. "conn_" .. tonumber(wndcnt));
+
+	local statusid = null_surface(2,2);
+	statusbar = wm:add_window(statusid, {
+		ontop = true, fixed = true, width = VRESW,
+		height = menu_fontsz + 4, name = "status"
+	});
+	statusbar:move(0, VRESH - menu_fontsz - 4);
 end
 
 function add_window(source)
@@ -314,15 +328,20 @@ function translate_wh(source, status)
 		else
 			translators[status.message] = source;
 			translators[source] = status.message;
+			local lbl = string.gsub(status.message, "\\", "\\\\");
+
 			table.insert(translator_popup, {
 				value = source,
-				label = string.gsub(status.message, "\\", "\\\\") -- filter more?
+				label = lbl
 			});
+			statusbar:set_message("Translator connected: " .. lbl, DEFAULT_TIMEOUT);
 		end
 	elseif (status.kind == "terminated") then
 		for k,v in ipairs(translator_popup) do
 			if (v.value == source) then
 				table.remove(translator_popup, k);
+				statusbar:set_message("Lost translator: " ..
+					tostring(v.label), DEFAULT_TIMEOUT);
 				break;
 			end
 		end
@@ -382,6 +401,38 @@ function senseye_shutdown()
 	gconfig_shutdown();
 end
 
+local function update_symstatus(sym, active, meta, meta_detail)
+	local lbl = sym;
+	local tbl = {};
+	local sym_meta = false;
+
+	for k,v in pairs(BINDINGS) do
+		if (v == sym and (k == "META" or k == "META_DETAIL")) then
+			lbl = k;
+			sym_meta = true;
+			break;
+		end
+
+		if (v == sym) then
+			table.insert(tbl, k);
+		end
+	end
+
+	if #tbl > 0 then
+		lbl = lbl .. " (" .. table.concat(tbl, ", ") .. " )";
+	end
+
+	if (sym_meta and not active) then
+		statusbar:set_message();
+	else
+		statusbar:set_message(string.format("%s%s%s%s",
+			(meta and not sym_meta) and "META + " or "",
+			(meta_detail and not sym_meta) and "META_DETAIL + " or "",
+			lbl,
+			active and " Pressed" or " Released"), active and -1 or 100);
+	end
+end
+
 --
 -- the mid-c flip-flop buffer is a common workaround for the issue of
 -- mouse devices reporting data on multiple axis (design flaw that
@@ -393,6 +444,11 @@ mid_v = {0, 0};
 function senseye_input(iotbl)
 	if (iotbl.source == "mouse") then
 		if (iotbl.kind == "digital") then
+			if (demo_mode) then
+				update_symstatus(iotbl.subid == 1 and "Left Mouse" or "Right Mouse",
+					iotbl.active, wm.meta, wm.meta_detail);
+			end
+
 			mouse_button_input(iotbl.subid, iotbl.active);
 		else
 			mid_v[iotbl.subid+1] = iotbl.samples[1];
@@ -429,6 +485,9 @@ function senseye_input(iotbl)
 
 -- wm input takes care of other management as well, i.e.
 -- data routing, locking etc. so just forward
+		if (demo_mode) then
+			update_symstatus(sym, iotbl.active, wm.meta, wm.meta_detail);
+		end
 		wm:input_sym(sym, iotbl.active);
 
 	else
