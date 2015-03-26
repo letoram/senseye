@@ -33,6 +33,63 @@ local function wnd_reset(wnd)
 	wnd:update_zoom();
 end
 
+local function gen_dumpname(sens, suffix)
+	local testname;
+	local attempt = 0;
+
+	repeat
+		testname = string.format("dumps/%s_%d%s.%s", sens,
+			benchmark_timestamp(1), attempt > 0 and tostring(CLOCK) or "", suffix);
+		attempt = attempt + 1;
+	until (resource(testname) == nil);
+
+	return testname;
+end
+
+local function gen_dumpid(wnd)
+	local s1 = wnd.zoom_ofs[1];
+	local t1 = wnd.zoom_ofs[2];
+	local s2 = wnd.zoom_ofs[3];
+	local t2 = wnd.zoom_ofs[4];
+
+	local did = valid_vid(wnd.ctrl_id) and wnd.ctrl_id or wnd.canvas;
+
+-- zoomed case, create an intermediate recipient that has the dimensions
+-- of the zoomed range but uses the source buffer and copies into a
+-- temporary calctarget
+	local res = image_storage_properties(did);
+	local x1 = s1 * res.width;
+	local y1 = t1 * res.height;
+	local x2 = s2 * res.width;
+	local y2 = t2 * res.height;
+	local interim = alloc_surface(x2-x1, y2-y1);
+	local csurf = null_surface(x2-x1, y2-t1);
+	image_sharestorage(did, csurf);
+	show_image({interim, csurf});
+	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
+	image_set_txcos(csurf, txcos);
+	force_image_blend(csurf, BLEND_NONE);
+
+	if (wnd.shtbl) then
+		switch_shader(wnd, csurf);
+	end
+
+	define_calctarget(interim, {csurf}, RENDERTARGET_DETACH,
+		RENDERTARGET_NOSCALE, 0, function() end);
+	rendertarget_forceupdate(interim);
+
+	return interim;
+end
+
+local function dump_png(wnd)
+	local name = gen_dumpname(wnd.basename, "png");
+	local img = gen_dumpid(wnd);
+	save_screenshot(name, FORMAT_PNG_FLIP, img);
+	delete_image(img);
+	wnd:set_message(render_text(
+		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
+end
+
 local function zoom_position(wnd, x, y, click)
 	wnd:select();
 
@@ -157,6 +214,18 @@ function setup_dispatch(dt)
 	local point_sz = gconfig_get("point_size");
 
 	shader_pcloud_pointsz(point_sz);
+
+	dt[BINDINGS["SCREENSHOT"]] = function(wn)
+		if (wm.meta and wm.selected) then
+			local name = gen_dumpname("screenshot", "png");
+			local img = gen_dumpid(wm.selected);
+			save_screenshot(name, FORMAT_PNG, img);
+			delete_image(img);
+		else
+			local name = gen_dumpname("screenshot", "png");
+			save_screenshot(name, FORMAT_PNG_FLIP);
+		end
+	end
 
 -- just used for recording videos
 -- dt["F9"] = function(wm)
@@ -752,62 +821,6 @@ local wnd_xl = {
 		handler = subwnd_toggle
 	},
 };
-
-local function gen_dumpname(sens, suffix)
-	local testname;
-	local attempt = 0;
-
-	repeat
-		testname = string.format("dumps/%s_%d%s.%s", sens,
-			benchmark_timestamp(1), attempt > 0 and tostring(CLOCK) or "", suffix);
-		attempt = attempt + 1;
-	until (resource(testname) == nil);
-
-	return testname;
-end
-
-local function gen_dumpid(wnd)
-	local s1 = wnd.zoom_ofs[1];
-	local t1 = wnd.zoom_ofs[2];
-	local s2 = wnd.zoom_ofs[3];
-	local t2 = wnd.zoom_ofs[4];
-
--- "normal" case, no zoom
-	if (s1 == 0 and t1 == 0 and s2 == 1 and t2 == 1) then
-		local res = null_surface(wnd.width, wnd.height);
-		image_sharestorage(wnd.ctrl_id, res);
-		return res;
-	end
-
--- zoomed case, create an intermediate recipient that has the dimensions
--- of the zoomed range but uses the source buffer and copies into a
--- temporary calctarget
-	local res = image_storage_properties(wnd.ctrl_id);
-	local x1 = s1 * res.width;
-	local y1 = t1 * res.height;
-	local x2 = s2 * res.width;
-	local y2 = t2 * res.height;
-	local interim = alloc_surface(x2-x1, y2-y1);
-	local csurf = null_surface(x2-x1, y2-t1);
-	image_sharestorage(wnd.ctrl_id, csurf);
-	show_image({interim, csurf});
-	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
-	image_set_txcos(csurf, txcos);
-	force_image_blend(csurf, BLEND_NONE);
-	define_calctarget(interim, {csurf}, RENDERTARGET_DETACH,
-		RENDERTARGET_NOSCALE, 0, function() end);
-	rendertarget_forceupdate(interim);
-	return interim;
-end
-
-local function dump_png(wnd)
-	local name = gen_dumpname(wnd.basename, "png");
-	local img = gen_dumpid(wnd);
-	save_screenshot(name, FORMAT_PNG_FLIP, img);
-	delete_image(img);
-	wnd:set_message(render_text(
-		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
-end
 
 local function dump_full(wnd)
 	local name = gen_dumpname(wnd.basename, "raw");

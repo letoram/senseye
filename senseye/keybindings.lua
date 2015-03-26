@@ -26,6 +26,8 @@ BINDINGS["CYCLE_MAPPING"] = "m"
 BINDINGS["TRANSLATORS"]   = "t" -- requires meta
 BINDINGS["HELPERS"]       = "x" -- for aligning zoom properly
 
+BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
+
 -- global
 BINDINGS["POINTSZ_INC"]   = "F7"
 BINDINGS["POINTSZ_DEC"]   = "F8"
