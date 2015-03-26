@@ -73,10 +73,8 @@ local function set_calc(nw, abuf, canv)
 		local pct = math.ceil(((1.0 - sum / (w * h * 255 * 3)) * 100));
 		if (pct >= nw.thresh) then
 			nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
-
-			if (nw.in_signal) then
-			else
-				nw.in_signal = true;
+			if (nw.in_signal == nil) then
+				nw.in_signal = pct;
 				nw.signal_pos = nw.parent.ofs;
 				nw:set_border(2, 0, 255 - (100-nw.thresh)/255*(pct - nw.thresh), 0);
 				nw.parent:alert("pattern_" ..tostring(nw.ptind),
@@ -84,7 +82,9 @@ local function set_calc(nw, abuf, canv)
 			end
 		else
 			nw:set_border(2, 255 - ((nw.thresh-pct)/nw.thresh)*255, 0, 0);
-			nw.in_signal = not (nw.in_signal and nw.parent.ofs ~= nw.signal_ofs);
+			if (nw.in_signal ~= nil and math.abs(pct - nw.in_signal) > 2) then
+				nw.in_signal = nil;
+			end
 		end
 	end);
 end
@@ -134,7 +134,6 @@ function spawn_patfind(wnd, refimg)
 	nw.reposition = repos_window;
 	nw:resize(64, 64);
 	nw:set_parent(wnd, ANCHOR_UL);
-	nw.in_signal = true;
 	nw.signal_pos = nw.parent.ofs;
 	move_image(nw.anchor, 0, -64);
 	nw.fullscreen_disabled = true;
@@ -169,5 +168,7 @@ function spawn_patfind(wnd, refimg)
 		update_threshold(nw, nw.thresh - (wnd.wm.meta and 1 or 10));
 	end
 
+	rendertarget_forceupdate(abuf);
+	stepframe_target(abuf);
 	defocus_window(nw);
 end
