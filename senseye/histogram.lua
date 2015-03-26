@@ -81,7 +81,6 @@ local histo_popup = {
 		handler = function(wnd)
 			if (wnd.ref_histo == nil) then
 				wnd.log_histo = true;
-				wnd.pending = 1;
 				if (wnd.scanners ~= nil) then
 					wnd.scanners = wnd.scanners + 1;
 				else
@@ -215,17 +214,10 @@ function spawn_histogram(wnd)
 -- readbacks are asynchronous by default (and we don't want
 -- the stalls imposed for synchronous transfers) we defer
 -- histogram updates and lock them to the logical clock.
-	nw.pending = 1;
-	nw.tick = function()
-		if (nw.pending > 0) then
-			nw.pending = 0;
-			stepframe_target(ibuf);
-		end
-	end
-
 	nw.source_handler = function(wnd, source, status)
 		if (status.kind == "frame") then
-			nw.pending = nw.pending + 1;
+			rendertarget_forceupdate(ibuf);
+			stepframe_target(ibuf);
 		end
 	end
 
