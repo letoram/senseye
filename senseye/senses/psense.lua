@@ -215,8 +215,8 @@ function psense_decode_streaminfo(wnd, status)
 end
 
 local fsrv_ev = {
-	framestatus = function(wnd, source, status)
-		wnd.ofs = status.frame;
+	frame = function(wnd, source, status)
+		wnd.ofs = status.pts;
 	end,
 	streaminfo = function(wnd, source, status)
 		psense_decode_streaminfo(wnd, status);
