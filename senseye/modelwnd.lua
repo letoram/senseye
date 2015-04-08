@@ -16,7 +16,7 @@ local function modelwnd(wnd, model, shader)
 -- 2. create an offscreen rendertarget for our 3d pipeline, and add a camera
 	local rtgt = alloc_surface(VRESW, VRESH);
 	define_rendertarget(rtgt, {model, box}, RENDERTARGET_DETACH,
-		RENDERTARGET_NOSCALE, RENDERTARGET_FULL);
+		RENDERTARGET_NOSCALE, -1, RENDERTARGET_FULL);
 
 	local camera = null_surface(1, 1);
 	rendertarget_attach(rtgt, camera, RENDERTARGET_DETACH);

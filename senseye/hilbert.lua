@@ -4,8 +4,17 @@
 -- requires the bit module in namespace which
 -- is included with luajit but not all linked lua versions.
 --
-local bxor = bit.bxor;
-local band = bit.band;
+
+local bxor;
+local band;
+
+if (bit ~= nil) then
+	local bxor = bit.bxor;
+	local band = bit.band;
+else
+	local bxor = function() return 0; end
+	local band = function() return 0; end
+end
 
 local function rot(n, x, y, rx, ry)
 	if (ry == 0) then
