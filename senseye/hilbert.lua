@@ -9,8 +9,8 @@ local bxor;
 local band;
 
 if (bit ~= nil) then
-	local bxor = bit.bxor;
-	local band = bit.band;
+	bxor = bit.bxor;
+	band = bit.band;
 else
 	local bxor = function() return 0; end
 	local band = function() return 0; end
