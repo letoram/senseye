@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include <arcan_shmif.h>
 #include "sense_supp.h"

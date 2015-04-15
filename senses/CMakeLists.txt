@@ -1,5 +1,6 @@
 PROJECT( senses )
-cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
+include(ExternalProject)
 
 #
 # cmake3.1+ provides this as part of normal flags, but it
@@ -7,6 +8,7 @@ cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
 # minimum version.
 #
 option(ENABLE_ASAN "Build with Address-Sanitizer, (gcc >= 4.8, clang >= 3.1)" OFF)
+set(DISABLE_PEPE ON) # doesn't work yet
 
 if (ENABLE_ASAN)
 	if (ASAN_TYPE)
@@ -16,87 +18,106 @@ if (ENABLE_ASAN)
 	endif()
 endif (ENABLE_ASAN)
 
-#
-# For finding the shared memory interface and corresponding
-# Platform functions. When that API is more stable, we'll
-# simply wrap it in a library but for now, we require
-# compiler and layout compliance.
-#
-if (NOT ARCAN_SOURCE_DIR)
-	message(FATAL_ERROR "ARCAN_SOURCE_DIR is not set, use -DARCAN_SOURCE_DIR=")
-endif()
-
-add_definitions(
-	-Wall
-	-Wno-unused-function # -Wuseless-warning
-	-D__UNIX
-	-DPOSIX_C_SOURCE
-	-DGNU_SOURCE
-	-std=gnu11 # shmif-api requires this
-	-DPLATFORM_HEADER=\"${ARCAN_SOURCE_DIR}/platform/platform.h\"
-)
-
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	message("------------------*Debug Build*--------------------")
 	add_definitions(-g -D_DEBUG -O0 -fno-omit-frame-pointer -D_DEBUG_NOLOG)
 endif (CMAKE_BUILD_TYPE STREQUAL "Debug")
 
-include_directories(${ARCAN_SOURCE_DIR}/shmif /usr/local/include)
-
-SET(LIBRARIES
-	pthread
-	m
+add_compile_options(
+	-Wall
+	-Wno-unused-function # -Wuseless-warning
+	-D__UNIX
+	-D_POSIX_SOURCE
+	-DGNU_SOURCE
+	-D_BSD_SOURCE
+	-std=iso9899:1999
 )
 
-SET(SHMIF_SOURCES
-	${ARCAN_SOURCE_DIR}/platform/posix/warning.c
-	${ARCAN_SOURCE_DIR}/platform/posix/fdpassing.c
-	${ARCAN_SOURCE_DIR}/shmif/arcan_shmif_control.c
-	${ARCAN_SOURCE_DIR}/shmif/arcan_shmif_interop.c
+find_package(arcan_shmif REQUIRED)
+include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
+link_libraries(pthread m ${ARCAN_SHMIF_LIBRARY})
+
+add_library(xlt_supp STATIC xlt_supp.c xlt_supp.h)
+add_library(sense_supp STATIC sense_supp.c rwstat.c rwstat.h sense_supp.h)
+
+set(TRANSLATORS
+	xlt_hex
+	xlt_dpipe
+	xlt_ascii
+	xlt_capstone
+#	xlt_pepe
+# xlt_seqver
+# xlt_verify
 )
 
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	add_definitions(-DARCAN_SHMIF_OVERCOMMIT)
-	list(APPEND SHMIF_SOURCES
-		${ARCAN_SOURCE_DIR}/platform/darwin/time.c
-		${ARCAN_SOURCE_DIR}/platform/darwin/sem.c
-	)
-
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-	message("[*] Linux detected, enabling msense")
-	set(ENABLE_MSENSE true)
-	LIST(APPEND SHMIF_SOURCES
-		${ARCAN_SOURCE_DIR}/platform/posix/sem.c
-		${ARCAN_SOURCE_DIR}/platform/posix/time.c
-	)
-	LIST(APPEND LIBRARIES
-		rt
-	)
-endif()
-
-link_libraries(${LIBRARIES})
-
-set(XLT_SOURCES ${SHMIF_SOURCES} xlt_supp.c xlt_supp.h)
-set(SENSE_SOURCES ${SHMIF_SOURCES} sense_supp.c rwstat.c rwstat.h sense_supp.h)
-
-add_executable(sense_pipe sense_pipe.c ${SENSE_SOURCES})
-add_executable(sense_file sense_file.c ${SENSE_SOURCES})
-
-find_library(CAPSTONE_LIBRARY NAMES capstone)
-if (CAPSTONE_LIBRARY)
-	message("[*] Capstone found, enabling xlt_capstone")
-	add_executable(xlt_capstone ${SHMIF_SOURCES} xlt_capstone.c xlt_supp.c)
-	target_link_libraries(xlt_capstone ${CAPSTONE_LIBRARY})
-else()
-	message("[ ] Capstone not found, xlt_capstone disabled")
-endif()
+set(SENSES
+	sense_pipe
+	sense_file
+)
 
 if (ENABLE_MSENSE)
-	add_executable(sense_mem sense_mem.c ${SENSE_SOURCES})
+	list(APPEND SENSES sense_mem)
 endif()
-add_executable(xlt_seqver xlt_seqver.c ${XLT_SOURCES})
-add_executable(xlt_verify xlt_verify.c ${XLT_SOURCES})
-add_executable(xlt_hex xlt_hex.c ${XLT_SOURCES})
-add_executable(xlt_dpipe xlt_dpipe.c ${XLT_SOURCES})
-add_executable(xlt_ascii xlt_ascii.c ${XLT_SOURCES})
+
+foreach(xlt ${TRANSLATORS})
+	add_executable(${xlt} "${xlt}.c")
+	target_link_libraries(${xlt} xlt_supp)
+	install(TARGETS ${xlt} DESTINATION bin)
+endforeach()
+
+foreach(sense ${SENSES})
+	add_executable(${sense} "${sense}.c")
+	target_link_libraries(${sense} sense_supp)
+	install(TARGETS ${xlt} DESTINATION bin)
+endforeach()
+
+set(CMAKE_EXTERNAL_DEFS
+	CMAKE_ARGS
+	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+	-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+	-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+	-DLIBTYPE=STATIC
+)
+
+if (NOT DISABLE_PEPE)
+	ExternalProject_Add(peparse
+		SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/peparse
+		GIT_REPOSITORY "https://github.com/trailofbits/pe-parse.git"
+		UPDATE_COMMAND ""
+		PATCH_COMMAND ""
+		${CMAKE_EXTERNAL_DEFS}
+		-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/peparse
+	)
+
+	target_link_libraries(xlt_pepe
+		${BINARY_DIR}/parser-library/libpe-parser-library.a)
+	target_include_directories(xlt_pepe PRIVATE ${SOURCE_DIR}/parser-library)
+endif()
+
+if (NOT DISABLE_CAPSTONE)
+	find_library(CAPSTONE_LIBRARY NAMES capstone)
+	if (NOT CAPSTONE_LIBRARY)
+		ExternalProject_Add(Capstone
+			SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/capstone-src
+			GIT_REPOSITORY "https://github.com/aquynh/capstone.git"
+			UPDATE_COMMAND ""
+			PATCH_COMMAND ""
+			${CMAKE_EXTERNAL_DEFS}
+			-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/capstone
+			-DCAPSTONE_BUILD_SHARED=OFF
+			-DCAPSTONE_BUILD_STATIC_RUNTIME=ON
+			-DCAPSTONE_BUILD_TESTS=OFF
+		)
+		add_dependencies(xlt_capstone Capstone)
+		set(CAPSTONE_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/capstone/lib/libcapstone.a)
+		set(CAPSTONE_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/capstone/include)
+	endif()
+
+	target_link_libraries(xlt_capstone ${CAPSTONE_LIBRARY})
+	target_include_directories(xlt_capstone PRIVATE ${CAPSTONE_INCLUDE_DIRS})
+endif()
+
+# installation missing:
+# preferably packaging (won't happen until 0.6)
+# wrapper script to just run senseye to get arcan settings
 

@@ -70,7 +70,7 @@ static void populate(struct xlt_session* s)
 		uint8_t* outb = s->buf;
 
 		for (size_t i = 0; i < s->in.addr->w * s->in.addr->h; i++){
-			av_pixel cp = s->in.vidp[i];
+			shmif_pixel cp = s->in.vidp[i];
 			*outb++ = (cp & 0x000000ff);
 			if (s->pack_sz == 1)
 				continue;

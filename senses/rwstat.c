@@ -267,7 +267,6 @@ static void ch_step(struct rwstat_ch* ch)
 		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
 		.ext.framestatus.framenumber = ch->priv->cnt_local,
 		.ext.framestatus.pts = ch->priv->cnt_total,
-		.ext.framestatus.acquired = arcan_timemillis(),
 	};
 
 	size_t ntw = chp->base * chp->base;
