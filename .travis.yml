@@ -1,0 +1,8 @@
+language: c
+os:
+- linux
+compiler:
+- clang
+- gcc
+install: git clone git://github.com/letoram/arcan.git arcan;
+script: mkdir build; cd build; cmake -DARCAN_SOURCE_DIR=../arcan/src ../senses; make

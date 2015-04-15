@@ -3,57 +3,50 @@ About
 
 Senseye is a dynamic visual binary analysis and debugging tool intended to
 assist in monitoring, analysing and grasping large data feeds e.g. static
-files, dynamic streams and live memory.
+files, dynamic streams and live memory. It is also powerful as part of a
+build-test-refine loop when developing parsers and reversing file formats.
 
-For a bit more of what that entails, please take a look at the [Senseye Github Wiki](https://github.com/letoram/senseye/wiki).
-
-Senseye uses [Arcan](https://github.com/letoram/arcan) as display server
-and graphics engine to provide the user interface, representations and
-other data transformations.
-
-As such it requires a recent and working arcan build, see _Compiling_ below
-for more details on a quick and dirty setup and _Starting_ for information
-on how to start the user interface and to connect a sensor.
+For more details on design, roadmap, use and features, take a look at the
+[Senseye Github Wiki](https://github.com/letoram/senseye/wiki).
 
 It current runs on Linux/FreeBSD/OSX, with a Windows port hiding in the near
 future.
 
 Compiling
-=====
+======
 
-Senseye uses [Capstone engine](http://www.capstone-engine.org), so Capstone
-must be installed beforehand. See more instructions at
-http://capstone-engine.org/download.html, or build it from source like
-followings:
+Senseye uses [Arcan](https://github.com/letoram/arcan) as display server
+and graphics engine to provide the user interface, representations and
+other data transformations.
 
-    git clone https://github.com/aquynh/capstone.git
-    cd capstone
-    ./make.sh
-    sudo ./make.sh install
+The short version for building arcan:
 
-Senseye also requires an arcan build to be present / installed, e.g. (assuming all
-dependencies are installed: OpenGL, SDL, Freetype and openal for the build
-settings mentioned below). You also need cmake (2.8+) and gcc4.8+ or clang.
+    [first, fix dependencies (freetype, openal, sdl1.2, luajit5.1, clang >= 3.1)
+     for debian/ubuntu:
+     sudo apt-get install libfreetype6-dev libopenal-dev libsdl1.2-dev libluajit-5.1-dev)
+    ]
 
-    git clone https://github.com/letoram/senseye.git
-    cd senseye
     git clone https://github.com/letoram/arcan.git
-    mkdir build-arcan
-    cd build-arcan
-    cmake -DCMAKE_BUILD_TYPE=Release -DVIDEO_PLATFORM=sdl
-     -DDISABLE_FRAMESERVERS=ON -DCMAKE_C_COMPILER=clang ../arcan/src
-    make -j 4
-    cd ..
-    mkdir build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
-     -DARCAN_SOURCE_DIR=../arcan/src ../senses
-    make -j 4
+    or (for a debian/ubuntu)
+    mkdir arcan/build ; cd arcan/build
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DVIDEO_PLATFORM=sdl ../src
+    make -j 12
+    sudo make install
 
-The arcan build configuration above disables a lot of features that we have
-no use for here. When arcan moves to a more mature stage (around 0.9) we can
-replace some of this with a libarcan-shmif find module, and arcan itself is
-hopefully packaged in a few distributions before then.
+Now you are ready to build the sensors and translators:
+
+   git clone https://github.com/letoram/senseye.git
+   mkdir senseye/build ; cd senseye/build
+   cmake ../senses
+
+It is possible to avoid installing arcan and using an in-source build with:
+
+    cmake -DARCAN_SOURCE_DIR=/path/to/arcan/src ../senses
+
+Senseye uses [Capstone engine](http://www.capstone-engine.org) for providing
+disassembly translators. If it is not installed, its current master branch
+will be cloned and linked statically. To disable disassembly support,
+add -DDISABLE\_CAPSTONE=ON
 
 Starting
 =====
@@ -63,14 +56,14 @@ you could do the following:
 
 First, fire up the UI:
 
-    ../build-arcan/arcan -p ../res -w 800 -h 800 ../senseye &
+    arcan -p /path/to/senseye/res -w 800 -h 800 /path/to/senseye/senseye &
 
-and then attach a sensor or two:
+Then attach a sensor or two:
 
     ./sense_file ../tests/test.bin &
     cat ../tests/test.bin | ./sense_pipe 1> /dev/null &
 
-and optionally one or more translators.
+Optionally one or more translators:
 
     ./xlt_ascii &
     ./xlt_dpipe /usr/bin/file - &

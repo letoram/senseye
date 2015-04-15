@@ -27,13 +27,18 @@ add_compile_options(
 	-Wall
 	-Wno-unused-function # -Wuseless-warning
 	-D__UNIX
-	-D_POSIX_SOURCE
+	-D_POSIX_C_SOURCE=200809L
 	-DGNU_SOURCE
 	-D_BSD_SOURCE
 	-std=iso9899:1999
 )
 
-find_package(arcan_shmif REQUIRED)
+if (ARCAN_SOURCE_DIR)
+	add_subdirectory(${ARCAN_SOURCE_DIR}/shmif ashmif)
+else()
+	find_package(arcan_shmif REQUIRED)
+endif()
+
 include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
 link_libraries(pthread m ${ARCAN_SHMIF_LIBRARY})
 
@@ -82,7 +87,7 @@ set(CMAKE_EXTERNAL_DEFS
 if (NOT DISABLE_PEPE)
 	ExternalProject_Add(peparse
 		SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/peparse
-		GIT_REPOSITORY "https://github.com/trailofbits/pe-parse.git"
+		GIT_REPOSITORY "https://github.com/letoram/pe-parse.git"
 		UPDATE_COMMAND ""
 		PATCH_COMMAND ""
 		${CMAKE_EXTERNAL_DEFS}
