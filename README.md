@@ -46,7 +46,8 @@ It is possible to avoid installing arcan and using an in-source build with:
 Senseye uses [Capstone engine](http://www.capstone-engine.org) for providing
 disassembly translators. If it is not installed, its current master branch
 will be cloned and linked statically. To disable disassembly support,
-add -DDISABLE\_CAPSTONE=ON
+add -DENABLE\_CAPSTONE=OFF (or use an interactive cmake interface for better
+control).
 
 Starting
 =====

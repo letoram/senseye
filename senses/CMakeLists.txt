@@ -7,21 +7,29 @@ include(ExternalProject)
 # will take quite a while before we can use that as the
 # minimum version.
 #
-option(ENABLE_ASAN "Build with Address-Sanitizer, (gcc >= 4.8, clang >= 3.1)" OFF)
-set(DISABLE_PEPE ON) # doesn't work yet
-
-if (ENABLE_ASAN)
-	if (ASAN_TYPE)
-		set(CMAKE_C_FLAGS "-fsanitize=${ASAN_TYPE} ${CMAKE_C_FLAGS}")
-	else()
-		set(CMAKE_C_FLAGS "-fsanitize=address ${CMAKE_C_FLAGS}")
-	endif()
-endif (ENABLE_ASAN)
+option(ENABLE_CAPSTONE "Build Capstone- based Assembly translator" ON)
+option(ENABLE_IMG "Build with Image- translator (not working)" OFF)
+option(ENABLE_PEPE "Build PE- translator (not working)" OFF)
+option(ENABLE_MEMSENSE "Build with /proc/pid/mem translator (needs permissions)" ON)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	option(ENABLE_ASAN "Build with Address-Sanitizer, (gcc >= 4.8, clang >= 3.1)" OFF)
+
+	if (ENABLE_ASAN)
+		if (ASAN_TYPE)
+			set(CMAKE_C_FLAGS "-fsanitize=${ASAN_TYPE} ${CMAKE_C_FLAGS}")
+		else()
+			set(CMAKE_C_FLAGS "-fsanitize=address ${CMAKE_C_FLAGS}")
+		endif()
+	endif (ENABLE_ASAN)
+
 	message("------------------*Debug Build*--------------------")
 	add_definitions(-g -D_DEBUG -O0 -fno-omit-frame-pointer -D_DEBUG_NOLOG)
-endif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	set(DEBUG_XLT
+		xlt_seqver
+		xlt_verify
+	)
+endif()
 
 add_compile_options(
 	-Wall
@@ -39,6 +47,24 @@ else()
 	find_package(arcan_shmif REQUIRED)
 endif()
 
+# apply options
+
+if(ENABLE_MEMSENSE)
+	set(SENSE_MEM sense_mem)
+endif()
+
+if (ENABLE_PEPE)
+	set(XLT_PEPE xlt_pepe)
+endif()
+
+if (ENABLE_IMG)
+	set(XLT_IMG xlt_img)
+endif()
+
+if (ENABLE_CAPSTONE)
+	set(XLT_CAPSTONE xlt_capstone)
+endif()
+
 include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
 link_libraries(pthread m ${ARCAN_SHMIF_LIBRARY})
 
@@ -49,20 +75,17 @@ set(TRANSLATORS
 	xlt_hex
 	xlt_dpipe
 	xlt_ascii
-	xlt_capstone
-#	xlt_pepe
-# xlt_seqver
-# xlt_verify
+	${XLT_CAPSTONE}
+	${XLT_PEPE}
+	${XLT_IMG}
+	${DEBUG_XLT}
 )
 
 set(SENSES
 	sense_pipe
 	sense_file
+	${SENSE_MEM}
 )
-
-if (ENABLE_MSENSE)
-	list(APPEND SENSES sense_mem)
-endif()
 
 foreach(xlt ${TRANSLATORS})
 	add_executable(${xlt} "${xlt}.c")
@@ -73,7 +96,7 @@ endforeach()
 foreach(sense ${SENSES})
 	add_executable(${sense} "${sense}.c")
 	target_link_libraries(${sense} sense_supp)
-	install(TARGETS ${xlt} DESTINATION bin)
+	install(TARGETS ${sense} DESTINATION bin)
 endforeach()
 
 set(CMAKE_EXTERNAL_DEFS
@@ -84,7 +107,7 @@ set(CMAKE_EXTERNAL_DEFS
 	-DLIBTYPE=STATIC
 )
 
-if (NOT DISABLE_PEPE)
+if (ENABLE_PEPE)
 	ExternalProject_Add(peparse
 		SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/peparse
 		GIT_REPOSITORY "https://github.com/letoram/pe-parse.git"
@@ -99,7 +122,7 @@ if (NOT DISABLE_PEPE)
 	target_include_directories(xlt_pepe PRIVATE ${SOURCE_DIR}/parser-library)
 endif()
 
-if (NOT DISABLE_CAPSTONE)
+if (ENABLE_CAPSTONE)
 	find_library(CAPSTONE_LIBRARY NAMES capstone)
 	if (NOT CAPSTONE_LIBRARY)
 		ExternalProject_Add(Capstone
