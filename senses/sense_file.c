@@ -158,19 +158,19 @@ void* data_loop(void* th_data)
 				continue;
 
 			if (ev.category == EVENT_IO){
-				if (strcmp(ev.label, "STEP_BYTE") == 0){
+				if (strcmp(ev.io.label, "STEP_BYTE") == 0){
 					fsense.small_step = 1;
 				}
-				else if (strcmp(ev.label, "STEP_ROW") == 0){
+				else if (strcmp(ev.io.label, "STEP_ROW") == 0){
 					fsense.small_step = 0;
 				}
-				else if (strcmp(ev.label, "STEP_HALFPAGE") == 0){
+				else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0){
 					fsense.large_step = 1;
 				}
-				else if (strcmp(ev.label, "STEP_PAGE") == 0){
+				else if (strcmp(ev.io.label, "STEP_PAGE") == 0){
 					fsense.large_step = 0;
 				}
-				else if (strcmp(ev.label, "STEP_ALIGN_512") == 0){
+				else if (strcmp(ev.io.label, "STEP_ALIGN_512") == 0){
 					pthread_mutex_lock(&fsense.flock);
 					if (fsense.ofs % 512 != 0){
 						fsense.ofs = fix_ofset(ch, fsense.ofs - (fsense.ofs % 512));

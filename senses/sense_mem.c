@@ -147,15 +147,15 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 	bool refresh = false;
 
 	if (ev->category == EVENT_IO){
-		if (strcmp(ev->label, "UP") == 0){
+		if (strcmp(ev->io.label, "UP") == 0){
 			msense.sel = (msense.sel - 1 < 0) ? msense.sel_lim - 1 : msense.sel - 1;
 			refresh = true;
 		}
-		else if (strcmp(ev->label, "DOWN") == 0){
+		else if (strcmp(ev->io.label, "DOWN") == 0){
 			msense.sel = (msense.sel + 1) % (msense.sel_lim);
 			refresh = true;
 		}
-		else if (strcmp(ev->label, "LEFT") == 0){
+		else if (strcmp(ev->io.label, "LEFT") == 0){
 			msense.sel -= msense.sel_page;
 			if (msense.sel < 0)
 				msense.sel = msense.sel_lim - 1;
@@ -163,13 +163,13 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 				msense.sel = 0;
 			refresh = true;
 		}
-		else if (strcmp(ev->label, "RIGHT") == 0){
+		else if (strcmp(ev->io.label, "RIGHT") == 0){
 			msense.sel += msense.sel_page;
 			if (msense.sel >= msense.sel_lim)
 				msense.sel = 0;
 			refresh = true;
 		}
-		else if (strcmp(ev->label, "SELECT") == 0){
+		else if (strcmp(ev->io.label, "SELECT") == 0){
 			if (!msense.ptrace)
 				fprintf(stderr, "cannot inspect segment, ptrace support disabled.\n");
 			else

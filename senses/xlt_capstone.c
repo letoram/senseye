@@ -125,11 +125,11 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 {
 	if (ev->io.datatype == EVENT_IDATATYPE_DIGITAL && out->user){
 		struct cs_ctx* ctx = out->user;
-		if (strcmp(ev->label, "RIGHT") == 0)
+		if (strcmp(ev->io.label, "RIGHT") == 0)
 			ctx->disass_ofs++;
-		else if (strcmp(ev->label, "LEFT") == 0)
+		else if (strcmp(ev->io.label, "LEFT") == 0)
 			ctx->disass_ofs = ctx->disass_ofs> 0 ? ctx->disass_ofs- 1 : 0;
-		else if (strcmp(ev->label, "TAB") == 0)
+		else if (strcmp(ev->io.label, "TAB") == 0)
 			ctx->mode = ctx->mode == 1 ? 0 : 1;
 		else
 			return false;

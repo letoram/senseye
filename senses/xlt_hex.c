@@ -46,16 +46,16 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 {
 	if (ev->io.datatype == EVENT_IDATATYPE_DIGITAL && out->user){
 		struct hex_user* ctx = out->user;
-		if (strcmp(ev->label, "UP") == 0){
+		if (strcmp(ev->io.label, "UP") == 0){
 			if (ctx->row > 0){
 				ctx->row--;
 			}
 			else
 				ctx->col = 0;
 		}
-		else if (strcmp(ev->label, "DOWN") == 0)
+		else if (strcmp(ev->io.label, "DOWN") == 0)
 			ctx->row++;
-		else if (strcmp(ev->label, "RIGHT") == 0){
+		else if (strcmp(ev->io.label, "RIGHT") == 0){
 			if (ctx->col + 1 > ROW_WIDTH(out->addr->w)){
 				ctx->row++;
 				ctx->col = 0;
@@ -63,7 +63,7 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 			else
 				ctx->col++;
 		}
-		else if (strcmp(ev->label, "LEFT") == 0){
+		else if (strcmp(ev->io.label, "LEFT") == 0){
 			if (ctx->col == 0){
 				if (ctx->row > 0){
 					ctx->row--;
@@ -73,7 +73,7 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 			else
 				ctx->col--;
 		}
-		else if (strcmp(ev->label, "TAB") == 0)
+		else if (strcmp(ev->io.label, "TAB") == 0)
 			ctx->rm = ctx->rm+1 >= RM_ENDM ? RM_SIMPLE : ctx->rm + 1;
 	}
 	else

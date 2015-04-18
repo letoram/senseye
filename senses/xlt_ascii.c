@@ -36,15 +36,15 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 {
 	if (ev->io.datatype == EVENT_IDATATYPE_DIGITAL && out->user){
 		struct ascii_user* ctx = out->user;
-		if (strcmp(ev->label, "UP") == 0)
+		if (strcmp(ev->io.label, "UP") == 0)
 			ctx->row = ctx->row > 0 ? ctx->row - 1 : 0;
-		else if (strcmp(ev->label, "DOWN") == 0)
+		else if (strcmp(ev->io.label, "DOWN") == 0)
 			ctx->row++;
-		else if (strcmp(ev->label, "RIGHT") == 0)
+		else if (strcmp(ev->io.label, "RIGHT") == 0)
 			ctx->col++;
-		else if (strcmp(ev->label, "LEFT") == 0)
+		else if (strcmp(ev->io.label, "LEFT") == 0)
 			ctx->col = ctx->col > 0 ? ctx->col - 1 : 0;
-		else if (strcmp(ev->label, "TAB") == 0)
+		else if (strcmp(ev->io.label, "TAB") == 0)
 			ctx->lfm = ctx->lfm+1 >= LF_ENDM ? LF_WRAP : ctx->lfm + 1;
 	}
 	else
