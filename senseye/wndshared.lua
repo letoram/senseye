@@ -458,7 +458,8 @@ local function resize_zone(wnd)
 	local mx, my = mouse_xy();
 	local lx = mx - props.x;
 	local ly = my - props.y;
-	return (lx > wnd.width * 0.6667 and ly > wnd.height * 0.6667);
+	return (wnd.width < 32 or wnd.height < 32) or
+		(lx > wnd.width * 0.6667 and ly > wnd.height * 0.6667);
 end
 
 local function update_zoom_preview(wnd, x, y)

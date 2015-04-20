@@ -35,8 +35,9 @@ function activate_translator(wnd, value)
 
 -- then the output that's connected to the new window
 	local vid = target_alloc(value, function(source, status)
-		if (status.kind == "resized") then
+		if (status.kind == "resized" and neww.dragmode == nil) then
 			neww:resize(status.width, status.height, true)
+			neww:drag(source, 0, 0);
 		end
 	end, wnd.size_cur
 	);
@@ -47,8 +48,6 @@ function activate_translator(wnd, value)
 		delete_image(tgt);
 		return;
 	end
-
---	target_displayhint(tgt, props.width, props.height);
 
 -- hook the output to a new window, and make sure the output buffer
 -- gets tracked and deleted properly as well
@@ -104,8 +103,8 @@ function activate_translator(wnd, value)
 			return old_resize(wnd, w, h);
 		end
 
+		target_displayhint(tgt, w, h);
 		if (wnd.dragmode == nil) then
-			target_displayhint(tgt, w, h);
 			return;
 		else
 			return old_resize(wnd, w, h);

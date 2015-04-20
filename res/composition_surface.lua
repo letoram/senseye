@@ -40,8 +40,8 @@ if (SHADER_LANGUAGE == "GLSL120") then
 	void main()
 	{
 		vec3 col = texture2D(map_diffuse, texco).rgb;
-		float margin_s = 0.5 * (border / obj_output_sz.x);
-		float margin_t = 0.5 * (border / obj_output_sz.y);
+		float margin_s = (border / obj_output_sz.x);
+		float margin_t = (border / obj_output_sz.y);
 
 		if ( texco.s <= 1.0 - margin_s && texco.s >= margin_s &&
 			texco.t <= 1.0 - margin_t && texco.t >= margin_t )
@@ -366,6 +366,9 @@ end
 -- forward to a frameserver
 --
 local function compsurf_wnd_resize(wnd, neww, newh, interm)
+	neww = neww < wnd.wm.min_w and wnd.wm.min_w or neww;
+	newh = newh < wnd.wm.min_h and wnd.wm.min_h or newh;
+
 	resize_image(wnd.canvas, neww, newh);
 
 	wnd.width = neww;
@@ -770,6 +773,8 @@ function compsurf_create(width, height, opts)
 		src_lut = {},
 		max_w = width,
 		max_h = height,
+		min_w = 32,
+		min_h = 32,
 		def_ww = opts.def_ww ~= nil and opts.def_ww or math.floor(width * 0.3),
 		def_wh = opts.def_wh ~= nil and opts.def_wh or math.floor(height * 0.3),
 		name = opts.name ~= nil and opts.name or ("compsurf_" .. tostring(seq)),
