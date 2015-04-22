@@ -84,6 +84,7 @@ set(TRANSLATORS
 set(SENSES
 	sense_pipe
 	sense_file
+	sense_mfile
 	${SENSE_MEM}
 )
 
@@ -133,7 +134,7 @@ if (ENABLE_CAPSTONE)
 			${CMAKE_EXTERNAL_DEFS}
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/capstone
 			-DCAPSTONE_BUILD_SHARED=OFF
-			-DCAPSTONE_BUILD_STATIC_RUNTIME=ON
+			-DCAPSTONE_BUILD_STATIC=ON
 			-DCAPSTONE_BUILD_TESTS=OFF
 		)
 		add_dependencies(xlt_capstone Capstone)
