@@ -106,7 +106,7 @@ struct rwstat_ch {
  */
 struct rwstat_ch* rwstat_addch(enum rwstat_clock clock,
 	enum rwstat_mapping map, enum rwstat_pack pack,
-	struct arcan_shmif_cont*
+	size_t base, struct arcan_shmif_cont*
 );
 
 /*

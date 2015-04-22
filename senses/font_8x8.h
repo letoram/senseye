@@ -166,15 +166,15 @@ static unsigned char builtin_font[128][8] = {
 static bool draw_box(struct arcan_shmif_cont* c, uint16_t x, uint16_t y,
 	uint16_t w, uint16_t h, shmif_pixel col)
 {
-	if (x >= c->addr->w || y >= c->addr->h)
+	if (x >= c->w || y >= c->h)
 		return false;
 
-	int ux = x + w > c->addr->w ? c->addr->w : x + w;
-	int uy = y + h > c->addr->h ? c->addr->h : y + h;
+	int ux = x + w > c->w ? c->w : x + w;
+	int uy = y + h > c->h ? c->h : y + h;
 
 	for (int cy = y; cy != uy; cy++)
 		for (int cx = x; cx != ux; cx++)
-			c->vidp[ cy * c->addr->w + cx ] = col;
+			c->vidp[ cy * c->pitch + cx ] = col;
 
 	return true;
 }
@@ -182,10 +182,10 @@ static bool draw_box(struct arcan_shmif_cont* c, uint16_t x, uint16_t y,
 static inline void draw_char(struct arcan_shmif_cont* c, uint8_t ch,
 	uint16_t x, uint16_t y, shmif_pixel txcol)
 {
-	for (int row = 0; row < fonth && row + y < c->addr->h; row++)
-		for (int col = 0; col < fontw && col + x < c->addr->w; col++)
+	for (int row = 0; row < fonth && row + y < c->h; row++)
+		for (int col = 0; col < fontw && col + x < c->w; col++)
 			if (builtin_font[ch][row] & 1 << col)
-				c->vidp[c->addr->w * (row + y) + col + x] = txcol;
+				c->vidp[(row + y) * c->pitch + col + x] = txcol;
 }
 
 static void draw_text(struct arcan_shmif_cont* c, const char* msg,

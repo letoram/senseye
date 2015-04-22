@@ -102,6 +102,11 @@ dpack_sub.handler = function(wnd, value, rv)
 	end
 end
 
+local space_lut = {};
+space_lut[0] = "Wrap";
+space_lut[1] = "Tuple";
+space_lut[2] = "Hilbert";
+
 local space_sub = {
 	{
 		label = "Wrap",
@@ -148,8 +153,8 @@ clock_sub.handler = function(wnd, value, rv)
 end
 
 disp[BINDINGS["CYCLE_MAPPING"]] = function(wnd)
-	wnd.map_cur = (wnd.map_cur + 1 >= #space_sub) and 0 or wnd.map_cur+1;
-	space_sub.handler(wnd, wnd.map_cur);
+	local map_cur = wnd.map_cur + 1 >= #space_sub and 0 or wnd.map_cur+1;
+	space_sub.handler(wnd, map_cur);
 end
 
 function color_sub()
@@ -204,14 +209,39 @@ end
 
 function psense_decode_streaminfo(wnd, status)
 	local base = string.byte("0", 1);
-	wnd.pack_cur = string.byte(status.lang, 1) - base;
-	wnd.map_cur  = string.byte(status.lang, 2) - base;
-	wnd.size_cur = string.byte(status.lang, 3) - base;
-	wnd.pack_sz  = pack_sztbl[wnd.pack_cur+1];
+	local upd = "";
 
-	if (wnd.pack_sz == nil) then
-		wnd:message("Warning: received broken streaminfo");
+	local pack_cur = string.byte(status.lang, 1) - base;
+	local map_cur  = string.byte(status.lang, 2) - base;
+	local size_cur = string.byte(status.lang, 3) - base;
+	local pack_sz  = pack_sztbl[pack_cur+1];
+
+	if (pack_sz == nil) then
+		wnd:set_message("Warning: received broken streaminfo", DEFAULT_TIMEOUT);
+		pack_cur = wnd.pack_cur;
+		pack_sz = wnd.pack_sz;
 	end
+
+	if (space_lut[map_cur] == nil) then
+		wnd:set_message("Warning: received broken mapping info", DEFAULT_TIMEOUT);
+		map_cur = wnd.map_cur;
+	end
+
+	local chmsg = nil;
+	if (wnd.pack_cur ~= pack_cur) then
+		chmsg = "Packing: " .. tostring(pack_sz) .. "/bpp ";
+	end
+
+	if (wnd.map_cur ~= map_cur) then
+		chmsg = "Mapping: " .. space_lut[map_cur];
+	end
+
+	wnd.pack_cur = pack_cur;
+	wnd.map_cur = map_cur;
+	wnd.size_cur = size_cur;
+	wnd.pack_sz = pack_sz;
+
+	return chmsg;
 end
 
 local fsrv_ev = {
@@ -219,7 +249,8 @@ local fsrv_ev = {
 		wnd.ofs = status.pts;
 	end,
 	streaminfo = function(wnd, source, status)
-		psense_decode_streaminfo(wnd, status);
+		local msg = psense_decode_streaminfo(wnd, status);
+		msg = msg and wnd:set_message(msg, DEFAULT_TIMEOUT);
 	end,
 	resized = function(wnd, source, status)
 		wnd.base = status.width;

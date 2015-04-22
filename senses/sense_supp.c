@@ -133,8 +133,7 @@ bool senseye_connect(const char* key, FILE* log,
 	dcont->context = cont_getctx;
 
 	setenv("ARCAN_CONNPATH", key, 0);
-	dcont->priv->cont = arcan_shmif_open(
-		SEGID_SENSOR, SHMIF_CONNECT_LOOP, darg);
+	dcont->priv->cont = arcan_shmif_open(SEGID_SENSOR, SHMIF_CONNECT_LOOP, darg);
 	unsetenv("ARCAN_CONNPATH");
 
 	opts.args = *darg;
@@ -321,7 +320,7 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				goto fail;
 
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
-				opts.def_map, opts.def_pack, &cp->cont);
+				opts.def_map, opts.def_pack, base, &cp->cont);
 			rv->in_handle = cp->cont.epipe;
 			rwstat_addpatterns(rv->in, opts.args);
 			break;

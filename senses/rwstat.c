@@ -147,7 +147,6 @@ static inline void pack_bytes(
 {
 	int x = 0, y = 0;
 	shmif_pixel val = 0;
-	int lofs = 0;
 
 	switch (chp->map){
 	case MAP_WRAP:
@@ -156,9 +155,9 @@ static inline void pack_bytes(
 	break;
 
 	case MAP_TUPLE:
-		lofs += 2;
 		x = (float)buf[0] * chp->sf_x;
 		y = (float)buf[1] * chp->sf_y;
+		buf += 2;
 	break;
 
 	case MAP_HILBERT:
@@ -169,17 +168,17 @@ static inline void pack_bytes(
 
 	switch (chp->pack){
 	case PACK_TIGHT:
-		val = RGBA(buf[lofs+0], buf[lofs+1], buf[lofs+2], buf[lofs+3]);
+		val = RGBA(buf[0], buf[1], buf[2], buf[3]);
 	break;
 	case PACK_TNOALPHA:
-		val = RGBA(buf[lofs+0], buf[lofs+1], buf[lofs+2], chp->alpha[ofs]);
+		val = RGBA(buf[0], buf[1], buf[2], chp->alpha[ofs]);
 	break;
 	case PACK_INTENS:
-		val = RGBA(buf[lofs], buf[lofs], buf[lofs], chp->alpha[ofs]);
+		val = RGBA(buf[0], buf[0], buf[0], chp->alpha[ofs]);
 	break;
 	}
 
-	chp->cont->vidp[ chp->cont->addr->w * y + x ] = val;
+	chp->cont->vidp[ y * chp->cont->pitch + x ] = val;
 }
 
 /*
@@ -296,7 +295,7 @@ static void ch_step(struct rwstat_ch* ch)
 	else if (chp->amode == RW_ALPHA_PTN)
 		update_ptnalpha(chp);
 
-	for (size_t i = 0; i < chp->buf_sz; i+= chp->pack_sz)
+	for (size_t i = 0; i < chp->buf_sz; i += chp->pack_sz)
 		pack_bytes(chp, &chp->buf[i], i / chp->pack_sz);
 
 	chp->cont->addr->vpts = ch->priv->cnt_total;
@@ -492,7 +491,7 @@ static void ch_reclock(struct rwstat_ch* ch, enum rwstat_clock clock)
 
 static size_t ch_rowsz(struct rwstat_ch* ch)
 {
-	return ch->priv->pack_sz * ch->priv->cont->addr->w;
+	return ch->priv->pack_sz * ch->priv->cont->w;
 }
 
 static void ch_free(struct rwstat_ch** ch)
@@ -529,7 +528,13 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 			free(ch->priv->alpha);
 	}
 	ch->priv->buf_sz = bsqr * ch->priv->pack_sz;
-	ch->priv->buf = malloc(ch->priv->buf_sz);
+	assert(ch->priv->buf_sz);
+
+/* we allocate some guard_bytes here to avoid the nasty combination
+ * of switching packing+map modes that require more bytes than we can
+ * currently deliver but don't want to wait for a full-step immediately */
+	ch->priv->buf = malloc(ch->priv->buf_sz + base);
+	memset(ch->priv->buf + ch->priv->buf_sz, '\0', base);
 	ch->priv->alpha = malloc(bsqr);
 
 	memset(ch->priv->buf, '\0', ch->priv->buf_sz);
@@ -671,7 +676,7 @@ void rwstat_addpatterns(struct rwstat_ch* ch, struct arg_arr* arg)
 
 struct rwstat_ch* rwstat_addch(
 	enum rwstat_clock mode, enum rwstat_mapping map, enum rwstat_pack pack,
- 	struct arcan_shmif_cont* c)
+	size_t base, struct arcan_shmif_cont* c)
 {
 	if (!c)
 		return NULL;
@@ -685,6 +690,7 @@ struct rwstat_ch* rwstat_addch(
 	res->priv->cont = c;
 	res->data = ch_data;
 	res->priv->clock = mode;
+	res->priv->base = base;
 	res->switch_packing = ch_pack;
 	res->switch_mapping = ch_map;
 	res->switch_clock = ch_reclock;
@@ -702,7 +708,6 @@ struct rwstat_ch* rwstat_addch(
 	res->priv->map = map;
 	res->priv->pack = pack;
 	res->priv->amode = RW_ALPHA_FULL;
-	res->resize(res, c->addr->w);
 	res->switch_packing(res, PACK_INTENS);
 	res->priv->status_dirty = true;
 
