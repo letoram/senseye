@@ -283,10 +283,9 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 	arcan_event sr = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_SEGREQ,
-		.ext.noticereq.width = base,
-		.ext.noticereq.height = base,
-		.ext.noticereq.type = SEGID_SENSOR,
-		.ext.noticereq.id = tag
+		.ext.segreq.width = base,
+		.ext.segreq.height = base,
+		.ext.segreq.id = tag
 	};
 	arcan_shmif_enqueue(&cpriv->cont, &sr);
 
