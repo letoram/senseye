@@ -68,7 +68,7 @@ function activate_translator(wnd, value)
 	neww.source_handler = function(wnd, source, status)
 		if (status.kind == "streaminfo") then
 			psense_decode_streaminfo(wnd, status);
-			target_graphmode(tgt, wnd.size_cur);
+			target_graphmode(tgt, wnd.pack_sz);
 		end
 	end
 
