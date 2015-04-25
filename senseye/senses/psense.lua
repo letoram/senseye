@@ -19,7 +19,7 @@ disp[BINDINGS["PSENSE_PLAY_TOGGLE"]] = function(wnd)
 	end
 end
 
-disp[BINDINGS["CYCLE_SHADER"]] = function(wnd)
+disp[BINDINGS["MODE_TOGGLE"]] = function(wnd)
 	wnd.shind = wnd.shind == nil and 0 or wnd.shind;
 	wnd.shind = (wnd.shind + 1 > #shaders_2dview and 1 or wnd.shind + 1);
 	switch_shader(wnd, wnd.canvas, shaders_2dview[wnd.shind]);
@@ -269,7 +269,7 @@ local fsrv_ev = {
 	end
 };
 
-local pop = {{
+local pop = { {
 	label = "Data Packing...",
 	submenu = dpack_sub }, {
 	label = "Metadata...",
@@ -299,6 +299,5 @@ return {
 		target_graphmode(wnd.ctrl_id, gconfig_get("map_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("pack_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("alpha_default"));
-
 	end -- hook to set members before data comes
 };

@@ -153,7 +153,7 @@ function spawn_patfind(wnd, refimg)
 
 	nw.thresh = 95;
 
-	nw.dispatch[BINDINGS["CYCLE_SHADER"]] = function(wnd)
+	nw.dispatch[BINDINGS["MODE_TOGGLE"]] = function(wnd)
 		nw.shid = (nw.shid + 1) > #shtbl and 1 or nw.shid+1;
 		image_shader(canv, shtbl[nw.shid]);
 		wnd.parent:set_message("Delta Method: " ..

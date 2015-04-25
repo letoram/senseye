@@ -9,9 +9,18 @@
 
 -- prepare a window suitable for showing / navigating one model
 local function modelwnd(wnd, model, shader)
--- 1. share the storage from the original model (note, should we
---    add an update hook for zoom and do a corresponding txco- mapping?)
-	image_sharestorage(wnd.canvas, model);
+-- 1. render the zoomed view to a texture that we use as LUT
+	local props = image_storage_properties(wnd.ctrl_id);
+	local isurf = alloc_surface(props.width, props.height);
+	local csurf = null_surface(props.width, props.height);
+	force_image_blend(csurf, BLEND_NONE);
+	force_image_blend(isurf, BLEND_NONE);
+	image_sharestorage(wnd.ctrl_id, csurf);
+	show_image(csurf);
+	define_rendertarget(isurf, {csurf},
+		RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
+	rendertarget_forceupdate(isurf);
+	image_sharestorage(isurf, model);
 
 -- 2. create an offscreen rendertarget for our 3d pipeline, and add a camera
 	local rtgt = alloc_surface(VRESW, VRESH);
@@ -30,6 +39,19 @@ local function modelwnd(wnd, model, shader)
 
 -- 3. take the rendertarget and set as the window canvas
 	local nw = wnd.wm:add_window(rtgt, {});
+	nw.zoom_link = function(self, wnd, txcos)
+		image_set_txcos(csurf, txcos);
+		rendertarget_forceupdate(isurf);
+	end
+
+	nw.source_handler = function(wnd, source, status)
+		if (status.kind == "frame") then
+			rendertarget_forceupdate(isurf);
+		end
+	end
+
+	wnd:add_zoom_handler(nw);
+	table.insert(wnd.source_listener, nw);
 
 	nw:set_parent(wnd, ANCHOR_UR);
 	defocus_window(nw)
@@ -42,6 +64,8 @@ local function modelwnd(wnd, model, shader)
 	nw.mmode = "rotate";
 	nw.spinning = false;
 	nw:resize(wnd.width, wnd.height);
+	table.insert(nw.autodelete, isurf);
+	table.insert(nw.autodelete, rtgt);
 
 	rotate3d_model(model, nw.xang, nw.yang, nw.zang);
 
@@ -115,7 +139,7 @@ local function modelwnd(wnd, model, shader)
 		wnd.mmode = wnd.mmode == "rotate" and "move" or "rotate";
 	end
 
-	nw.dispatch[BINDINGS["CYCLE_SHADER"]] = function(wnd)
+	nw.dispatch[BINDINGS["MODE_TOGGLE"]] = function(wnd)
 		wnd.shind = (wnd.shind + 1 > #shaders_3dview_pcloud and 1 or
 			wnd.shind + 1);
 		switch_shader(wnd, wnd.model, shaders_3dview_pcloud[wnd.shind]);
