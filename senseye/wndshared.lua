@@ -23,6 +23,7 @@ system_load("modelwnd.lua")();
 system_load("distgram.lua")();
 system_load("patfind.lua")();
 system_load("alphamap.lua")();
+system_load("pictune.lua")();
 
 local function wnd_reset(wnd)
 	wnd.zoom_range = 1.0;
@@ -781,6 +782,11 @@ local views_sub = {
 		label = "Distance Tracker",
 		name = "view_distgram",
 		handler = spawn_distgram
+	},
+	{
+		label = "Picture Tuner",
+		name = "pictune",
+		handler = spawn_pictune
 	},
 	{
 		label = "Pattern Finder",
