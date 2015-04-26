@@ -36,7 +36,7 @@ struct ent {
 	uint8_t* map;
 	size_t map_sz;
 	int fd;
-	int ind;
+	const char* arg;
 };
 
 struct {
@@ -52,7 +52,8 @@ struct {
 	size_t small_step;
 	size_t large_step;
 } mfsense = {
-	.bytes_perline = 1
+	.bytes_perline = 1,
+	.ent_min_sz = INT_MAX
 };
 
 void control_event(struct senseye_cont* cont, arcan_event* ev)
@@ -232,26 +233,49 @@ int main(int argc, char* argv[])
 	break;
 	}
 
-	if (optind >= argc){
-		printf("Error: missing filename\n");
+	if (optind >= argc - 1){
+		printf("Error: missing filenames (need >= 2)\n");
 		return usage();
 	}
 
-	int fd = open(argv[optind], O_RDONLY);
-	struct stat buf;
-	if (-1 == fstat(fd, &buf)){
-		fprintf(stderr, "couldn't stat file, check permissions and file state.\n");
-		return EXIT_FAILURE;
-	}
+	mfsense.ent_cnt = argc - optind;
+	mfsense.entries = malloc(sizeof(struct ent) * mfsense.ent_cnt);
+	memset(mfsense.entries, '\0', sizeof(struct ent));
 
-	if (!S_ISREG(buf.st_mode)){
-		fprintf(stderr, "invalid file mode, expecting a regular file.\n");
-		return EXIT_FAILURE;
-	}
+	for (size_t i=0; i < mfsense.ent_cnt; i++){
+		struct ent* dent = &mfsense.entries[i];
+		dent->fd = open(argv[i+optind], O_RDONLY);
+		if (-1 == dent->fd){
+			fprintf(stderr, "Failed while trying to open %s\n", argv[i+optind]);
+			return EXIT_FAILURE;
+		}
 
-/*
- * map and load all files
- */
+		struct stat buf;
+		if (1 == fstat(dent->fd, &buf)){
+			fprintf(stderr, "Couldn't get stat for %s, reason: %s\n",
+				argv[i+optind], strerror(errno));
+			return EXIT_FAILURE;
+		}
+
+		if (!S_ISREG(buf.st_mode)){
+			fprintf(stderr, "Invalid file mode for %s, expecting a normal file.\n",
+				argv[i+optind]);
+		}
+
+		dent->map_sz = buf.st_size;
+		dent->map = mmap(NULL, dent->map_sz, PROT_READ, MAP_PRIVATE, dent->fd, 0);
+		if (dent->map == MAP_FAILED){
+			fprintf(stderr, "Failed to map %s, reason: %s\n",
+				argv[i+optind], strerror(errno));
+			return EXIT_FAILURE;
+		}
+
+		if (dent->map_sz > mfsense.ent_max_sz)
+			mfsense.ent_max_sz = dent->map_sz;
+
+		if (dent->map_sz < mfsense.ent_min_sz)
+			mfsense.ent_min_sz = dent->map_sz;
+	}
 
 	if (!senseye_connect(NULL, stderr, &cont, &aarr)){
 		fprintf(stderr, "couldn't connect to senseye server\n");
