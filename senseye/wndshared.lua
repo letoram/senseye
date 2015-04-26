@@ -253,6 +253,10 @@ function setup_dispatch(dt)
 		shader_pcloud_pointsz(point_sz);
 	end
 
+	dt[BINDINGS["HELP"]] = function(wm)
+		show_help();
+	end
+
 	dt[BINDINGS["CANCEL"]] = function(wm)
 		if (wm.meta) then
 			return shutdown();

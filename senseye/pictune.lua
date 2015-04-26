@@ -11,9 +11,6 @@
 --  [tile_readback_buffer] -> [eval] -> [auto adjust tuner] ->
 --  [auto ofset]
 --
---  and a final "auto-ofs" step that uses an edge detector and
---  looks for an edge that covers the whole vertical span
---
 -- Details:
 -- Color space unpack works on the assumption that though the
 -- input data has been provided as RGBA, it may itself contain
@@ -35,10 +32,17 @@
 --  This is a heuristic driven algorithm that is prone to
 --  both false-positives and false negatives.
 --
---  There is no support for planar images, only interleaved.
+--  There is no support for planar images, only interleaved as we
+--  don't know if we have the full image buffer or not in the active
+--  sample window.
+--
 --  Input buffer size in relation to the width evaluated is
 --  also important (as the sample window dimensions effectively
 --  limit the maximum detectable width).
+--
+--  The auto- steps are effective for cases where you have a sample
+--  window that is smaller than the images you want to detect, which
+--  is typically the case.
 --
 -- Improvements:
 --
@@ -53,6 +57,19 @@
 --  * For "autostepping", look for a vertical edge to determine
 --  when to use or autotuning based on sharp breaks in histogram
 --  on a per row basis.
+--
+--  * Use edge-detection to find and isolate blocks of text,
+--  then OCR to automatically extract strings
+--
+--  * Propagate detected dimensions to rwstat(in sensor sampling support)
+--  in order to set a step size that would allow you to pan around inside
+--  the buffer
+--
+--  * Detect starting row and height by rewinding (requires the step-size
+--  change), looking for sharp histogram changes per row.
+--
+--  * When the 'favorites' feature is added, auto-add newly detected
+--  images with their assumed stride and offset
 --
 -- This solution could also be broken out to a separate tool that
 -- uses most of the same IPC / setup as senseye, but works automatically
@@ -189,7 +206,11 @@ local function gen_tiles(source, tilelist, base, calc)
 	local rt = null_surface(htiles * base, htiles * base);
 	if (calc) then
 		return define_calctarget(rt,
-			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0, calc);
+			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0,
+			function(tbl, w, h)
+				calc(tbl, base, w, h);
+			end
+		);
 	else
 		return define_rendertarget(rt,
 			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);

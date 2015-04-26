@@ -16,27 +16,27 @@ BINDINGS["META"]          = "LSHIFT"
 BINDINGS["META_DETAIL"]   = "z" -- update position and motion markers
 
 -- window-shared
-BINDINGS["FULLSCREEN"]    = "F1"
+BINDINGS["HELP"]          = "F1"
+BINDINGS["FULLSCREEN"]    = "ENTER"
 BINDINGS["ZOOM"]          = "F3" -- + META zooms out
 BINDINGS["RESIZE_X2"]     = "F2" -- + META shrinks
-BINDINGS["PLAYPAUSE"]     = " "
+BINDINGS["PLAYPAUSE"]     = "SPACE"
 BINDINGS["SELECT"]        = "RETURN"
 BINDINGS["DESTROY"]       = "BACKSPACE" -- requires meta
 BINDINGS["MODE_TOGGLE"]   = "c"
 BINDINGS["CYCLE_MAPPING"] = "m"
 BINDINGS["TRANSLATORS"]   = "t" -- requires meta
-BINDINGS["HELPERS"]       = "x" -- for aligning zoom properly
-
-BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
+-- BINDINGS["HELPERS"]       = "x" -- for aligning zoom properly
+BINDINGS["POPUP"]         = "TAB" -- meta cycles selected window
 
 -- global
+BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
 BINDINGS["POINTSZ_INC"]   = "F7"
 BINDINGS["POINTSZ_DEC"]   = "F8"
 BINDINGS["CANCEL"]        = "ESCAPE"
-BINDINGS["POPUP"]         = "TAB" -- meta cycles selected window
 
 -- 3d model based windows
-BINDINGS["TOGGLE_3DSPIN"]  = " " -- model automatically spins around y
+BINDINGS["TOGGLE_3DSPIN"]  = "SPACE" -- model automatically spins around y
 BINDINGS["TOGGLE_3DMOUSE"] = "m" -- change click/drag from rotate to move
 BINDINGS["STEP_FORWARD"]   = "w"
 BINDINGS["STEP_BACKWARD"]  = "s"

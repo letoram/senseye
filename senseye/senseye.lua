@@ -29,6 +29,7 @@ menu_text_fontstr = string.format("\\fdefault.ttf,%d\\#cccccc ", menu_fontsz);
 -- populated by scanning senses/[name].lua
 --
 type_handlers = {};
+type_helpers = {};
 
 translators = {};
 data_meta_popup = {
@@ -86,6 +87,10 @@ function senseye()
 
 				if (tbl ~= nil) then
 					type_handlers[base] = tbl;
+					if (tbl.help) then
+						table.insert(type_helpers, tbl.help);
+					end
+
 				end
 			end
 		end
@@ -154,7 +159,88 @@ local function add_subwindow(parent, id)
 	wnd.shader_group = shaders_2dview;
 	wnd.shind = 1;
 	target_flags(id, TARGET_VSTORE_SYNCH);
+
+	if (gconfig_get("show_help") == 1) then
+		show_help();
+	end
 	return wnd;
+end
+
+function show_help()
+	if (valid_vid(help_anchor)) then
+		nudge_image(help_anchor,
+			image_surface_properties(help_anchor).width, 0, 5);
+		expire_image(help_anchor, 5);
+		help_anchor = nil;
+		return;
+	end
+
+	local msg = string.format([[
+\fdefault.ttf,%d\#ffffffQuick Help\#ffff00\n\r
+Toggle Help\n\r
+Toggle Fullscreen\n\r
+Screenshot\n\r
+\#ffffffAll Windows\n\r\#ffff00\n\r
+Meta 1 (move, resize)\n\r
+Meta 2 (zoom, synch)\n\r
+Cycle Focus\n\r
+Zoom-Area\n\r
+Show Popup\n\r
+Delete Window\n\r
+Grow/Shrink x2\n\r
+\#ffffffData Window\#ffff00\n\r
+Toggle Play/Pause\n\r
+Cycle Mapping\n\r
+Mode Toggle]], 16);
+
+	local data = string.format([[
+ \#00ff00\n\r
+%s\n\r
+%s\n\r
+%s\n\r
+ \n\r\n\r
+%s\n\r
+%s\n\r
+%s\n\r
+lclick+drag\n\r
+%s\n\r
+%s\n\r
+%s\n\r
+ \n\r\n\r
+%s\n\r
+%s\n\r
+%s\n\r
+]],
+	BINDINGS["HELP"], BINDINGS["FULLSCREEN"],
+	BINDINGS["SCREENSHOT"],
+	BINDINGS["META"], BINDINGS["META_DETAIL"],
+	BINDINGS["POPUP"], BINDINGS["POPUP"],
+	BINDINGS["DESTROY"], BINDINGS["RESIZE_X2"],
+	BINDINGS["PLAYPAUSE"], BINDINGS["CYCLE_MAPPING"],
+	BINDINGS["MODE_TOGGLE"], BINDINGS["STEP_FORWARD"],
+	BINDINGS["STEP_BACKWARDS"]
+);
+
+	for k,v in ipairs(type_helpers) do
+		msg = msg .. [[\n\r]] .. v;
+	end
+
+	local help_text = render_text(msg);
+	local help_bind = render_text(data);
+	local props = image_surface_properties(help_text);
+	props.width = props.width + image_surface_properties(help_bind).width + 20;
+	link_image(help_bind, help_text, ANCHOR_UR);
+	nudge_image(help_bind, 20, 0);
+	help_anchor = color_surface(props.width+20, props.height+20, 0, 0, 0);
+	link_image(help_text, help_anchor);
+	show_image({help_text, help_anchor, help_bind});
+	move_image(help_anchor, VRESW,
+		math.floor( 0.5 * (VRESH - props.height) ));
+	nudge_image(help_anchor, -1 * (props.width + 20), 0, 5);
+	move_image(help_text, 10, 10);
+	order_image(help_anchor, 1000);
+	image_inherit_order(help_text, true);
+	image_inherit_order(help_bind, true);
 end
 
 --
