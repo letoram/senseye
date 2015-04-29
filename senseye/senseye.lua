@@ -134,6 +134,10 @@ function senseye()
 		height = menu_fontsz + 4, name = "status"
 	});
 	statusbar:move(0, VRESH - menu_fontsz - 4);
+
+	if (gconfig_get("show_help") == 1) then
+		show_help();
+	end
 end
 
 function add_window(source)
@@ -160,17 +164,13 @@ local function add_subwindow(parent, id)
 	wnd.shind = 1;
 	target_flags(id, TARGET_VSTORE_SYNCH);
 
-	if (gconfig_get("show_help") == 1) then
-		show_help();
-	end
 	return wnd;
 end
 
 function show_help()
 	if (valid_vid(help_anchor)) then
-		nudge_image(help_anchor,
-			image_surface_properties(help_anchor).width, 0, 5);
-		expire_image(help_anchor, 5);
+		blend_image(help_anchor, 0.0, 10);
+		expire_image(help_anchor, 10);
 		help_anchor = nil;
 		return;
 	end
@@ -193,6 +193,17 @@ Toggle Play/Pause\n\r
 Cycle Mapping\n\r
 Mode Toggle]], 16);
 
+	local lookup = function(sym)
+		if BINDINGS[sym] ~= nil then
+			if BINDINGS[sym] == " " then
+				return "SPACE";
+			end
+			return BINDINGS[sym];
+		else
+			return "";
+		end
+	end
+
 	local data = string.format([[
  \#00ff00\n\r
 %s\n\r
@@ -211,14 +222,14 @@ lclick+drag\n\r
 %s\n\r
 %s\n\r
 ]],
-	BINDINGS["HELP"], BINDINGS["FULLSCREEN"],
-	BINDINGS["SCREENSHOT"],
-	BINDINGS["META"], BINDINGS["META_DETAIL"],
-	BINDINGS["POPUP"], BINDINGS["POPUP"],
-	BINDINGS["DESTROY"], BINDINGS["RESIZE_X2"],
-	BINDINGS["PLAYPAUSE"], BINDINGS["CYCLE_MAPPING"],
-	BINDINGS["MODE_TOGGLE"], BINDINGS["STEP_FORWARD"],
-	BINDINGS["STEP_BACKWARDS"]
+	lookup("HELP"), lookup("FULLSCREEN"),
+	lookup("SCREENSHOT"),
+	lookup("META"), lookup("META_DETAIL"),
+	lookup("POPUP"), lookup("POPUP"),
+	lookup("DESTROY"), lookup("RESIZE_X2"),
+	lookup("PLAYPAUSE"), lookup("CYCLE_MAPPING"),
+	lookup("MODE_TOGGLE"), lookup("STEP_FORWARD"),
+	lookup("STEP_BACKWARDS")
 );
 
 	for k,v in ipairs(type_helpers) do
@@ -236,7 +247,7 @@ lclick+drag\n\r
 	show_image({help_text, help_anchor, help_bind});
 	move_image(help_anchor, VRESW,
 		math.floor( 0.5 * (VRESH - props.height) ));
-	nudge_image(help_anchor, -1 * (props.width + 20), 0, 5);
+	nudge_image(help_anchor, -1 * (props.width + 20), 0, 50, INTERP_EXPOUT);
 	move_image(help_text, 10, 10);
 	order_image(help_anchor, 1000);
 	image_inherit_order(help_text, true);

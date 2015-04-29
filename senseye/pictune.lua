@@ -266,6 +266,22 @@ function spawn_pictune(wnd)
 		set_width(nw, nw.split_w, nw.ofs_t);
 	end
 
+	nw.dispatch[BINDINGS["PLAYPAUSE"]] = function()
+		local iotbl = {};
+		if (nw.paused) then
+			iotbl = {kind = "digital", active = true, label = "STEP_SIZE_ROW"};
+			wnd:set_message("Pictune set step to row", DEFAULT_TIMEOUT);
+			nw.paused = nil;
+		else
+			iotbl = {kind = "digital", active = true, label = ""};
+			iotbl.label = string.format("CSTEP_%d", nw.split_w * wnd.pack_sz);
+			wnd:set_message(string.format("Pictune set step to %d bytes",
+				nw.split_w * wnd.pack_sz), DEFAULT_TIMEOUT);
+			nw.paused = true;
+		end
+		target_input(wnd.ctrl_id, iotbl);
+	end
+
 	nw.source_handler = function(wnd, source, status)
 -- for this to work, we need to know how many bytes we have moved and judge
 -- if this is enough for a new row and if so, adjust offset accordingly
@@ -293,7 +309,7 @@ function spawn_pictune(wnd)
 
 	nw.shid = build_shader(nil, tuners[1].frag, tostring(nw.name));
 	image_shader(nw.canvas, nw.shid);
-	set_width(nw, 533, 0);
+	set_width(nw, props.width, 0);
 
 	muppet = alloc_surface(props.width, props.height);
 	int = null_surface(props.width, props.height);

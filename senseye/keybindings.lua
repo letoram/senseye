@@ -20,7 +20,7 @@ BINDINGS["HELP"]          = "F1"
 BINDINGS["FULLSCREEN"]    = "ENTER"
 BINDINGS["ZOOM"]          = "F3" -- + META zooms out
 BINDINGS["RESIZE_X2"]     = "F2" -- + META shrinks
-BINDINGS["PLAYPAUSE"]     = "SPACE"
+BINDINGS["PLAYPAUSE"]     = " "
 BINDINGS["SELECT"]        = "RETURN"
 BINDINGS["DESTROY"]       = "BACKSPACE" -- requires meta
 BINDINGS["MODE_TOGGLE"]   = "c"
@@ -36,7 +36,7 @@ BINDINGS["POINTSZ_DEC"]   = "F8"
 BINDINGS["CANCEL"]        = "ESCAPE"
 
 -- 3d model based windows
-BINDINGS["TOGGLE_3DSPIN"]  = "SPACE" -- model automatically spins around y
+BINDINGS["TOGGLE_3DSPIN"]  = " " -- model automatically spins around y
 BINDINGS["TOGGLE_3DMOUSE"] = "m" -- change click/drag from rotate to move
 BINDINGS["STEP_FORWARD"]   = "w"
 BINDINGS["STEP_BACKWARD"]  = "s"

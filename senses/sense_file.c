@@ -133,6 +133,8 @@ void* data_loop(void* th_data)
 	ch->event(ch, &ev);
 	ch->switch_clock(ch, RW_CLK_BLOCK);
 
+	fsense.small_step = ch->row_size(ch);
+
 	while (1){
 		struct pollfd fds[2] = {
 			{	.fd = fsense.pipe_in, .events = pollev },
@@ -162,7 +164,7 @@ void* data_loop(void* th_data)
 					fsense.small_step = 1;
 				}
 				else if (strcmp(ev.io.label, "STEP_ROW") == 0){
-					fsense.small_step = 0;
+					fsense.small_step = ch->row_size(ch);
 				}
 				else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0){
 					fsense.large_step = 1;
@@ -170,11 +172,19 @@ void* data_loop(void* th_data)
 				else if (strcmp(ev.io.label, "STEP_PAGE") == 0){
 					fsense.large_step = 0;
 				}
-				else if (strcmp(ev.io.label, "STEP_ALIGN_512") == 0){
-					pthread_mutex_lock(&fsense.flock);
-					if (fsense.ofs % 512 != 0){
-						fsense.ofs = fix_ofset(ch, fsense.ofs - (fsense.ofs % 512));
-						refresh_data(ch, fsense.ofs);
+				else if (strncmp(ev.io.label, "CSTEP_", 6) == 0){
+					unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
+					if (sz > 0)
+						fsense.small_step = sz;
+				}
+				else if (strncmp(ev.io.label, "STEP_ALIGN_", 11) == 0){
+					unsigned align = strtoul(&ev.io.label[11], NULL, 10);
+					if (align > 0){
+						pthread_mutex_lock(&fsense.flock);
+						if (fsense.ofs % align != 0){
+							fsense.ofs = fix_ofset(ch, fsense.ofs - (fsense.ofs % align));
+							refresh_data(ch, fsense.ofs);
+						}
 					}
 					pthread_mutex_unlock(&fsense.flock);
 				}
@@ -210,7 +220,7 @@ void* data_loop(void* th_data)
 				if (ev.tgt.ioevs[0].iv == -1 || ev.tgt.ioevs[0].iv == 1){
 					pthread_mutex_lock(&fsense.flock);
 					fsense.ofs = fix_ofset(ch, fsense.ofs +
-						(fsense.small_step ? 1 : ch->row_size(ch)) * ev.tgt.ioevs[0].iv);
+						fsense.small_step * ev.tgt.ioevs[0].iv);
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
 
