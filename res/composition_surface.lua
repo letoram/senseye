@@ -28,7 +28,7 @@ local default_width = 1;
 -- blurred or textured etc.
 --
 local shader_types = {};
-if (SHADER_LANGUAGE == "GLSL120") then
+if (SHADER_LANGUAGE == "GLSL120" or SHADER_LANGUAGE == "GLSL100") then
 	shader_types["default"] = [[
 	uniform sampler2D map_diffuse;
 	uniform float border;
