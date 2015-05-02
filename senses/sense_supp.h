@@ -28,7 +28,7 @@ struct senseye_ch {
 struct senseye_cont {
 	bool (*refresh)(struct senseye_cont*, shmif_pixel* vidp, size_t w, size_t h);
 	void (*dispatch)(struct senseye_cont*, arcan_event* ev);
-	struct arcan_shmif_cont* (*context)();
+	struct arcan_shmif_cont* (*context)(struct senseye_cont* c);
 
 	void* tag;
 	struct senseye_priv* priv;
@@ -50,7 +50,7 @@ bool senseye_connect(const char* key, FILE* logout,
  * semantics for connection with the UI (override the default
  * refresh and event handlers in the structure if needed)
  */
-bool senseye_pump(struct senseye_cont*);
+bool senseye_pump(struct senseye_cont*, bool block);
 
 /*
  * Path is just a hint that will be used as a textual identifier

@@ -76,7 +76,7 @@ static void refresh_data(struct rwstat_ch* ch, size_t pos)
 {
 	size_t nb = ch->row_size(ch);
 	struct arcan_shmif_cont* cont = ch->context(ch);
-	size_t ntw = nb * cont->addr->h;
+	size_t ntw = nb * cont->h;
 
 	struct arcan_event outev = {
 		.category = EVENT_EXTERNAL,
@@ -235,7 +235,7 @@ void* data_loop(void* th_data)
 				else if (ev.tgt.ioevs[0].iv == -2 || ev.tgt.ioevs[0].iv == 2){
 					pthread_mutex_lock(&fsense.flock);
 					fsense.ofs = fix_ofset(ch, fsense.ofs +
-						(ch->row_size(ch) * (ch->context(ch)->addr->h) >> fsense.large_step)
+						(ch->row_size(ch) * (ch->context(ch)->h) >> fsense.large_step)
 						* (ev.tgt.ioevs[0].iv == -2 ? -1 : 1));
 					size_t lofs = fsense.ofs;
 					pthread_mutex_unlock(&fsense.flock);
@@ -248,25 +248,6 @@ void* data_loop(void* th_data)
 		}
 
 	}
-}
-
-static void update_preview(struct arcan_shmif_cont* c, uint8_t* buf, size_t s)
-{
-	size_t np = c->addr->w * c->addr->h;
-	size_t step_sz = s / np;
-
-	shmif_pixel* px = c->vidp;
-	uint8_t* wb = buf;
-	while (wb - buf < s){
-		uint8_t val = *wb;
-		*px++ = RGBA(0, val, 0, 0xff);
-		wb += step_sz;
-	}
-
-	fsense.bytes_perline = step_sz * c->addr->w;
-	arcan_shmif_signal(c, SHMIF_SIGVID);
-	int nonsense = 0;
-	write(fsense.pipe_out, &nonsense, sizeof(nonsense));
 }
 
 static int usage()
@@ -336,14 +317,13 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (!S_ISREG(buf.st_mode)){
-		fprintf(stderr, "invalid file mode, expecting a regular file.\n");
+	if (buf.st_size == 0){
+		fprintf(stderr, "empty file encountered\n");
 		return EXIT_FAILURE;
 	}
 
-	if (buf.st_size < base * base && buf.st_size < p_w * p_h){
-		fprintf(stderr, "file too small, expecting "
-			"*at least* %zu and %zu bytes.\n", base*base, (size_t) (p_w * p_h));
+	if (!S_ISREG(buf.st_mode)){
+		fprintf(stderr, "invalid file mode, expecting a regular file.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -379,13 +359,54 @@ int main(int argc, char* argv[])
 	cont.dispatch = control_event;
 	fsense.fmap_sz = buf.st_size - 1;
 
-	update_preview(cont.context(&cont), fsense.fmap, buf.st_size);
+/* update preview a row at a time, synch is determined
+ * by number of bytes that had to be sampled */
+	struct arcan_shmif_cont* c = cont.context(&cont);
+	size_t step_sz = buf.st_size / (c->w * c->h);
+	if (step_sz == 0)
+		step_sz = 1;
+
+	fsense.bytes_perline = step_sz * c->w;
+	size_t pos = 0;
+	size_t row = 0;
+
+/* clear before generating preview */
+	for (size_t i = 0; i < c->w * c->h; i++)
+		c->vidp[i] = RGBA(0x00, 0x00, 0x00, 0xff);
+
+	const int byte_threshold = 10 * 1024 * 1024;
 
 	pthread_t pth;
 	pthread_create(&pth, NULL, data_loop, chan);
 
-	while (senseye_pump(&cont)){
+/* rather crude sample, plan is to use overlay maps for more interesting
+ * metadata in the other color channels (file-operation playback sequence,
+ * page mapping, heap, stack, ...) */
+	while (pos + step_sz < buf.st_size && row < c->h){
+		size_t cpos = pos;
+		for (size_t i = 0; i < c->w && pos < buf.st_size; i++){
+			c->vidp[row * c->w + i] = RGBA(
+				0x00, fsense.fmap[pos], 0x00, 0xff);
+			pos += step_sz;
+		}
+
+		if (!senseye_pump(&cont, false))
+			goto done;
+
+		if (cpos > byte_threshold){
+			for (size_t i = 0; i < c->w && row < c->h; i++)
+				c->vidp[(row+1) * c->w + i] = RGBA(0xff, 0x00, 0x00, 0xff);
+			arcan_shmif_signal(c, SHMIF_SIGVID);
+		}
+
+		row++;
+	}
+	arcan_shmif_signal(c, SHMIF_SIGVID);
+
+	while (senseye_pump(&cont, true)){
 	}
 
+done:
+	arcan_shmif_drop(c);
 	return EXIT_SUCCESS;
 }

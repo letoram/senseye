@@ -182,7 +182,7 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		size_t width = ev->tgt.ioevs[0].iv;
 		size_t height = ev->tgt.ioevs[1].iv;
 
-		arcan_shmif_resize(cont->context(), width, height);
+		arcan_shmif_resize(cont->context(cont), width, height);
 		refresh = true;
 	}
 
@@ -472,6 +472,7 @@ int main(int argc, char* argv[])
 
 	msense.cont = &cont;
 	pthread_mutex_init(&msense.plock, NULL);
+
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;
@@ -483,7 +484,7 @@ int main(int argc, char* argv[])
 	};
 	arcan_shmif_enqueue(msense.cont->context(msense.cont), &ev);
 
-	while (senseye_pump(&cont)){
+	while (senseye_pump(&cont, true)){
 	}
 
 	return EXIT_SUCCESS;

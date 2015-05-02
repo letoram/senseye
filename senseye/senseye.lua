@@ -178,11 +178,10 @@ function show_help()
 	local msg = string.format([[
 \fdefault.ttf,%d\#ffffffQuick Help\#ffff00\n\r
 Toggle Help\n\r
-Toggle Fullscreen\n\r
-Screenshot\n\r
-\#ffffffAll Windows\n\r\#ffff00\n\r
 Meta 1 (move, resize)\n\r
 Meta 2 (zoom, synch)\n\r
+Screenshot\n\r
+\#ffffffAll Windows\n\r\#ffff00\n\r
 Cycle Focus\n\r
 Zoom-Area\n\r
 Show Popup\n\r
@@ -191,7 +190,9 @@ Grow/Shrink x2\n\r
 \#ffffffData Window\#ffff00\n\r
 Toggle Play/Pause\n\r
 Cycle Mapping\n\r
-Mode Toggle]], 16);
+Mode Toggle\n\r
+Step Forward\n\r
+Step Backwards\n\r]], 16);
 
 	local lookup = function(sym)
 		if BINDINGS[sym] ~= nil then
@@ -209,27 +210,26 @@ Mode Toggle]], 16);
 %s\n\r
 %s\n\r
 %s\n\r
+%s\n\r
  \n\r\n\r
-%s\n\r
-%s\n\r
-%s\n\r
+(meta1) %s\n\r
 lclick+drag\n\r
 %s\n\r
 %s\n\r
-%s\n\r
+(meta) %s\n\r
  \n\r\n\r
+%s\n\r
+%s\n\r
 %s\n\r
 %s\n\r
 %s\n\r
 ]],
-	lookup("HELP"), lookup("FULLSCREEN"),
-	lookup("SCREENSHOT"),
-	lookup("META"), lookup("META_DETAIL"),
-	lookup("POPUP"), lookup("POPUP"),
+	lookup("HELP"), lookup("META"), lookup("META_DETAIL"),
+	lookup("SCREENSHOT"), lookup("POPUP"), lookup("POPUP"),
 	lookup("DESTROY"), lookup("RESIZE_X2"),
 	lookup("PLAYPAUSE"), lookup("CYCLE_MAPPING"),
-	lookup("MODE_TOGGLE"), lookup("STEP_FORWARD"),
-	lookup("STEP_BACKWARDS")
+	lookup("MODE_TOGGLE"), lookup("PSENSE_STEP_FRAME"),
+	lookup("FSENSE_STEP_BACKWARD")
 );
 
 	for k,v in ipairs(type_helpers) do

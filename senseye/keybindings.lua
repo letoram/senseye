@@ -17,7 +17,7 @@ BINDINGS["META_DETAIL"]   = "z" -- update position and motion markers
 
 -- window-shared
 BINDINGS["HELP"]          = "F1"
-BINDINGS["FULLSCREEN"]    = "ENTER"
+BINDINGS["FULLSCREEN"]    = "KP_ENTER"
 BINDINGS["ZOOM"]          = "F3" -- + META zooms out
 BINDINGS["RESIZE_X2"]     = "F2" -- + META shrinks
 BINDINGS["PLAYPAUSE"]     = " "

@@ -245,12 +245,13 @@ static void process_event(struct senseye_cont* cont, arcan_event* ev)
 	cont->dispatch(cont, ev);
 }
 
-bool senseye_pump(struct senseye_cont* cont)
+bool senseye_pump(struct senseye_cont* cont, bool block)
 {
 	struct senseye_priv* cpriv = cont->priv;
 	arcan_event sr;
 
-	while(arcan_shmif_wait(&cpriv->cont, &sr) != 0){
+	while ((block && arcan_shmif_wait(&cpriv->cont, &sr) != 0) ||
+		(!block && arcan_shmif_poll(&cpriv->cont, &sr) != 0)){
 		if (sr.category == EVENT_TARGET &&
 			sr.tgt.kind == TARGET_COMMAND_EXIT)
 				return false;

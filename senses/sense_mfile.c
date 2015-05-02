@@ -298,7 +298,7 @@ int main(int argc, char* argv[])
 	pthread_t pth;
 	pthread_create(&pth, NULL, data_loop, chan);
 
-	while (senseye_pump(&cont)){
+	while (senseye_pump(&cont, true)){
 	}
 
 	return EXIT_SUCCESS;

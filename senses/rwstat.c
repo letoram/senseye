@@ -523,9 +523,12 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
  * how large the raw buffer needs to be.
  */
 	size_t bsqr = base * base;
-		if (ch->priv->buf){
-			free(ch->priv->buf);
-			free(ch->priv->alpha);
+	if (ch->priv->buf_sz == bsqr * ch->priv->pack_sz)
+		goto done;
+
+	if (ch->priv->buf){
+		free(ch->priv->buf);
+		free(ch->priv->alpha);
 	}
 	ch->priv->buf_sz = bsqr * ch->priv->pack_sz;
 	assert(ch->priv->buf_sz);
@@ -543,6 +546,7 @@ static void ch_resize(struct rwstat_ch* ch, size_t base)
 	ch->priv->sf_x = (float) (base-1) / 255.0f;
 	ch->priv->sf_y = (float) (base-1) / 255.0f;
 
+done:
 	ch_map(ch, ch->priv->map);
 }
 
