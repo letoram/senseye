@@ -135,13 +135,14 @@ void main()
 {
 	float step_s = obj_input_sz.x;
 	float step_t = obj_input_sz.y;
+	float tx = tune_x < obj_storage_sz.x ? obj_storage_sz.x : tune_x;
 
 /* align against grid to lessen sampling artifacts */
 	float new_s = floor(texco.s / obj_input_sz.x) * obj_input_sz.x;
 	float new_t = floor(texco.t / obj_input_sz.y) * obj_input_sz.y;
 
 /* calculate the offset shift for each row */
-	float lpr = (tune_x - obj_storage_sz.x) * obj_input_sz.x;
+	float lpr = (tx - obj_storage_sz.x) * obj_input_sz.x;
 	new_s = new_s + new_t / step_t * lpr + (ofs_s * step_s);
 
 /* adjust s/t accordingly */
@@ -248,14 +249,28 @@ function spawn_pictune(wnd)
 	local rt = build_unpacker(unpackers[1], wnd.ctrl_id);
 	local nw = wnd.wm:add_window(rt, {});
 
-	window_shared(nw);
 	nw:set_parent(wnd, ANCHOR_LL);
 	nw.basew = props.width;
 	nw.copy = copy;
 	nw.mode = 0;
 	nw.splitw = 0.0;
 	nw.ofs_t = 0.0;
+	nw.dynamic_zoom = false;
 	nw:select();
+
+	window_shared(nw);
+	local old_drag = nw.drag;
+	nw.drag = function(wnd, vid, x, y)
+		if (not wnd.wm.meta and not wnd.wm.meta_detail) then
+			if (nw.mode == 0) then
+				set_width(wnd, wnd.split_w + 0.5 * x, wnd.ofs_s);
+			else
+				set_width(wnd, wnd.split_w, wnd.ofs_s + 0.5 * y);
+			end
+		else
+			old_drag(wnd, vid, x, y);
+		end
+	end
 
 	nw.dispatch["LEFT"] = function()
 		if (nw.mode == 0) then
@@ -314,20 +329,6 @@ function spawn_pictune(wnd)
 	muppet = alloc_surface(props.width, props.height);
 	int = null_surface(props.width, props.height);
 	image_sharestorage(nw.canvas, int);
-
-	nw.sh_drag = nw.drag;
-	nw.motion = function() end;
-	nw.drag = function(wnd, vid, x, y)
-		if (wm.meta_detail) then
-			if (nw.mode == 0) then
-				set_width(wnd, wnd.split_w + 0.5 * x, wnd.ofs_s);
-			else
-				set_width(wnd, wnd.split_w, wnd.ofs_s + 0.5 * y);
-			end
-		else
-			return wnd:sh_drag(vid, x, y);
-		end
-	end
 
 	table.insert(nw.autodelete, copy);
 end

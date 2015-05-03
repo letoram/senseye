@@ -119,7 +119,7 @@ local function goto_position(nw, slot)
 
 	local sz = nw.width > 256 and nw.width / 256 or 1;
 	resize_image(nw.cursor, sz, nw.height);
-	move_image(nw.cursor, slot * math.floor(nw.width / 256), 0);
+	move_image(nw.cursor, slot * nw.width / 255, 0);
 
 	local slotstr = string.format("(0x%.2x) - ", slot);
 
@@ -176,7 +176,15 @@ function spawn_histogram(wnd)
 	nw.reposition = repos_window;
 	nw:set_parent(wnd, ANCHOR_LR);
 	nw:resize(wnd.width, wnd.height);
+	window_shared(nw);
 	local destroy = nw.destroy;
+
+	local old_resize = nw.resize;
+
+	nw.resize = function(wnd, neww, newh)
+		old_resize(wnd, neww, newh);
+		goto_position(nw, nw.hgram_slot);
+	end
 
 	force_image_blend(csurf, BLEND_NONE);
 
@@ -236,7 +244,9 @@ function spawn_histogram(wnd)
 	nw.cursor = cursor;
 	nw.match_fun = bhattacharyya;
 
+	local old_motion = nw.motion;
 	nw.motion = function(wnd, vid, x, y)
+		old_motion(wnd, vid, x, y);
 		local rprops = image_surface_resolve_properties(wnd.canvas);
 		local newx = (x-rprops.x > wnd.width) and wnd.width or (x-rprops.x);
 		x = (x - rprops.x) / wnd.width;

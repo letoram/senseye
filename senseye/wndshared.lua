@@ -468,6 +468,10 @@ local function resize_zone(wnd)
 end
 
 local function update_zoom_preview(wnd, x, y)
+	if (not wnd.zoom_preview) then
+		return;
+	end
+
 	if (not valid_vid(wnd.wm.meta_zoom)) then
 		local ms = null_surface(80, 80);
 		image_sharestorage(wnd.canvas, ms);

@@ -144,9 +144,10 @@ end
 
 function add_window(source)
 	local wnd = wm:add_window(source, {});
-	window_shared(wnd);
+	window_shared(wnd, true);
 	wnd.fullscreen_disabled = true;
 	wnd.ctrl_id = source;
+	wnd.zoom_preview = true;
 	wnd.source_listener = {};
 	wnd.popup = controlwnd_menu;
 	return wnd;
@@ -154,9 +155,10 @@ end
 
 local function add_subwindow(parent, id)
 	local wnd = wm:add_window(id, {});
-	window_shared(wnd);
+	window_shared(wnd, true);
 	wnd.ctrl_id = id;
 	wnd.pending = 0;
+	wnd.zoom_preview = true;
 	wnd.source_listener = {};
 	wnd.highlight = shader_update_range;
 	wnd:set_parent(parent, ANCHOR_UR);

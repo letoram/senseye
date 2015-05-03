@@ -128,8 +128,7 @@ local function goto_slot(wnd, id)
 	id = id > 255 and 255 or id;
 
 	wnd.slot = id;
-	local xp = (wnd.width / 256) * id;
-	move_image(wnd.cursor, xp, 0);
+	move_image(wnd.cursor, id * wnd.width / 255, 0);
 
 	local sz = wnd.width >= 256 and wnd.width / 256 or 1;
 	resize_image(wnd.cursor, sz, wnd.height);
@@ -143,8 +142,6 @@ local function goto_slot(wnd, id)
 end
 
 local function disttbl_motion(wnd, vid, x, y)
-	local rprops = image_surface_resolve_properties(wnd.canvas);
-	goto_slot(wnd, math.floor((x - rprops.x) / wnd.width * 255));
 end
 
 function spawn_distgram(wnd)
@@ -162,9 +159,16 @@ function spawn_distgram(wnd)
 	nw.shader_group = shaders_1dplot;
 	nw.shind = 1;
 	nw.reposition = repos_window;
+	window_shared(nw);
 	defocus_window(nw);
 	switch_shader(nw, nw.canvas, shaders_1dplot[1]);
-	nw.motion = disttbl_motion;
+
+	local old_motion = nw.motion;
+	nw.motion = function(wnd, vid, x, y)
+		local rprops = image_surface_resolve_properties(wnd.canvas);
+		goto_slot(wnd, math.floor((x - rprops.x) / wnd.width * 255));
+		old_motion(wnd, vid, x, y);
+	end
 	nw:resize(256, 256);
 
 	local cursor = color_surface(1, wnd.height, 0, 255, 0);
@@ -176,6 +180,12 @@ function spawn_distgram(wnd)
 	table.insert(nw.autodelete, cursor);
 	nw.cursor = cursor;
 	nw.slot = 0;
+
+	local old_resize = nw.resize;
+	nw.resize = function(wnd, neww, newh)
+		old_resize(wnd, neww, newh);
+		goto_slot(nw, nw.slot);
+	end
 
 	nw.update_disttbl = function()
 		if (gen_lut[wnd.pack_sz]) then
