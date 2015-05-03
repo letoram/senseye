@@ -130,9 +130,11 @@ function senseye()
 
 	local statusid = null_surface(2,2);
 	statusbar = wm:add_window(statusid, {
-		ontop = true, fixed = true, width = VRESW,
-		height = menu_fontsz + 4, name = "status"
+		ontop = true, fixed = true, block_select = true,
+		width = VRESW, height = menu_fontsz + 4,
+		name = "status"
 	});
+	statusbar.select = function() end
 	statusbar:move(0, VRESH - menu_fontsz - 4);
 
 	if (gconfig_get("show_help") == 1) then

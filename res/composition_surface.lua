@@ -91,8 +91,8 @@ local function compsurf_find(ctx, name)
 	end
 end
 
-local function wnd_ind(wm, wnd)
-	for k,v in ipairs(wm.windows) do
+local function wnd_ind(tbl, wnd)
+	for k,v in ipairs(tbl) do
 		if (v == wnd) then
 			return k;
 		end
@@ -115,7 +115,7 @@ end
 local function forward_children(wm, wnd)
 	if (wnd.children) then
 		for k,v in ipairs(wnd.children) do
-			local ind = wnd_ind(wm, v);
+			local ind = wnd_ind(wm.windows, v);
 			table.remove(wm.windows, ind);
 			table.insert(wm.windows, v);
 			if (v.children) then
@@ -147,8 +147,9 @@ local function compsurf_wnd_select(wnd)
 	wm.selected = wnd;
 	broadcast(wm.handlers.select, wnd);
 
+-- we use the flat windows list to determine drawing order
 	forward_children(wm, wnd);
-	local ind = wnd_ind(wm, wnd);
+	local ind = wnd_ind(wm.windows, wnd);
 	table.remove(wm.windows, ind);
 	table.insert(wm.windows, wnd);
 
@@ -203,9 +204,12 @@ local function compsurf_wnd_destroy(wnd, cascade)
 
 -- drop from list, delete anchor (which will cascade
 -- to all linked surfaces), deregister
-	local wi = wnd_ind(wnd.wm, wnd);
-	assert(wi ~= nil);
+	local wi = wnd_ind(wnd.wm.windows, wnd);
 	table.remove(wnd.wm.windows, wi);
+	local oi = wnd_ind(wnd.wm.wnd_order, wnd);
+	if (oi ~= nil) then
+		table.remove(wnd.wm.wnd_order, oi);
+	end
 
 	delete_image(wnd.anchor);
 
@@ -522,6 +526,21 @@ local function compsurf_wnd_show(wnd)
 	show_image(wnd.anchor);
 end
 
+local function compsurf_next_window(ctx, wnd)
+	local oi = 1;
+
+	if (wnd ~= nil) then
+		oi = wnd_ind(ctx.wnd_order, wnd);
+		if (oi ~= nil) then
+			oi = (oi + 1) > #ctx.wnd_order and 1 or (oi + 1);
+		end
+	end
+
+	if (oi ~= nil and ctx.wnd_order[oi]	~= nil) then
+		ctx.wnd_order[oi]:select();
+	end
+end
+
 local function compsurf_add_window(ctx, surf, opts)
 	local w = opts.width ~= nil and opts.width or ctx.def_ww;
 	local h = opts.height ~= nil and opts.height or ctx.def_wh;
@@ -611,6 +630,10 @@ local function compsurf_add_window(ctx, surf, opts)
 	wseq = wseq + 1;
 
 	table.insert(ctx.windows, wnd);
+	if (not opts.block_select) then
+		table.insert(ctx.wnd_order, wnd);
+	end
+
 	ctx.src_lut[wnd.canvas] = wnd;
 
 	if (not ctx.selected and not opts.fixed) then
@@ -770,6 +793,7 @@ function compsurf_create(width, height, opts)
 -- 'private' properties
 		canvas = null_surface(width, height),
 		windows = {},
+		wnd_order = {},
 		src_lut = {},
 		max_w = width,
 		max_h = height,
@@ -787,6 +811,7 @@ function compsurf_create(width, height, opts)
 		set_background = compsurf_background,
 		toggle_fullscreen = compsurf_fullscreen,
 		max_order = compsurf_maxorder,
+		step_selected = compsurf_next_window,
 
 -- explicitly hint what state the cursor should be in
 		cursor_normal = function() end,

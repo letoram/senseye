@@ -737,15 +737,7 @@ function window_shared(wnd)
 		end
 
 		if (wm.meta) then
-			local ind = 1;
-			for i=1,#wm.windows do
-				if (wm.windows[i] == wnd) then
-					ind = i;
-					break;
-				end
-			end
-			ind = (ind + 1 > #wm.windows) and 1 or (ind + 1);
-			wm.windows[ind]:select();
+			wm:step_selected(wnd);
 		else
 			spawn_popupmenu(wm, wnd.popup);
 		end
