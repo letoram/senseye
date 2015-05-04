@@ -482,6 +482,11 @@ static void ch_alpha(struct rwstat_ch* ch, enum rwstat_alpha amode)
 	}
 }
 
+static size_t ch_packsz(struct rwstat_ch* ch)
+{
+	return ch->priv->pack;
+}
+
 static void ch_reclock(struct rwstat_ch* ch, enum rwstat_clock clock)
 {
 /*	ch_step(ch); - somewhat uncertain if there is any valid point
@@ -708,7 +713,7 @@ struct rwstat_ch* rwstat_addch(
 	res->add_pattern = ch_pattern;
 	res->left = ch_left;
 	res->row_size = ch_rowsz;
-
+	res->pack_sz = ch_packsz;
 	res->priv->map = map;
 	res->priv->pack = pack;
 	res->priv->amode = RW_ALPHA_FULL;

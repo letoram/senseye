@@ -238,6 +238,10 @@ local picture_popup = {
 	}
 };
 
+local function vcont(tbl, source, w, h)
+	print("cont!");
+end
+
 function spawn_pictune(wnd)
 	local props = image_storage_properties(wnd.ctrl_id);
 	if (wnd.pack_sz == 1) then
@@ -281,6 +285,14 @@ function spawn_pictune(wnd)
 		set_width(nw, nw.split_w, nw.ofs_t);
 	end
 
+	nw.dispatch["a"] = function()
+		gen_tiles(wnd.canvas, {
+			{x = 0, y = 0},
+			{x = 16, y = 16}
+			}, 8, vcont
+		);
+	end
+
 	nw.dispatch[BINDINGS["PLAYPAUSE"]] = function()
 		local iotbl = {};
 		if (nw.paused) then
@@ -315,7 +327,7 @@ function spawn_pictune(wnd)
 			nw.ofs_t = nw.ofs_t + (nw.wm.meta and 10 or 1);
 		end
 		set_width(nw, nw.split_w, nw.ofs_t);
-	end
+end
 
 	nw.dispatch[BINDINGS["MODE_TOGGLE"]] = function()
 		nw.mode = nw.mode == 0 and 1 or 0;

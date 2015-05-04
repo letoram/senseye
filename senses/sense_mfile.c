@@ -68,23 +68,41 @@ void control_event(struct senseye_cont* cont, arcan_event* ev)
 	}
 }
 
+/*
+ * we use rwstat as a convenience here, most of the mapping
+ * and statistics functions break as we rely on a tiled output
+ * format.
+ */
 static void refresh_data(struct rwstat_ch* ch, size_t pos)
 {
-/*
-	size_t nb = ch->row_size(ch);
 	struct arcan_shmif_cont* cont = ch->context(ch);
-	size_t ntw = nb * cont->addr->h;
+	size_t area = cont->w * cont->w;
+	area = area / ((mfsense.diff ? 1 : 0) + mfsense.ent_cnt);
+	size_t tile_sz = sqrt(area);
 
 	struct arcan_event outev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
 		.ext.framestatus.framenumber = (pos + 1) / mfsense.bytes_perline,
-		.ext.framestatus.pts = ntw / mfsense.bytes_perline
+		.ext.framestatus.pts = pos,
 	};
-	arcan_shmif_enqueue(mfsense.cont->context(mfsense.cont), &outev);
 
+	size_t cy = 0, cx = 0;
+
+/* we actually ignore rwstat entirely, except for the event semantics */
+	static uint8_t* wbuf;
+
+	size_t pack_sz = ch->pack_sz(ch);
+
+	for (size_t i = 0; i < mfsense.ent_cnt; i++){
+		for (size_t y = 0; y < tile_sz; y++)
+			for (size_t x = 0; x < tile_sz; x++){
+
+			}
+	}
+
+	arcan_shmif_enqueue(cont, &outev);
 	ch->wind_ofs(ch, pos);
-*/
 }
 
 static size_t fix_ofset(struct rwstat_ch* ch, ssize_t ofs)
@@ -197,6 +215,10 @@ void* data_loop(void* th_data)
 static void update_preview(struct arcan_shmif_cont* c)
 {
 	draw_box(c, 0, 0, c->w, c->h, RGBA(0x00, 0x00, 0x00, 0xff));
+	const char msg[] = "# of files: %d\ncurrent ofs: %d\ndiff: %d\n";
+	char tmpbuf[sizeof(msg) + 24];
+	snprintf(tmpbuf, sizeof(tmpbuf), msg, (int) mfsense.ent_cnt, (int)mfsense.ofs, 1);
+	draw_text(c, tmpbuf, 8, 8, RGBA(0xff, 0xff, 0xff, 0xff));
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 }
 

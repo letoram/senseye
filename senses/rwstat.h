@@ -63,6 +63,7 @@ struct rwstat_ch {
  * current packing / mapping sizes */
 	size_t (*left)(struct rwstat_ch*);
 	size_t (*row_size)(struct rwstat_ch*);
+	size_t (*pack_sz)(struct rwstat_ch*);
 
 /* force a transfer step even though parts of buffer state may be incomplete */
 	void (*tick)(struct rwstat_ch*);
