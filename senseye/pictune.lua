@@ -172,50 +172,60 @@ local function set_width(wnd, neww, newofs)
 	shader_uniform(wnd.shid, "tune_x", "f", PERSIST, neww);
 	shader_uniform(wnd.shid, "ofs_s", "f", PERSIST, newofs);
 	wnd:set_message(string.format("width (%d), ofs (%d)", neww, newofs));
+
+	if (wnd.cascade) then
+		for k,v in ipairs(wnd.cascade) do
+			rendertarget_forceupdate(v);
+			stepframe_target(v);
+		end
+	end
 end
 
 --
--- used for autotuning, take a table of {.x, .y} tables and a base
--- width (to avoid bin packing problem) and pack into a rendertarget
+-- used for autotuning, take a set of cords (x,y,x2,y2, ...)
+-- and a base (x,y,x+base,y+base), generate null surfaces that
+-- are part of a calctarget readback into calc.
 --
-local function gen_tiles(source, tilelist, base, calc)
+-- x, y [+base] should be within the assumed "max" testing
+-- width relative to the input source so that there is enough
+-- data to work with.
+--
+-- returns a reference to the calc/rendertarget and the set of tiles
+--
+local function gen_tiles(source, coords, base, calc)
 	local props = image_storage_properties(source);
-	local htiles = math.ceil(math.sqrt(#tilelist));
-	local ofs = 1;
-	local row = 1;
+	local ntiles = #coords / 2;
+
 	local tset = {};
 	local ss = base / props.width;
 	local st = base / props.height;
 
-	while row <= htiles and ofs <= #tilelist do
-		for col=1,htiles do
-			local tile = null_surface(base, base);
-			local s1 = tilelist[ofs].x > 0 and tilelist[ofs].x / props.width or 0;
-			local t1 = tilelist[ofs].y > 0 and tilelist[ofs].y / props.height or 0;
-			local s2 = s1 + ss;
-			local t2 = t1 + st;
-			move_image(tile, (row - 1) * base, (col - 1) * base);
-			image_sharestorage(source, tile);
-			local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
-			image_set_txcos(tile, txcos);
-			tset[ofs] = tile;
-			ofs = ofs + 1;
-		end
-		row = row + 1;
+	for i=1,ntiles do
+		local x = coords[i*2-1];
+		local y = coords[i*2-0];
+
+		local tile = null_surface(base, base);
+		image_sharestorage(source, tile);
+		move_image(tile, base * (i-1), 0);
+		show_image(tile);
+		local s1 = x * (1.0 / props.width);
+		local t1 = y * (1.0 / props.height);
+		local s2 = s1 + ss;
+		local t2 = t1 + st;
+
+		local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
+		image_set_txcos(tile, txcos);
+		table.insert(tset, tile);
 	end
 
-	local rt = null_surface(htiles * base, htiles * base);
+	local rt = alloc_surface(ntiles * base, base);
 	if (calc) then
-		return define_calctarget(rt,
-			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0,
-			function(tbl, w, h)
-				calc(tbl, base, w, h);
-			end
-		);
+		define_calctarget(rt, tset,
+			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0, calc);
 	else
-		return define_rendertarget(rt,
-			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
+		define_rendertarget(rt, tset, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
 	end
+	return rt, tset;
 end
 
 local unpacking_popup = {
@@ -238,8 +248,31 @@ local picture_popup = {
 	}
 };
 
-local function vcont(tbl, source, w, h)
-	print("cont!");
+local function vcont(wnd, tbl, base, w, h)
+	local tilec = w / base;
+
+-- just compare euclid distance between rows (vertical continuity)
+	local function tile_score(ofs)
+		local score = 0;
+		for x=0,base do
+			local last_pos = 0;
+			for y=0,base do
+				local r,g,b = tbl:get(x+ofs, y, 3);
+				local dist = math.sqrt(r * r + g * g + b * b);
+				if (math.abs(dist - last_pos) < 0.01) then
+					score = score + 1;
+				else
+					last_pos = dist;
+				end
+			end
+		end
+		return score;
+	end
+
+	for i=0,tilec-1 do
+		local score = tile_score(i*base);
+--  print("tile", i, score);
+	end
 end
 
 function spawn_pictune(wnd)
@@ -286,11 +319,32 @@ function spawn_pictune(wnd)
 	end
 
 	nw.dispatch["a"] = function()
-		gen_tiles(wnd.canvas, {
-			{x = 0, y = 0},
-			{x = 16, y = 16}
-			}, 8, vcont
+		local tiles = {0, 0, 20, 20, 40, 40, 60, 60};
+-- for the tiles we also need an intermediate rendertarget
+-- as the tuning shader is built on buffer dimensions
+		local props = image_storage_properties(nw.canvas);
+		local im = alloc_surface(props.width, props.height);
+		table.insert(nw.autodelete, im);
+		local ns = null_surface(props.width, props.height);
+		image_sharestorage(nw.canvas, ns);
+		show_image(ns);
+		define_rendertarget(im, {ns}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
+		image_shader(ns, nw.shid);
+		rendertarget_forceupdate(im);
+--		show_image(im);
+
+		local rt, tiles = gen_tiles(im, tiles, 20,
+			function(tbl, w, h)
+				vcont(nw, tbl, 20, w, h);
+			end
 		);
+--    debugging views, ignore
+--    show_image(rt);
+--		order_image(rt, 1000);
+--		resize_image(rt, VRESW, 40);
+		rendertarget_forceupdate(rt);
+		stepframe_target(rt);
+		nw.cascade = {im, rt};
 	end
 
 	nw.dispatch[BINDINGS["PLAYPAUSE"]] = function()
