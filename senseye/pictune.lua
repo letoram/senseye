@@ -176,7 +176,7 @@ local function set_width(wnd, neww, newofs)
 	if (wnd.cascade) then
 		for k,v in ipairs(wnd.cascade) do
 			rendertarget_forceupdate(v);
-			stepframe_target(v);
+			stepframe_target_builtin(v, 1, true);
 		end
 	end
 end
@@ -254,9 +254,9 @@ local function vcont(wnd, tbl, base, w, h)
 -- just compare euclid distance between rows (vertical continuity)
 	local function tile_score(ofs)
 		local score = 0;
-		for x=0,base do
+		for x=0,base-1 do
 			local last_pos = 0;
-			for y=0,base do
+			for y=0,base-1 do
 				local r,g,b = tbl:get(x+ofs, y, 3);
 				local dist = math.sqrt(r * r + g * g + b * b);
 				if (math.abs(dist - last_pos) < 0.01) then
@@ -269,10 +269,12 @@ local function vcont(wnd, tbl, base, w, h)
 		return score;
 	end
 
+-- punish tiles that are close to perfect?
+	local sum = 0.0001;
 	for i=0,tilec-1 do
-		local score = tile_score(i*base);
---  print("tile", i, score);
+		sum = sum + tile_score(i*base);
 	end
+	return sum / tilec;
 end
 
 function spawn_pictune(wnd)
@@ -287,10 +289,9 @@ function spawn_pictune(wnd)
 	local nw = wnd.wm:add_window(rt, {});
 
 	nw:set_parent(wnd, ANCHOR_LL);
-	nw.basew = props.width;
 	nw.copy = copy;
 	nw.mode = 0;
-	nw.splitw = 0.0;
+	nw.split_w = props.width;
 	nw.ofs_t = 0.0;
 	nw.dynamic_zoom = false;
 	nw:select();
@@ -319,32 +320,46 @@ function spawn_pictune(wnd)
 	end
 
 	nw.dispatch["a"] = function()
-		local tiles = {0, 0, 20, 20, 40, 40, 60, 60};
+		local tiles = {0, 4, 20, 4, 80, 4, 120, 4};
 -- for the tiles we also need an intermediate rendertarget
 -- as the tuning shader is built on buffer dimensions
 		local props = image_storage_properties(nw.canvas);
 		local im = alloc_surface(props.width, props.height);
-		table.insert(nw.autodelete, im);
 		local ns = null_surface(props.width, props.height);
 		image_sharestorage(nw.canvas, ns);
 		show_image(ns);
 		define_rendertarget(im, {ns}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
 		image_shader(ns, nw.shid);
 		rendertarget_forceupdate(im);
---		show_image(im);
+		show_image(im);
 
+		local scores = {};
 		local rt, tiles = gen_tiles(im, tiles, 20,
 			function(tbl, w, h)
-				vcont(nw, tbl, 20, w, h);
+				scores[nw.split_w] = vcont(nw, tbl, 20, w, h);
 			end
 		);
---    debugging views, ignore
---    show_image(rt);
---		order_image(rt, 1000);
---		resize_image(rt, VRESW, 40);
-		rendertarget_forceupdate(rt);
-		stepframe_target(rt);
 		nw.cascade = {im, rt};
+
+-- possible detected tile depend on base size and highest sampled y val,
+-- we can calculate "lost height" based on assumed width vs. tested width
+		for i=props.width+1,props.width * 5 do
+			set_width(nw, i, 0);
+		end
+
+		local highest = 0;
+		local highest_ind = 1;
+
+		for k,v in pairs(scores) do
+			if (v > highest) then
+				highest = v;
+				highest_ind = k;
+			end
+		end
+		delete_image(im);
+		delete_image(rt);
+		nw.cascade = nil;
+		set_width(nw, highest_ind, 0);
 	end
 
 	nw.dispatch[BINDINGS["PLAYPAUSE"]] = function()

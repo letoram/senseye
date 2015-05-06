@@ -221,10 +221,12 @@ function setup_dispatch(dt)
 			local name = gen_dumpname("screenshot", "png");
 			local img = gen_dumpid(wm.selected);
 			save_screenshot(name, FORMAT_PNG, img);
+			statusbar:set_message("Window saved as " .. name, DEFAULT_TIMEOUT);
 			delete_image(img);
 		else
 			local name = gen_dumpname("screenshot", "png");
 			save_screenshot(name, FORMAT_PNG_FLIP);
+			statusbar:set_message("Screen saved as " .. name, DEFAULT_TIMEOUT);
 		end
 	end
 

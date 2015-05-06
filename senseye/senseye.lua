@@ -264,11 +264,11 @@ end
 -- more important ones (switching clocking modes etc.) so make these
 -- requests synchronous with delivery.
 --
-local defstep = stepframe_target;
+stepframe_target_builtin = stepframe_target;
 function stepframe_target(src, id)
 	local wnd = wm:find(src);
 	if (wnd == nil) then
-		return defstep(src, id);
+		return stepframe_target_builtin(src, id);
 	end
 
 -- this is deferred from all over the place to not have multiple
@@ -286,10 +286,10 @@ function stepframe_target(src, id)
 	end
 
 	if (wnd.pending == nil) then
-		defstep(src, id);
+		stepframe_target_builtin(src, id);
 		return;
 	elseif (wnd.pending < pending_lim) then
-		defstep(src, id);
+		stepframe_target_builtin(src, id);
 		wnd.pending = wnd.pending + 1;
 	end
 end
