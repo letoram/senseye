@@ -50,6 +50,9 @@
 --  stage, possibly also add color formats to the auto-tuning
 --  process.
 --
+--  * Create a tuner shader that "zooms out" to skip having to slide
+--  offset to see what is in the picture
+--
 --  * Switch between "all in one run" and "one evaluation
 --  per frame", default could possibly be set using
 --  the command-line synchronization strategy.
@@ -74,6 +77,20 @@
 -- This solution could also be broken out to a separate tool that
 -- uses most of the same IPC / setup as senseye, but works automatically
 -- (i.e. no UI, just headless).
+--
+-- Developer notes:
+--
+-- To expand on this module, the key tables to modify is:
+-- * 'tuners' - for adding new shader methods for changing pitch.
+--
+-- * 'unpackers' - for adding support for new color formats, note the
+--   sfx and sfy values that describe the factors that color format packed
+--   as RGBx would expand to.
+--
+-- * 'tilevals' - tile evaluation functions supposed to return some
+--   commensurable value that takes 'useless' samples etc. into account
+--
+-- * 'stepping' - heuristic function that returns the next pitch to evaluate
 --
 
 local function build_unpacker(unpack, srcid)
@@ -116,6 +133,7 @@ void main()
 		sfx = 1.0,
 		sfy = 1.0,
 		handler = function(wnd, source)
+			print("switch unpacker");
 		end
 	}
 };
@@ -176,7 +194,7 @@ local function set_width(wnd, neww, newofs)
 	if (wnd.cascade) then
 		for k,v in ipairs(wnd.cascade) do
 			rendertarget_forceupdate(v);
-			stepframe_target_builtin(v, 1, true);
+			stepframe_target_builtin(v, 1);
 		end
 	end
 end
@@ -228,26 +246,6 @@ local function gen_tiles(source, coords, base, calc)
 	return rt, tset;
 end
 
-local unpacking_popup = {
-};
-
-local tuning_popup = {
-	-- reset, autoscan, # tiles, tile-size
-};
-
-local picture_popup = {
-	{
-		label = "Unpacking...",
-		name = "pt_unpack_menu",
-		submenu = unpackers
-	},
-	{
-		label = "Tuning...",
-		name = "pt_tune_menu",
-		submenu = tuners
-	}
-};
-
 local function vcont(wnd, tbl, base, w, h)
 	local tilec = w / base;
 
@@ -277,6 +275,150 @@ local function vcont(wnd, tbl, base, w, h)
 	return sum / tilec;
 end
 
+local function drop_tuner(nw)
+	table.remove_match(postframe_handlers, nw.postframe_handler);
+	delete_image(nw.cascade[1]);
+	nw.cascade = nil;
+	nw.in_autotune = nil;
+end
+
+local function autotune_toggle(nw)
+	if (nw.in_autotune) then
+		nw:set_message("Autotune aborted", DEFAULT_TIMEOUT);
+		drop_tuner(nw);
+		return;
+	end
+	local scores = {};
+	open_rawresource("stat");
+
+-- actual stepping / tuning is aligned with a frame delivery
+-- to lessen the responsiveness impact in readback + process
+-- loop
+
+	nw:set_message("Autotuning");
+	nw.in_autotune = true;
+
+-- only request a new value if we have finished processing the previous one
+	nw.postframe_handler = function()
+		if (nw.tune_pending) then
+			return;
+		end
+		if (nw.candidate == nil) then
+			drop_tuner(nw);
+			nw:set_message("Autotune completed", DEFAULT_TIMEOUT);
+		else
+			set_width(nw, nw.candidate, nw.ofs_t);
+		end
+	end
+	table.insert(postframe_handlers, nw.postframe_handler);
+
+-- good rules for tile distribution is a multivariable analysis problem,
+-- (origw * (origh-2)) / tile_sz is the hard limit for detectable sizes
+-- [ first and last row is expected to be cropped ].
+
+	local tiles = {0, nw.tile_sz*0.5, 20,
+		nw.tile_sz, 80, nw.tile_sz*1.5, 120, nw.tile_sz*2};
+
+	local lim = nw.tile_sz;
+	for i=2,#tiles,2 do
+		lim = (tiles[i] + nw.tile_sz) > lim and (tiles[i] + nw.tile_sz) or lim;
+	end
+
+	nw.tile_lim = lim;
+	local props = image_storage_properties(nw.canvas);
+	local im = alloc_surface(props.width, props.height);
+	local ns = null_surface(props.width, props.height);
+	image_sharestorage(nw.canvas, ns);
+	show_image(ns);
+	define_rendertarget(im, {ns}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
+	image_shader(ns, nw.shid);
+	rendertarget_forceupdate(im);
+	show_image(im);
+
+	local highest = 1.0;
+	local sla = 0;
+	local rt, tiles = gen_tiles(im, tiles, nw.tile_sz,
+		function(tbl, w, h)
+			local score = nw.pitch_heuristic(nw, tbl, nw.tile_sz, w, h);
+			nw.candidate = nw.eval_score(nw, scores, score, nw.split_w);
+		end
+	);
+	nw.cascade = {im, rt};
+	nw.candidate = props.width;
+end
+
+local function linear_eval(cont, scoretbl, val, width)
+	local props = image_storage_properties(cont.canvas);
+	local ul = (props.width * props.height) / cont.tile_lim;
+	local nv = width + cont.step_sz;
+	return (nv < ul) and nv or nil;
+end
+
+local steppers = {
+	{
+		label = "Linear Search",
+		name = "pt_step_linear",
+		handler = function(wnd)
+			wnd.eval_score = linear_eval;
+		end
+	},
+};
+
+local tileevals = {
+	{
+		label = "Vertical Continuity",
+		name = "pt_eval_vcont",
+		handler = function(wnd)
+			wnd.pitch_heuristic = vcont;
+		end
+	}
+};
+
+local step_factor = {};
+for i=1,10 do
+	table.insert(step_factor, {
+		label = tostring(i),
+		value = i,
+		name = "step_factor",
+	});
+end
+step_factor.handler = function(wnd, val)
+	wnd.step_sz = val;
+end
+
+local picture_popup = {
+	{
+		label = "Unpacking...",
+		name = "pt_unpack_menu",
+		submenu = unpackers
+	},
+	{
+		label = "Tuning Shader...",
+		name = "pt_tune_menu",
+		submenu = tuners
+	},
+	{
+		label = "Tile Evaluation...",
+		name = "pt_tileval_menu",
+		submenu = tileevals
+	},
+	{
+		label = "Scoring/Stepping...",
+		name = "pt_tilescore_menu",
+		submenu = steppers
+	},
+	{
+		label = "Step Factor...",
+		name = "pt_tilestep_factor",
+		submenu = step_factor
+	},
+	{
+		label = "Toggle Autotune",
+		name =" pt_autotune_toggle",
+		handler = autotune_toggle
+	}
+};
+
 function spawn_pictune(wnd)
 	local props = image_storage_properties(wnd.ctrl_id);
 	if (wnd.pack_sz == 1) then
@@ -293,7 +435,11 @@ function spawn_pictune(wnd)
 	nw.mode = 0;
 	nw.split_w = props.width;
 	nw.ofs_t = 0.0;
+	nw.pitch_heuristic = vcont;
+	nw.eval_score = linear_eval;
 	nw.dynamic_zoom = false;
+	nw.step_sz = 4;
+	nw.tile_sz = 20;
 	nw:select();
 
 	window_shared(nw);
@@ -310,7 +456,7 @@ function spawn_pictune(wnd)
 		end
 	end
 
-	nw.dispatch["LEFT"] = function()
+	nw.dispatch[BINDINGS["BACKWARD"]] = function()
 		if (nw.mode == 0) then
 			nw.split_w = nw.split_w - (nw.wm.meta and 10 or 1);
 		else
@@ -319,49 +465,16 @@ function spawn_pictune(wnd)
 		set_width(nw, nw.split_w, nw.ofs_t);
 	end
 
-	nw.dispatch["a"] = function()
-		local tiles = {0, 4, 20, 4, 80, 4, 120, 4};
--- for the tiles we also need an intermediate rendertarget
--- as the tuning shader is built on buffer dimensions
-		local props = image_storage_properties(nw.canvas);
-		local im = alloc_surface(props.width, props.height);
-		local ns = null_surface(props.width, props.height);
-		image_sharestorage(nw.canvas, ns);
-		show_image(ns);
-		define_rendertarget(im, {ns}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
-		image_shader(ns, nw.shid);
-		rendertarget_forceupdate(im);
-		show_image(im);
-
-		local scores = {};
-		local rt, tiles = gen_tiles(im, tiles, 20,
-			function(tbl, w, h)
-				scores[nw.split_w] = vcont(nw, tbl, 20, w, h);
-			end
-		);
-		nw.cascade = {im, rt};
-
--- possible detected tile depend on base size and highest sampled y val,
--- we can calculate "lost height" based on assumed width vs. tested width
-		for i=props.width+1,props.width * 5 do
-			set_width(nw, i, 0);
+	nw.dispatch[BINDINGS["FORWARD"]] = function()
+		if (nw.mode == 0) then
+			nw.split_w = nw.split_w + (nw.wm.meta and 10 or 1);
+		else
+			nw.ofs_t = nw.ofs_t + (nw.wm.meta and 10 or 1);
 		end
-
-		local highest = 0;
-		local highest_ind = 1;
-
-		for k,v in pairs(scores) do
-			if (v > highest) then
-				highest = v;
-				highest_ind = k;
-			end
-		end
-		delete_image(im);
-		delete_image(rt);
-		nw.cascade = nil;
-		set_width(nw, highest_ind, 0);
+		set_width(nw, nw.split_w, nw.ofs_t);
 	end
 
+	nw.dispatch[BINDINGS["AUTOTUNE"]] = autotune_toggle;
 	nw.dispatch[BINDINGS["PLAYPAUSE"]] = function()
 		local iotbl = {};
 		if (nw.paused) then
@@ -389,18 +502,19 @@ function spawn_pictune(wnd)
 	end
 	table.insert(nw.parent.source_listener, nw);
 
-	nw.dispatch["RIGHT"] = function()
-		if (nw.mode == 0) then
-			nw.split_w = nw.split_w + (nw.wm.meta and 10 or 1);
-		else
-			nw.ofs_t = nw.ofs_t + (nw.wm.meta and 10 or 1);
-		end
-		set_width(nw, nw.split_w, nw.ofs_t);
-end
-
 	nw.dispatch[BINDINGS["MODE_TOGGLE"]] = function()
 		nw.mode = nw.mode == 0 and 1 or 0;
 		nw:set_message("Mode switched to " .. (nw.mode == 0 and "(width)" or "(ofset)"));
+	end
+
+	nw.popup = picture_popup;
+
+	local destroy = nw.destroy;
+	nw.destroy = function(wnd)
+		if (nw.in_autotune) then
+			drop_tuner(nw);
+		end
+		destroy(wnd);
 	end
 
 	nw.shid = build_shader(nil, tuners[1].frag, tostring(nw.name));

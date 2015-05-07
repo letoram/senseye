@@ -64,8 +64,8 @@ local function set_calc(nw, abuf, canv)
 	define_calctarget(abuf, {canv}, RENDERTARGET_DETACH,
 		RENDERTARGET_NOSCALE, 0, function(tbl, w, h)
 		local sum = 0;
-		for y=1,h do
-			for x=1,w do
+		for y=0,h-1 do
+			for x=0,w-1 do
 				local r, g, b = tbl:get(x, y, 3);
 				sum = sum + r + g + b;
 			end

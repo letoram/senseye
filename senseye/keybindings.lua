@@ -28,6 +28,8 @@ BINDINGS["CYCLE_MAPPING"] = "m"
 BINDINGS["TRANSLATORS"]   = "t" -- requires meta
 -- BINDINGS["HELPERS"]       = "x" -- for aligning zoom properly
 BINDINGS["POPUP"]         = "TAB" -- meta cycles selected window
+BINDINGS["FORWARD"]       = "RIGHT"
+BINDINGS["BACKWARD"]      = "LEFT"
 
 -- global
 BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
@@ -46,6 +48,9 @@ BINDINGS["STRAFE_RIGHT"]   = "d"
 -- pattern finder
 BINDINGS["PFIND_INC"] = "RIGHT" -- increase match threshold
 BINDINGS["PFIND_DEC"] = "LEFT"  -- decrease match threshold
+
+-- picture tuner
+BINDINGS["AUTOTUNE"] = "a"
 
 -- sensor specific
 BINDINGS["PSENSE_PLAY_TOGGLE"] = " "

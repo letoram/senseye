@@ -31,6 +31,10 @@ menu_text_fontstr = string.format("\\fdefault.ttf,%d\\#cccccc ", menu_fontsz);
 type_handlers = {};
 type_helpers = {};
 
+-- primarily used by picture tune and other processes that rely heavily
+-- on multiple readbacks in short succession
+postframe_handlers = {};
+
 translators = {};
 data_meta_popup = {
 	{
@@ -496,6 +500,12 @@ end
 function senseye_clock_pulse()
 	mouse_tick(1);
 	wm:tick(1);
+end
+
+function senseye_postframe_pulse()
+	for k,v in ipairs(postframe_handlers) do
+		v();
+	end
 end
 
 function senseye_shutdown()
