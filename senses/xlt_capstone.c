@@ -158,7 +158,7 @@ static inline void flush(struct arcan_shmif_cont* c,
 static char hlut[16] = {'0', '1', '2', '3', '4', '5',
 	'6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
-static inline void draw_mnenmonic(
+static inline void draw_mnemonic(
 	struct arcan_shmif_cont* cont, struct cs_ctx* inh,
 	cs_insn* m, size_t* xpos, size_t* yofs)
 {
@@ -336,7 +336,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 		size_t row = 4 + fonth, xp = 0;
 		inh->pos = pos;
 		for (size_t i = 0; i < count && row < out->addr->h - fonth; i++)
-			draw_mnenmonic(out, inh, &insn[i], &xp, &row);
+			draw_mnemonic(out, inh, &insn[i], &xp, &row);
 	}
 	else
 		group_disass(out, insn, count);

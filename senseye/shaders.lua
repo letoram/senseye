@@ -405,9 +405,7 @@ local function load_new_lut(wnd, val, id)
 		global_lookup = newimg;
 	end
 
-	if (wnd.parent and wnd.parent.shtbl) then
-		switch_shader(wnd.parent);
-	end
+	switch_shader(wnd);
 end
 
 function shader_menu(group, target)

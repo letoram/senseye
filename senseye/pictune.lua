@@ -133,7 +133,6 @@ void main()
 		sfx = 1.0,
 		sfy = 1.0,
 		handler = function(wnd, source)
-			print("switch unpacker");
 		end
 	}
 };
@@ -409,8 +408,8 @@ local function linear_eval(wnd, sctx, val, width)
 		local step = math.ceil(wnd.step_sz / 2 - 0.5);
 		sctx.candidates = {};
 		for i=1,step do
-			table.insert(sctx.candidates, hgh_ind-step);
-			table.insert(sctx.candidates, hgh_ind+step);
+			table.insert(sctx.candidates, hgh_ind-i);
+			table.insert(sctx.candidates, hgh_ind+i);
 		end
 		return hgh_ind;
 	end

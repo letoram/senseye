@@ -33,12 +33,12 @@ local function modelwnd(wnd, model, shader)
 	scale3d_model(camera, 1.0, -1.0, 1.0);
 	forward3d_model(camera, -4.0);
 	image_tracetag(camera, "camera");
-
-	switch_shader(wnd, model, shader);
 	show_image({camera, rtgt, model});
 
 -- 3. take the rendertarget and set as the window canvas
 	local nw = wnd.wm:add_window(rtgt, {});
+	switch_shader(nw, model, shader);
+
 	nw.zoom_link = function(self, wnd, txcos)
 		image_set_txcos(csurf, txcos);
 		rendertarget_forceupdate(isurf);
