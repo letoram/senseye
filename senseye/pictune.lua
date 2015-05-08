@@ -223,6 +223,7 @@ local function gen_tiles(source, coords, base, calc)
 		local y = coords[i*2-0];
 
 		local tile = null_surface(base, base);
+		image_tracetag(tile, "tile_" .. tostring(i));
 		image_sharestorage(source, tile);
 		move_image(tile, base * (i-1), 0);
 		show_image(tile);
@@ -237,6 +238,7 @@ local function gen_tiles(source, coords, base, calc)
 	end
 
 	local rt = alloc_surface(ntiles * base, base);
+	image_tracetag(rt, "tiles_rtarget");
 	if (calc) then
 		define_calctarget(rt, tset,
 			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0, calc);
@@ -275,9 +277,12 @@ local function vcont(wnd, tbl, base, w, h)
 	return sum / tilec;
 end
 
+local count = 10;
+
 local function drop_tuner(nw)
 	table.remove_match(postframe_handlers, nw.postframe_handler);
 	delete_image(nw.cascade[1]);
+	delete_image(nw.cascade[2]);
 	nw.cascade = nil;
 	nw.in_autotune = nil;
 end
@@ -289,7 +294,6 @@ local function autotune_toggle(nw)
 		return;
 	end
 	local scores = {};
-	open_rawresource("stat");
 
 -- actual stepping / tuning is aligned with a frame delivery
 -- to lessen the responsiveness impact in readback + process
@@ -329,11 +333,12 @@ local function autotune_toggle(nw)
 	local im = alloc_surface(props.width, props.height);
 	local ns = null_surface(props.width, props.height);
 	image_sharestorage(nw.canvas, ns);
+	image_tracetag(im, "interim_rt");
+	image_tracetag(ns, "interim_canvas");
 	show_image(ns);
 	define_rendertarget(im, {ns}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
 	image_shader(ns, nw.shid);
 	rendertarget_forceupdate(im);
-	show_image(im);
 
 	local highest = 1.0;
 	local sla = 0;
@@ -347,11 +352,68 @@ local function autotune_toggle(nw)
 	nw.candidate = props.width;
 end
 
-local function linear_eval(cont, scoretbl, val, width)
-	local props = image_storage_properties(cont.canvas);
-	local ul = (props.width * props.height) / cont.tile_lim;
-	local nv = width + cont.step_sz;
-	return (nv < ul) and nv or nil;
+--
+-- slow and dumb, just sweep the positive range -- find the highest
+-- jump back there and local step up/down to find the peak
+--
+local function linear_eval(wnd, sctx, val, width)
+	if (sctx.done) then
+		return nil;
+	end
+
+-- first run, initialize state tracker
+	if (sctx.leval == nil) then
+		local props = image_storage_properties(wnd.canvas);
+		local ul = (props.width * props.height) / wnd.tile_lim;
+		sctx.leval = {};
+		sctx.leval.ul = ul;
+		for i=1,ul do
+			sctx[i] = 0;
+		end
+	end
+
+	sctx[width] = val;
+	local nv = width + wnd.step_sz;
+
+-- final selection list, pick the highest one
+	if (sctx.candidates) then
+		if (val > sctx.hgh) then
+			sctx.hgh = val;
+			sctx.hgh_ind = width;
+		end
+
+		if (#sctx.candidates == 0) then
+			sctx.done = true;
+			return sctx.hgh_ind;
+		end
+
+		return table.remove(sctx.candidates, 1);
+	end
+
+	if (nv < sctx.leval.ul) then
+		return nv;
+	else
+-- step_sz search space exausted, find apex and generate middle steps
+		local hgh = sctx[1];
+		local hgh_ind = 1;
+		for i=1,sctx.leval.ul do
+			if (sctx[i] > hgh) then
+				hgh = sctx[i];
+				hgh_ind = i;
+			end
+		end
+		sctx.sweep_over = true;
+		sctx.hgh = hgh;
+		sctx.hgh_ind = hgh_ind;
+
+		local step = math.ceil(wnd.step_sz / 2 - 0.5);
+		sctx.candidates = {};
+		for i=1,step do
+			table.insert(sctx.candidates, hgh_ind-step);
+			table.insert(sctx.candidates, hgh_ind+step);
+		end
+		return hgh_ind;
+	end
 end
 
 local steppers = {
