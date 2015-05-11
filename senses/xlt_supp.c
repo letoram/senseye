@@ -183,7 +183,7 @@ static void* process(void* inarg)
 
 /* two phase flush so that some events that can come in piles,
  * (input / displayhint) only apply the latest one */
-	while (arcan_shmif_wait(&sess->in, &ev) != 0){
+	while (arcan_shmif_wait(&sess->in, &ev)){
 		flush_output_events(sess);
 		if (!dispatch_event(sess, &ev))
 			goto end;
@@ -229,7 +229,7 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 	pending->populate = pop;
 	pending->flags = flags;
 
-	while (arcan_shmif_wait(&ctx, &ev) != -1){
+	while (arcan_shmif_wait(&ctx, &ev)){
 		if (ev.category == EVENT_TARGET)
 			switch (ev.tgt.kind){
 			case TARGET_COMMAND_NEWSEGMENT:

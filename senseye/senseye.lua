@@ -2,19 +2,19 @@
 -- License: 3-Clause BSD
 -- Reference: http://senseye.arcan-fe.com
 -- Description:
---  Main entry-points for the 'senseye' arcan application.
---  It passively listens on an external connection key (senseye)
---  for data 'senses' that connect through the senseye ARCAN_CONNPATH
---  and provides UI mappings and type- specific graphical
---  representations for data that these senses deliver.
+--  Main entry-points for the 'senseye' arcan application.  It passively
+--  listens on an external connection key (senseye) for data 'senses' that
+--  connect through the senseye ARCAN_CONNPATH and provides UI mappings and
+--  type- specific graphical representations for data that these senses
+--  deliver.
 --
 connection_path = "senseye";
 wndcnt = 0;
 pending_lim = 4;
 
 --
--- enable 'demo mode' with recording (if correct frameserver
--- is built in) and key overlay
+-- enable 'demo mode' with recording (if correct frameserver is built in) and
+-- key overlay
 --
 demo_mode = false;
 
@@ -25,14 +25,14 @@ menu_fontsz = 16;
 menu_text_fontstr = string.format("\\fdefault.ttf,%d\\#cccccc ", menu_fontsz);
 
 --
--- customized dispatch handlers based on registered sensor type
--- populated by scanning senses/[name].lua
+-- customized dispatch handlers based on registered sensor type populated by
+-- scanning senses/[name].lua
 --
 type_handlers = {};
 type_helpers = {};
 
--- primarily used by picture tune and other processes that rely heavily
--- on multiple readbacks in short succession
+-- primarily used by picture tune and other processes that rely heavily on
+-- multiple readbacks in short succession
 postframe_handlers = {};
 
 translators = {};
@@ -71,10 +71,9 @@ function senseye()
 	DEFAULT_TIMEOUT = gconfig_get("msg_timeout");
 
 --
--- load sense- specific user interfaces (name matches the
--- identification string that the connected frameserver sensor
--- segment provides, it does not define any additional trust barriers,
--- only user interface semantics.
+-- load sense- specific user interfaces (name matches the identification string
+-- that the connected frameserver sensor segment provides, it does not define
+-- any additional trust barriers, only user interface semantics.
 --
 	local res = glob_resource("senses/*.lua", APPL_RESOURCE);
 	if (res) then
@@ -263,10 +262,10 @@ lclick+drag\n\r
 end
 
 --
--- safeguard against pileups, the stepframe_target can have a steep
--- cost for each sensor and when events accumulate it might block
--- more important ones (switching clocking modes etc.) so make these
--- requests synchronous with delivery.
+-- safeguard against pileups, the stepframe_target can have a steep cost for
+-- each sensor and when events accumulate it might block more important ones
+-- (switching clocking modes etc.) so make these requests synchronous with
+-- delivery.
 --
 stepframe_target_builtin = stepframe_target;
 function stepframe_target(src, id)
@@ -299,8 +298,8 @@ function stepframe_target(src, id)
 end
 
 --
--- just hooked for now, using this as a means for having
--- UI notifications of future errors.
+-- just hooked for now, using this as a means for having UI notifications of
+-- future errors.
 --
 function error_message(note)
 	warning(note);
@@ -313,9 +312,8 @@ local function def_sourceh(wnd, source, status)
 end
 
 --
--- switch a window to expose one set of UI functions in
--- favor of another. Only really performed when a segment
--- sends an identity update.
+-- switch a window to expose one set of UI functions in favor of another. Only
+-- really performed when a segment sends an identity update.
 --
 function convert_type(wnd, th, basemenu)
 	if (th == nil) then
@@ -359,9 +357,8 @@ function convert_type(wnd, th, basemenu)
 end
 
 --
--- this is the minimized default subwindow handle, it works
--- as such until the point where we receive an ident message
--- with the suggested UI type.
+-- this is the minimized default subwindow handle, it works as such until the
+-- point where we receive an ident message with the suggested UI type.
 --
 function subid_handle(source, status)
 	local wnd = wm:find(source);
@@ -384,9 +381,8 @@ function subid_handle(source, status)
 end
 
 --
--- Default handle for the control- segment (main window)
--- to the sensor, other data components will be provided
--- as subsegments.
+-- Default handle for the control- segment (main window) to the sensor, other
+-- data components will be provided as subsegments.
 --
 function default_wh(source, status)
 	local wnd = wm:find(source);
@@ -394,9 +390,8 @@ function default_wh(source, status)
 	if (status.kind == "resized" and wnd ~= nil) then
 		wnd:resize(status.width, status.height);
 --
--- currently permitting infinite subsegments
--- (allocated from main one) in more sensitive settings,
--- this may be a bad idea (malicious process just spamming
+-- currently permitting infinite subsegments (allocated from main one) in more
+-- sensitive settings, this may be a bad idea (malicious process just spamming
 -- requests) if that is a concern, rate-limit and kill.
 --
 	elseif (status.kind == "segment_request") then
@@ -419,10 +414,9 @@ function default_wh(source, status)
 end
 
 --
--- note: translators are initially considered to be on
--- the same privilege level as the main senseye process,
--- it is only individual sessions that are deemed tainted.
--- Thus we assume that status.message is reasonable.
+-- note: translators are initially considered to be on the same privilege level
+-- as the main senseye process, it is only individual sessions that are deemed
+-- tainted.  Thus we assume that status.message is reasonable.
 --
 function translate_wh(source, status)
 	if (status.kind == "ident") then
@@ -455,10 +449,9 @@ function translate_wh(source, status)
 end
 
 --
--- there might be incentive to only permit windows that
--- registers with the correct subid to remain alive, and
--- have a timeout (i.e. mouse_tick on pending connections)
--- but >currently< we expect the sensor to cooperate.
+-- there might be incentive to only permit windows that registers with the
+-- correct subid to remain alive, and have a timeout (i.e. mouse_tick on
+-- pending connections) but >currently< we expect the sensor to cooperate.
 --
 function new_connection(source, status)
 -- need to distinguish between a translator (data interpreter)

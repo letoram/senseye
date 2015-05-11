@@ -135,7 +135,8 @@ void* data_loop(void* th_data)
 
 	fsense.small_step = ch->row_size(ch);
 
-	while (1){
+	int evstat = 0;
+	while (evstat != -1){
 		struct pollfd fds[2] = {
 			{	.fd = fsense.pipe_in, .events = pollev },
 			{ .fd = cont->epipe, .events = pollev }
@@ -154,7 +155,7 @@ void* data_loop(void* th_data)
 		}
 
 		arcan_event ev;
-		while (arcan_shmif_poll(cont, &ev) != 0){
+		while ( (evstat = arcan_shmif_poll(cont, &ev)) > 0){
 
 			if (rwstat_consume_event(ch, &ev))
 				continue;
@@ -192,10 +193,6 @@ void* data_loop(void* th_data)
 
 			if (ev.category == EVENT_TARGET)
 			switch(ev.tgt.kind){
-			case TARGET_COMMAND_EXIT:
-				return NULL;
-			break;
-
 			case TARGET_COMMAND_DISPLAYHINT:{
 				size_t base = ev.tgt.ioevs[0].iv;
 				if (base > 0 && (base & (base - 1)) == 0 &&
@@ -248,6 +245,8 @@ void* data_loop(void* th_data)
 		}
 
 	}
+
+	return NULL;
 }
 
 static int usage()
@@ -403,8 +402,8 @@ int main(int argc, char* argv[])
 	}
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 
-	while (senseye_pump(&cont, true)){
-	}
+	while (senseye_pump(&cont, true))
+		;
 
 done:
 	arcan_shmif_drop(c);

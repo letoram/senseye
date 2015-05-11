@@ -181,7 +181,7 @@ retry:
 /* otherwise, block thread, wait for user action and retry */
 	else{
 		arcan_event ev;
-		if (arcan_shmif_wait(&chp->cont, &ev) != 0){
+		if (arcan_shmif_wait(&chp->cont, &ev)){
 			dispatch_event(&ev, ch->in, chp);
 			goto retry;
 		}
@@ -250,16 +250,20 @@ bool senseye_pump(struct senseye_cont* cont, bool block)
 	struct senseye_priv* cpriv = cont->priv;
 	arcan_event sr;
 
-	while ((block && arcan_shmif_wait(&cpriv->cont, &sr) != 0) ||
-		(!block && arcan_shmif_poll(&cpriv->cont, &sr) != 0)){
-		if (sr.category == EVENT_TARGET &&
-			sr.tgt.kind == TARGET_COMMAND_EXIT)
+	if (block){
+		if (!arcan_shmif_wait(&cpriv->cont, &sr) ||
+			(sr.category == EVENT_TARGET && sr.tgt.kind == TARGET_COMMAND_EXIT))
 				return false;
 		else
 			process_event(cont, &sr);
+		return true;
 	}
 
-	return true;
+	int rc = arcan_shmif_poll(&cpriv->cont, &sr);
+	if (rc > 0)
+		process_event(cont, &sr);
+
+	return rc != -1;
 }
 
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
@@ -294,7 +298,7 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
  * events that may already be queued or if the request
  * management is deferred for any (UX)- reason.
  */
-	while(arcan_shmif_wait(&cpriv->cont, &sr) != 0){
+	while(arcan_shmif_wait(&cpriv->cont, &sr)){
 		if (sr.category == EVENT_TARGET && (
 			sr.tgt.kind == TARGET_COMMAND_NEWSEGMENT ||
 			sr.tgt.kind == TARGET_COMMAND_REQFAIL)){
