@@ -40,6 +40,19 @@ struct ent {
 	const char* arg;
 };
 
+static struct {
+	shmif_pixel border;
+	shmif_pixel pad;
+	shmif_pixel diff;
+	shmif_pixel match;
+}
+color = {
+	.border = RGBA(0xff, 0x00, 0x00, 0xff),
+	.pad = RGBA(0x00, 0x00, 0x00, 0xff),
+	.diff = RGBA(0x00, 0xff, 0x00, 0xff),
+	.match = RGBA(0x00, 0x00, 0x00, 0xff)
+};
+
 enum pack_mode {
 	PACK_INTENS = 0,
 	PACK_TIGHT,
@@ -123,13 +136,41 @@ static inline shmif_pixel pack_pixel(enum pack_mode mode, uint8_t* buf)
 	}
 }
 
+/*
+ * sweep all entries and generate a 1-bit tile that indicates if the input
+ * files match or diff at each packing position
+ */
+static void draw_dtile(struct arcan_shmif_cont* dst,
+	struct ent* ents, size_t n_ents, size_t pos, size_t x, size_t y,
+	enum pack_mode mode, size_t base)
+{
+	size_t step = pack_szlut[mode];
+
+	for (size_t row = y; row < y+base; row++)
+		for (size_t col = x; col < x+base; col++, pos += step){
+			shmif_pixel pxbuf[n_ents];
+			for (size_t i = 0; i < n_ents; i++)
+				pxbuf[i] = pos+step >= ents[i].map_sz ? color.pad :
+					pack_pixel(mode, ents[i].map + pos);
+
+			bool delta = false;
+			for (size_t i = 0; i < n_ents-1 && !delta; i++)
+				delta = pxbuf[i] != pxbuf[i+1];
+
+			dst->vidp[row*dst->pitch+col] = delta ? color.diff : color.match;
+	}
+}
+
 static void draw_tile(struct arcan_shmif_cont* dst,
 	struct ent* ent, size_t pos, size_t x, size_t y,
 	enum pack_mode mode, size_t base)
 {
 	size_t ntw = base*base;
 	size_t step = pack_szlut[mode];
-	ntw = ent->map_sz < pos + ntw * step ? (ent->map_sz - pos) / step : ntw;
+	size_t end = pos + ntw * step;
+
+	if (end > ent->map_sz)
+		ntw = end > ent->map_sz + ntw * step ? 0 : (ent->map_sz - pos) / step;
 
 	size_t row = y;
 	size_t col = x;
@@ -149,7 +190,8 @@ static void draw_tile(struct arcan_shmif_cont* dst,
 
 static void refresh_data(struct arcan_shmif_cont* dst,
 	struct ent* entries, size_t n_entries, size_t base,
-	enum pack_mode mode, size_t pos
+	enum pack_mode mode, size_t pos, size_t border,
+	bool diff
 )
 {
 	size_t y = 0, x = 0;
@@ -157,16 +199,43 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 /* flood-fill "draw_tile", this could well be thread- split per tile */
 	for (size_t i = 0; i < n_entries && y <= dst->h - base; i++){
 		draw_tile(dst, &entries[i], pos, x, y, mode, base);
-		x = x + base;
+		x = x + base + border;
 		if (x + base > dst->w){
 			x = 0;
-			y += base;
+			if (border)
+				draw_box(dst, 0, y + base, dst->w, border, color.border);
+			y += base + border;
 		}
+		else if (border)
+			draw_box(dst, x - border, y, border, base, color.border);
 	}
 
-/* generate diff tile if requested, and draw that one in a "fake" ent */
+	if (diff && y <= dst->h - base)
+		draw_dtile(dst, entries, n_entries, pos, x, y, mode, base);
 
+	arcan_event ev = {
+		.category = EVENT_EXTERNAL,
+		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
+		.ext.framestatus.framenumber = pos
+	};
+	arcan_shmif_enqueue(dst, &ev);
 	arcan_shmif_signal(dst, SHMIF_SIGVID);
+}
+
+static int resize_base(struct arcan_shmif_cont* cont,
+	size_t base, size_t n, size_t border)
+{
+	int npr = sqrtf(n);
+	int nr = ceil((float)n / (float)npr);
+
+	if (!arcan_shmif_resize(cont, npr * (base + border), nr * (base+border))){
+		fprintf(stderr, "Couldn't resize shmif segment, try with a smaller number "
+			" of tiles or a smaller base dimension.\n");
+		return 0;
+	}
+
+	draw_box(cont, 0, 0, cont->w, cont->h, color.pad);
+	return !0;
 }
 
 int main(int argc, char* argv[])
@@ -175,10 +244,11 @@ int main(int argc, char* argv[])
 	struct arg_arr* aarr;
 
 	size_t base = 64;
+	size_t border = 1;
 	off_t ofs = 0;
 	enum pack_mode pack_mode = PACK_INTENS;
 
-	bool difftile = false;
+	bool difftile = true;
 	int ch;
 
 	while((ch = getopt_long(argc, argv, "d?", longopts, NULL)) >= 0)
@@ -206,6 +276,8 @@ int main(int argc, char* argv[])
 	cont = arcan_shmif_open(SEGID_SENSOR, SHMIF_CONNECT_LOOP, &aarr);
 	unsetenv("ARCAN_CONNPATH");
 
+	resize_base(&cont, base, n_ent + (difftile ? 1 : 0), border);
+
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_IDENT,
@@ -213,31 +285,23 @@ int main(int argc, char* argv[])
 	};
 	arcan_shmif_enqueue(&cont, &ev);
 
-	int tbase = ceilf(sqrtf(n_ent));
+#define REFRESH() refresh_data(&cont, entries, \
+		n_ent, base, pack_mode, ofs, border, difftile)
 
-	if (!arcan_shmif_resize(&cont, tbase * base, tbase * base)){
-		fprintf(stderr, "Couldn't resize shmif segment, try with a smaller number "
-			" of tiles or a smaller base dimension.\n");
-		return EXIT_FAILURE;
-	}
-
-/* events we need to implement:
- *  PAUSE, DISPLAYHINT, UNPAUSE, STEPFRAME, EXIT
- *   TARGET_COMMAND_GRAPHMODE,
- *    20, 21, 22 => PACK_INTENS, PACK_TIGHT, PACK_TNOALPHA
- *
- */
-
-	refresh_data(&cont, entries, n_ent, base, pack_mode, ofs);
+	REFRESH();
 
 	while (arcan_shmif_wait(&cont, &ev) != 0){
 		if (ev.category == EVENT_TARGET)
 			switch(ev.tgt.kind){
-			case TARGET_COMMAND_PAUSE:
-			break;
-			case TARGET_COMMAND_DISPLAYHINT:
-			break;
-			case TARGET_COMMAND_UNPAUSE:
+			case TARGET_COMMAND_DISPLAYHINT:{
+				size_t lb = ev.tgt.ioevs[0].iv;
+					if (lb > 0 && (lb & (lb - 1)) == 0 &&
+						resize_base(&cont,lb,n_ent + (difftile ? 1 : 0), border)){
+						base = lb;
+						REFRESH();
+					}
+			}
+/* displayhint here would mean that width is the new base */
 			break;
 			case TARGET_COMMAND_STEPFRAME:
 				switch (ev.tgt.ioevs[0].iv){
@@ -250,24 +314,20 @@ int main(int argc, char* argv[])
 				break;
 				case 2: ofs += base * base * pack_szlut[pack_mode]; break;
 				}
-				refresh_data(&cont, entries, n_ent, base, pack_mode, ofs);
-
-			/* +- 1 small, 2 large */
+				REFRESH();
 			break;
 			case TARGET_COMMAND_GRAPHMODE:
 /* should we acknowledge the change in pack mode? */
 				if (ev.tgt.ioevs[0].iv >= 20 && ev.tgt.ioevs[0].iv <= 22)
 					pack_mode = ev.tgt.ioevs[0].iv - 20;
-				refresh_data(&cont, entries, n_ent, base, pack_mode, ofs);
+				REFRESH();
 			break;
 			default:
 			break;
 		}
 	}
-/* events:
- *  EXTERNAL_FRAMESTATUS,
- *  framenumber = local cont, pts = total_cont
- */
+
+#undef REFRESH
 	arcan_shmif_drop(&cont);
 
 	return EXIT_SUCCESS;
