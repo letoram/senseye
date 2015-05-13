@@ -79,7 +79,7 @@ local function modelwnd(wnd, model, shader)
 		image_set_txcos(model, txcos);
 	end
 
-	wnd.parent:add_zoom_handler(wnd);
+--	wnd.parent:add_zoom_handler(wnd);
 
 	nw.fullscreen_input_sym = function(wnd, sym)
 		if ((sym == BINDINGS["PSENSE_STEP_FRAME"] or

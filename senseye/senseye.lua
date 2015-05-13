@@ -151,26 +151,21 @@ function add_window(source)
 	wnd.fullscreen_disabled = true;
 	wnd.ctrl_id = source;
 	wnd.zoom_preview = true;
+	wnd.highlight = shader_update_range;
 	wnd.source_listener = {};
+	wnd.shader_group = shaders_2dview;
+	wnd.shind = 1;
+	wnd.pending = 0;
 	wnd.popup = controlwnd_menu;
 	return wnd;
 end
 
 local function add_subwindow(parent, id)
-	local wnd = wm:add_window(id, {});
-	window_shared(wnd, true);
-	wnd.ctrl_id = id;
-	wnd.pending = 0;
-	wnd.zoom_preview = true;
-	wnd.source_listener = {};
-	wnd.highlight = shader_update_range;
+	local wnd = add_window(id);
 	wnd:set_parent(parent, ANCHOR_UR);
 	nudge_image(wnd.anchor, 2, 0);
 	image_shader(wnd.canvas, shaders_2dview[1].shid);
-	wnd.shader_group = shaders_2dview;
-	wnd.shind = 1;
 	target_flags(id, TARGET_VSTORE_SYNCH);
-
 	return wnd;
 end
 

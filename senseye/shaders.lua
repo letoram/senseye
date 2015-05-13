@@ -315,6 +315,17 @@ for k,v in ipairs(shader_groups) do
 	end
 end
 
+build_shader(nil, [[
+	uniform sampler2D map_tu0;
+	varying vec2 texco;
+
+	void main(){
+		vec4 col = texture2D(map_tu0, texco);
+		gl_FragColor = vec4(col.r, 1.0 - col.g, col.b, 1.0);
+	}
+
+]], "invert_green");
+
 function shader_pcloud_pointsz(val)
 	for k,v in ipairs(shaders_3dview_pcloud) do
 		shader_uniform(v.shid, "point_sz", "f", PERSIST, val);

@@ -207,6 +207,7 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 	xlt_input inp, enum xlt_flags flags)
 {
 	struct arg_arr* darg;
+	struct xlt_session* pending;
 	assert(pop);
 	assert(tag);
 
@@ -223,8 +224,11 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 		sizeof(ev.ext.message) / sizeof(ev.ext.message[0]), "%s", tag);
 	arcan_shmif_enqueue(&ctx, &ev);
 
-	struct xlt_session* pending = malloc(sizeof(struct xlt_session));
+	pending = malloc(sizeof(struct xlt_session));
+
+reset_pending:
 	memset(pending, '\0', sizeof(struct xlt_session));
+	pending->pack_sz = 1;
 	pending->input = inp;
 	pending->populate = pop;
 	pending->flags = flags;
@@ -240,7 +244,7 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 				else{
 					pending->out = arcan_shmif_acquire(&ctx, NULL,
 						SEGID_SENSOR, SHMIF_DISABLE_GUARD);
-					pending->pack_sz = ev.tgt.ioevs[0].iv;
+					pending->pack_sz = ev.tgt.ioevs[0].iv ? ev.tgt.ioevs[0].iv : 1;
 				}
 
 /* sweet spot for attempting fork + seccmp-bpf */
@@ -255,10 +259,7 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 					}
 
 					pending = malloc(sizeof(struct xlt_session));
-					memset(pending, '\0', sizeof(struct xlt_session));
-					pending->input = inp;
-					pending->populate = pop;
-					pending->flags = flags;
+					goto reset_pending;
 				}
 
 			break;

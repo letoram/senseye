@@ -65,17 +65,26 @@ static size_t pack_szlut[] = {
 
 static int usage()
 {
-	printf("Usage: sense_mfile [options] file1 file2 ...\n"
-		"\t-d,--diff   \tlast tile is a binary difference indicator\n"
-		"\t-?=,--help= \tthis text\n"
-	);
+	const char* const argp[] = {
+		"-d,--nodiff", "disable diff subwindow",
+		"-s,--border=val", "set border width (0..10), default: 1",
+		"-?,--help", "this text"
+	};
+
+	printf("Usage: sense_mfile [options] file1 file2 ...\n");
+	for (size_t i = 0; i < sizeof(argp)/sizeof(argp[0]); i+=2)
+		printf("%-15s %s\n", argp[i], argp[i+1]);
+
+/* add options for size, border-color,
+* and if we should connect in loop or fatalfail */
 
 	return EXIT_SUCCESS;
 }
 
 static const struct option longopts[] = {
-	{"diff",   no_argument,       NULL, 'd'},
+	{"nodiff", no_argument,       NULL, 'd'},
 	{"help",   no_argument,       NULL, '?'},
+	{"border", required_argument, NULL, 's'},
 	{NULL, no_argument, NULL, 0}
 };
 
@@ -153,11 +162,12 @@ static void draw_dtile(struct arcan_shmif_cont* dst,
 				pxbuf[i] = pos+step >= ents[i].map_sz ? color.pad :
 					pack_pixel(mode, ents[i].map + pos);
 
-			bool delta = false;
-			for (size_t i = 0; i < n_ents-1 && !delta; i++)
-				delta = pxbuf[i] != pxbuf[i+1];
+			float n_delta = 0;
+			for (size_t i = 1; i < n_ents; i++)
+				n_delta += pxbuf[i] != pxbuf[0] ? 1 : 0;
 
-			dst->vidp[row*dst->pitch+col] = delta ? color.diff : color.match;
+			dst->vidp[row*dst->pitch+col] = n_delta ?
+				RGBA(0x00, 255.0 * (n_delta / (float)n_ents), 0x00, 0xff) : color.match;
 	}
 }
 
@@ -188,10 +198,17 @@ static void draw_tile(struct arcan_shmif_cont* dst,
 			dst->vidp[row*dst->pitch+col] = RGBA(0x00, 0x00, 0x00, 0xff);
 }
 
+static void refresh_diff(struct arcan_shmif_cont* dst,
+	struct ent* entries, size_t n_entries, size_t base,
+	enum pack_mode mode, size_t pos)
+{
+	draw_dtile(dst, entries, n_entries, pos, 0, 0,mode, base);
+	arcan_shmif_signal(dst, SHMIF_SIGVID | SHMIF_SIGBLK_NONE);
+}
+
 static void refresh_data(struct arcan_shmif_cont* dst,
 	struct ent* entries, size_t n_entries, size_t base,
-	enum pack_mode mode, size_t pos, size_t border,
-	bool diff
+	enum pack_mode mode, size_t pos, size_t border
 )
 {
 	size_t y = 0, x = 0;
@@ -210,12 +227,10 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 			draw_box(dst, x - border, y, border, base, color.border);
 	}
 
-	if (diff && y <= dst->h - base)
-		draw_dtile(dst, entries, n_entries, pos, x, y, mode, base);
-
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
+		.ext.framestatus.pts = n_entries,
 		.ext.framestatus.framenumber = pos
 	};
 	arcan_shmif_enqueue(dst, &ev);
@@ -225,10 +240,11 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 static int resize_base(struct arcan_shmif_cont* cont,
 	size_t base, size_t n, size_t border)
 {
-	int npr = sqrtf(n);
+	int npr = ceil(sqrtf(n));
 	int nr = ceil((float)n / (float)npr);
 
-	if (!arcan_shmif_resize(cont, npr * (base + border), nr * (base+border))){
+	if (!arcan_shmif_resize(cont,
+		(npr * (base + border)) - border, nr * (base+border) - border)){
 		fprintf(stderr, "Couldn't resize shmif segment, try with a smaller number "
 			" of tiles or a smaller base dimension.\n");
 		return 0;
@@ -241,6 +257,7 @@ static int resize_base(struct arcan_shmif_cont* cont,
 int main(int argc, char* argv[])
 {
 	struct arcan_shmif_cont cont;
+	struct arcan_shmif_cont diffcont = {0};
 	struct arg_arr* aarr;
 
 	size_t base = 64;
@@ -251,10 +268,14 @@ int main(int argc, char* argv[])
 	bool difftile = true;
 	int ch;
 
-	while((ch = getopt_long(argc, argv, "d?", longopts, NULL)) >= 0)
+	while((ch = getopt_long(argc, argv, "db:?", longopts, NULL)) >= 0)
 	switch(ch){
 	case '?' :
 		return usage();
+	break;
+	case 'b' :
+		border = strtoul(optarg, NULL, 10);
+		border = border > 10 ? 10 : border;
 	break;
 	case 'd' :
 		difftile = true;
@@ -275,8 +296,7 @@ int main(int argc, char* argv[])
 		setenv("ARCAN_CONNPATH", "senseye", 0);
 	cont = arcan_shmif_open(SEGID_SENSOR, SHMIF_CONNECT_LOOP, &aarr);
 	unsetenv("ARCAN_CONNPATH");
-
-	resize_base(&cont, base, n_ent + (difftile ? 1 : 0), border);
+	resize_base(&cont, base, n_ent, border);
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
@@ -285,14 +305,26 @@ int main(int argc, char* argv[])
 	};
 	arcan_shmif_enqueue(&cont, &ev);
 
-#define REFRESH() refresh_data(&cont, entries, \
-		n_ent, base, pack_mode, ofs, border, difftile)
+	if (difftile){
+		ev.ext.kind = EVENT_EXTERNAL_SEGREQ;
+		ev.ext.segreq.width = base;
+		ev.ext.segreq.height = base;
+		ev.ext.segreq.id = 0xcafe;
+		arcan_shmif_enqueue(&cont, &ev);
+	}
+
+#define REFRESH() {\
+	if (difftile && diffcont.vidp) refresh_diff(\
+		&diffcont, entries, n_ent, base, pack_mode, ofs);\
+		refresh_data(&cont, entries, n_ent, base, pack_mode, ofs, border);\
+	}
 
 	REFRESH();
 
 	while (arcan_shmif_wait(&cont, &ev) != 0){
 		if (ev.category == EVENT_TARGET)
 			switch(ev.tgt.kind){
+/* displayhint here would mean that width is the new base */
 			case TARGET_COMMAND_DISPLAYHINT:{
 				size_t lb = ev.tgt.ioevs[0].iv;
 					if (lb > 0 && (lb & (lb - 1)) == 0 &&
@@ -301,7 +333,18 @@ int main(int argc, char* argv[])
 						REFRESH();
 					}
 			}
-/* displayhint here would mean that width is the new base */
+			break;
+			case TARGET_COMMAND_NEWSEGMENT:
+				diffcont = arcan_shmif_acquire(&cont,
+					NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+				ev.ext.kind = EVENT_EXTERNAL_IDENT;
+				ev.category = EVENT_EXTERNAL;
+				snprintf((char*)ev.ext.message, sizeof(ev.ext.message)/
+					sizeof(ev.ext.message[0]), "mfsense_diff");
+				arcan_shmif_enqueue(&diffcont, &ev);
+
+				if (diffcont.vidp)
+					refresh_diff(&diffcont, entries, n_ent, base, pack_mode, ofs);
 			break;
 			case TARGET_COMMAND_STEPFRAME:
 				switch (ev.tgt.ioevs[0].iv){
