@@ -27,6 +27,7 @@ local rtbl = {
 	popup_sub = {},
 	init = function(wnd)
 		wnd.inv = false;
+		wnd.popup = {};
 		wnd.mfsense_diff = true;
 	end
 };

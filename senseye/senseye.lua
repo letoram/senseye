@@ -154,6 +154,7 @@ function add_window(source)
 	wnd.highlight = shader_update_range;
 	wnd.source_listener = {};
 	wnd.shader_group = shaders_2dview;
+	target_flags(source, TARGET_VSTORE_SYNCH);
 	wnd.shind = 1;
 	wnd.pending = 0;
 	wnd.popup = controlwnd_menu;
@@ -165,7 +166,6 @@ local function add_subwindow(parent, id)
 	wnd:set_parent(parent, ANCHOR_UR);
 	nudge_image(wnd.anchor, 2, 0);
 	image_shader(wnd.canvas, shaders_2dview[1].shid);
-	target_flags(id, TARGET_VSTORE_SYNCH);
 	return wnd;
 end
 

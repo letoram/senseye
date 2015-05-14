@@ -143,6 +143,9 @@ static inline shmif_pixel pack_pixel(enum pack_mode mode, uint8_t* buf)
 	case PACK_TNOALPHA:
 		return RGBA(buf[0], buf[1], buf[2], 0xff);
 	}
+
+/* because poor' ol' gcc */
+	return RGBA(0xde, 0xad, 0xbe, 0xef);
 }
 
 /*
@@ -230,7 +233,7 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_FRAMESTATUS,
-		.ext.framestatus.pts = n_entries,
+		.ext.framestatus.pts = base,
 		.ext.framestatus.framenumber = pos
 	};
 	arcan_shmif_enqueue(dst, &ev);
@@ -254,6 +257,20 @@ static int resize_base(struct arcan_shmif_cont* cont,
 	return !0;
 }
 
+static inline void send_streaminfo(struct arcan_shmif_cont* cont,
+	size_t n, size_t border, enum pack_mode mode)
+{
+	arcan_event ev = {
+		.category = EVENT_EXTERNAL,
+		.ext.kind = EVENT_EXTERNAL_STREAMINFO,
+		.ext.streaminf.streamid = n,
+		.ext.streaminf.langid[0] = '0' + border,
+		.ext.streaminf.langid[1] = '0' + pack_szlut[mode]
+	};
+
+	arcan_shmif_enqueue(cont, &ev);
+}
+
 int main(int argc, char* argv[])
 {
 	struct arcan_shmif_cont cont;
@@ -275,15 +292,15 @@ int main(int argc, char* argv[])
 	break;
 	case 'b' :
 		border = strtoul(optarg, NULL, 10);
-		border = border > 10 ? 10 : border;
+		border = border > 9 ? 9 : border;
 	break;
 	case 'd' :
 		difftile = true;
 	break;
 	}
 
-	if (optind >= argc - 1){
-		printf("Error: missing filenames (need >= 2)\n");
+	if (optind >= argc - 1 || (argc - optind) > 256){
+		printf("Error: missing filenames (n files within: 1 < n < 256)\n");
 		return usage();
 	}
 
@@ -304,6 +321,7 @@ int main(int argc, char* argv[])
 		.ext.message = "mfsense"
 	};
 	arcan_shmif_enqueue(&cont, &ev);
+	send_streaminfo(&cont, n_ent, border, pack_mode);
 
 	if (difftile){
 		ev.ext.kind = EVENT_EXTERNAL_SEGREQ;
@@ -319,7 +337,13 @@ int main(int argc, char* argv[])
 		refresh_data(&cont, entries, n_ent, base, pack_mode, ofs, border);\
 	}
 
+/* flush twice, once to initialize state, second to make sure secondary
+ * buffers are in synch for translators etc. */
 	REFRESH();
+	REFRESH();
+
+	size_t small_step = base;
+	size_t large_step = base*base;
 
 	while (arcan_shmif_wait(&cont, &ev) != 0){
 		if (ev.category == EVENT_TARGET)
@@ -328,8 +352,16 @@ int main(int argc, char* argv[])
 			case TARGET_COMMAND_DISPLAYHINT:{
 				size_t lb = ev.tgt.ioevs[0].iv;
 					if (lb > 0 && (lb & (lb - 1)) == 0 &&
-						resize_base(&cont,lb,n_ent + (difftile ? 1 : 0), border)){
+						resize_base(&cont,lb,n_ent + (difftile?1:0), border)){
+/* we may have a custom override step size, then don't adapt */
+						if (small_step == base)
+							small_step = lb;
+						if (large_step == base * base)
+							large_step = lb * lb;
+
 						base = lb;
+						if (difftile && diffcont.vidp)
+							arcan_shmif_resize(&diffcont, base, base);
 						REFRESH();
 					}
 			}
@@ -346,27 +378,44 @@ int main(int argc, char* argv[])
 				if (diffcont.vidp)
 					refresh_diff(&diffcont, entries, n_ent, base, pack_mode, ofs);
 			break;
-			case TARGET_COMMAND_STEPFRAME:
+			case TARGET_COMMAND_STEPFRAME:{
+				size_t small = small_step * pack_szlut[pack_mode];
+				size_t large = large_step * pack_szlut[pack_mode];
+
 				switch (ev.tgt.ioevs[0].iv){
-				case -1: ofs = ofs > pack_szlut[pack_mode] * base ?
-					ofs - pack_szlut[pack_mode] * base : 0;
-				break;
-				case 1: ofs += base * pack_szlut[pack_mode]; break;
-				case -2: ofs = ofs > pack_szlut[pack_mode] * base * base ?
-					ofs - pack_szlut[pack_mode] * base * base : 0;
-				break;
-				case 2: ofs += base * base * pack_szlut[pack_mode]; break;
+				case -1: ofs  = ofs > small ? ofs - small : 0; break;
+				case -2: ofs  = ofs > large ? ofs - large : 0; break;
+				case  1: ofs += small; break;
+				case  2: ofs += large; break;
 				}
 				REFRESH();
+			}
 			break;
 			case TARGET_COMMAND_GRAPHMODE:
 /* should we acknowledge the change in pack mode? */
 				if (ev.tgt.ioevs[0].iv >= 20 && ev.tgt.ioevs[0].iv <= 22)
 					pack_mode = ev.tgt.ioevs[0].iv - 20;
+				send_streaminfo(&cont, n_ent, border, pack_mode);
 				REFRESH();
 			break;
 			default:
 			break;
+		}
+/* same input mapping as used in sense_file */
+		else if (ev.category == EVENT_IO){
+			if (strcmp(ev.io.label, "STEP_BYTE") == 0)
+				small_step = 1;
+			else if (strcmp(ev.io.label, "STEP_ROW") == 0)
+				small_step = base;
+			else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0)
+				large_step = (base * base) >> 1;
+			else if (strcmp(ev.io.label, "STEP_PAGE") == 0)
+				large_step = base * base;
+			else if (strncmp(ev.io.label, "CSTEP_", 6) == 0){
+				unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
+				if (sz > 0)
+				small_step = sz;
+			}
 		}
 	}
 

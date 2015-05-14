@@ -158,7 +158,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 		elseif (menutbl[index].submenu) then
 			local mnu = menutbl[index].submenu;
 			if (type(mnu) == "function") then
-				mnu = mnu();
+				mnu = mnu(target);
 			elseif (#mnu == 0) then
 				return;
 			end
