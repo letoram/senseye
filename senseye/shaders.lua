@@ -319,6 +319,21 @@ build_shader(nil, [[
 	uniform sampler2D map_tu0;
 	varying vec2 texco;
 
+	void main()
+	{
+		if (texco.s < 0.0 || texco.s > 1.0 ||
+		texco.t < 0.0 || texco.t > 1.0)
+			discard;
+
+		vec4 col = texture2D(map_tu0, texco);
+		gl_FragColor = vec4(col.rgb, 1.0);
+	}
+]], "preview_zoom");
+
+build_shader(nil, [[
+	uniform sampler2D map_tu0;
+	varying vec2 texco;
+
 	void main(){
 		vec4 col = texture2D(map_tu0, texco);
 		gl_FragColor = vec4(col.r, 1.0 - col.g, col.b, 1.0);

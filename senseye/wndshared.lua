@@ -496,6 +496,7 @@ local function update_zoom_preview(wnd, x, y)
 	image_set_txcos(wnd.wm.meta_zoom, txcos);
 	props = image_surface_resolve_properties(wnd.canvas);
 	move_image(wnd.wm.meta_zoom, x - props.x - 40, y - props.y - 40);
+	image_shader(wnd.wm.meta_zoom, "preview_zoom");
 end
 
 local function motion_2d(wnd, vid, x, y)
