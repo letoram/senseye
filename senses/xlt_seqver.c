@@ -51,6 +51,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 int main(int argc, char** argv)
 {
-	return xlt_setup("SEQUENCE.BIN VERIFY", populate, NULL, XLT_NONE) == true ?
-		EXIT_SUCCESS : EXIT_FAILURE;
+	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	return xlt_setup("SEQUENCE.BIN VERIFY", populate, NULL, XLT_NONE, confl) ==
+		true ? EXIT_SUCCESS : EXIT_FAILURE;
 }

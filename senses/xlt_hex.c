@@ -257,6 +257,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 int main(int argc, char* argv[])
 {
 /* nice namespace pollution GIMP-export */
+	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
 	if (width != 256){
 		printf("error, xlt_hex was built with a broken color "
 			"table, fix xlt_hex_color.h\n");
@@ -269,6 +270,6 @@ int main(int argc, char* argv[])
 		color_lut[i] = RGBA(pixel[0], pixel[1], pixel[2], 0xff);
 	}
 
-	return xlt_setup("hex", populate, input, XLT_DYNSIZE) == true ?
+	return xlt_setup("hex", populate, input, XLT_DYNSIZE, confl) == true ?
 		EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -114,7 +114,7 @@ static void cont_dispatch(struct senseye_cont* cont, arcan_event* ev)
 }
 
 bool senseye_connect(const char* key, FILE* log,
-	struct senseye_cont* dcont, struct arg_arr** darg)
+	struct senseye_cont* dcont, struct arg_arr** darg, enum SHMIF_FLAGS flags)
 {
 	logout = log;
 	if (!key){
@@ -133,7 +133,7 @@ bool senseye_connect(const char* key, FILE* log,
 	dcont->context = cont_getctx;
 
 	setenv("ARCAN_CONNPATH", key, 0);
-	dcont->priv->cont = arcan_shmif_open(SEGID_SENSOR, SHMIF_CONNECT_LOOP, darg);
+	dcont->priv->cont = arcan_shmif_open(SEGID_SENSOR, flags, darg);
 	unsetenv("ARCAN_CONNPATH");
 
 	opts.args = *darg;

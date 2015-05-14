@@ -460,6 +460,7 @@ static int usage()
 		"-c,--color=   \tset coloring mode (default: simple)\n"
 			"\tsimple, group, none\n"
 		"-t,--tab=     \tset tab column width (pixels)\n"
+		"-l,--loop     \tsleep/retry connection loop\n"
 		"-f,--format=  \toutput format string "
 			"(default: %%c%%t%%r;%%n)\n"
 			"\t%%p: pos, %%P: rel-pos, %%x: raw hex %%c: opcode, \n"
@@ -488,6 +489,7 @@ int main(int argc, char** argv)
 {
 	setup_arch_lut();
 	int aind = -1, ch;
+	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
 
 	while ((ch = getopt_long(argc, argv, "a:s:c:f:t:", longopts, NULL)) >= 0){
 	switch (ch){
@@ -534,6 +536,6 @@ int main(int argc, char** argv)
 	arch = archs[aind].arch;
 	mode = archs[aind].mode;
 
-	return xlt_setup(archs[aind].name, populate, input, XLT_DYNSIZE) == true ?
-		EXIT_SUCCESS : EXIT_FAILURE;
+	return xlt_setup(archs[aind].name, populate, input, XLT_DYNSIZE, confl) ==
+		true ?  EXIT_SUCCESS : EXIT_FAILURE;
 }

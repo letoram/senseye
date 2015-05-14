@@ -272,6 +272,7 @@ static const struct option longopts[] = {
 int main(int argc, char* argv[])
 {
 	struct senseye_cont cont;
+	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 	struct arg_arr* aarr;
 	size_t base = 256;
 	size_t p_w = 128;
@@ -332,7 +333,7 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (!senseye_connect(NULL, stderr, &cont, &aarr))
+	if (!senseye_connect(NULL, stderr, &cont, &aarr, connectfl))
 		return EXIT_FAILURE;
 
 	if (!arcan_shmif_resize(cont.context(&cont), p_w, p_h))

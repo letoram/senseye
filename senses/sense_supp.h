@@ -43,7 +43,7 @@ struct senseye_cont {
  * will return a fdsense context in which new data channels can be opened
  */
 bool senseye_connect(const char* key, FILE* logout,
-	struct senseye_cont*, struct arg_arr**);
+	struct senseye_cont*, struct arg_arr**, enum SHMIF_FLAGS flags);
 
 /*
  * treat as main-loop, implements the main control channel

@@ -204,7 +204,7 @@ end:
 }
 
 bool xlt_setup(const char* tag, xlt_populate pop,
-	xlt_input inp, enum xlt_flags flags)
+	xlt_input inp, enum xlt_flags flags, enum SHMIF_FLAGS confl)
 {
 	struct arg_arr* darg;
 	struct xlt_session* pending;
@@ -212,8 +212,7 @@ bool xlt_setup(const char* tag, xlt_populate pop,
 	assert(tag);
 
 	setenv("ARCAN_CONNPATH", "senseye", 0);
-	struct arcan_shmif_cont ctx = arcan_shmif_open(
-		SEGID_ENCODER, SHMIF_CONNECT_LOOP, &darg);
+	struct arcan_shmif_cont ctx = arcan_shmif_open(SEGID_ENCODER, confl, &darg);
 
 /* assume we're connected or have FATALFAIL at this point */
 	arcan_event ev = {

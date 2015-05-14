@@ -105,8 +105,9 @@ int main(int argc, char* argv[])
 {
 	struct senseye_cont cont;
 	struct arg_arr* aarr;
+	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 
-	if (!senseye_connect(NULL, stderr, &cont, &aarr))
+	if (!senseye_connect(NULL, stderr, &cont, &aarr, connectfl))
 		return EXIT_FAILURE;
 
 	shm = cont.context(&cont);

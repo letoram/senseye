@@ -154,12 +154,13 @@ int main(int argc, char* argv[])
 {
 	char name[32];
 	snprintf(name, 32, "DPIPE(%d)", (int) getpid());
+	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
 
 	glob_argc = argc - 1;
 	glob_argv = &argv[1];
 
 	signal(SIGPIPE, SIG_IGN);
 
-	return xlt_setup(name, populate, NULL, XLT_NONE) == true ?
+	return xlt_setup(name, populate, NULL, XLT_NONE, confl) == true ?
 		EXIT_SUCCESS : EXIT_FAILURE;
 }

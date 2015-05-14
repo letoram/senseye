@@ -45,4 +45,5 @@ enum xlt_flags {
 	XLT_DYNSIZE = 1
 };
 
-bool xlt_setup(const char* ident, xlt_populate, xlt_input, enum xlt_flags);
+bool xlt_setup(const char* ident, xlt_populate, xlt_input,
+	enum xlt_flags, enum SHMIF_FLAGS confl);
