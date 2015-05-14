@@ -450,8 +450,14 @@ local function compsurf_wnd_border(wnd, width, r, g, b)
 
 	wnd.last_border_color = col;
 
+-- need to do this trick as other things might have been attached to
+-- the border, thus deleting them would cascade in unfortunate ways
 	if (valid_vid(wnd.border)) then
-		delete_image(wnd.border);
+		local cs = fill_surface(2, 2, r, g, b);
+		image_sharestorage(cs, wnd.border);
+		delete_image(cs);
+	else
+		wnd.border = fill_surface(2, 2, r, g, b);
 	end
 
 	if (width <= 0) then
@@ -460,7 +466,6 @@ local function compsurf_wnd_border(wnd, width, r, g, b)
 		return;
 	end
 
-	wnd.border = fill_surface(2, 2, r, g, b);
 	image_tracetag(wnd.border, tostring(wnd) .. "_border");
 	wnd.borderw = width;
 	image_mask_set(wnd.border, MASK_UNPICKABLE);

@@ -168,7 +168,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 		elseif (menutbl[index].value) then
 			menutbl.handler(target, menutbl[index].value, rv);
-			menu_input(wm, popup, "ESCAPE");
+			menu_input(wm, popup, "ESCAPE", true);
 		end
 	end
 

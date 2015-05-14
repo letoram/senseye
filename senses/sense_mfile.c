@@ -379,7 +379,7 @@ int main(int argc, char* argv[])
 					refresh_diff(&diffcont, entries, n_ent, base, pack_mode, ofs);
 			break;
 			case TARGET_COMMAND_STEPFRAME:{
-				size_t small = small_step * pack_szlut[pack_mode];
+				size_t small = small_step;
 				size_t large = large_step * pack_szlut[pack_mode];
 
 				switch (ev.tgt.ioevs[0].iv){
@@ -405,6 +405,8 @@ int main(int argc, char* argv[])
 		else if (ev.category == EVENT_IO){
 			if (strcmp(ev.io.label, "STEP_BYTE") == 0)
 				small_step = 1;
+			else if (strcmp(ev.io.label, "STEP_PIXEL") == 0)
+				small_step = pack_szlut[pack_mode];
 			else if (strcmp(ev.io.label, "STEP_ROW") == 0)
 				small_step = base;
 			else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0)
@@ -414,9 +416,22 @@ int main(int argc, char* argv[])
 			else if (strncmp(ev.io.label, "CSTEP_", 6) == 0){
 				unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
 				if (sz > 0)
-				small_step = sz;
+					small_step = sz;
 			}
+			else if (strncmp(ev.io.label, "STEP_ALIGN_", 11) == 0){
+				size_t align = strtoul(&ev.io.label[11], NULL, 10);
+				if (align && ofs > align){
+					if (ofs % align != 0){
+						ofs -= ofs % align;
+						REFRESH();
+					}
+				}
+			}
+			else
+				;
 		}
+		else
+			;
 	}
 
 #undef REFRESH

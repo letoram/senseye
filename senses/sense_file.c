@@ -161,18 +161,16 @@ void* data_loop(void* th_data)
 				continue;
 
 			if (ev.category == EVENT_IO){
-				if (strcmp(ev.io.label, "STEP_BYTE") == 0){
+				if (strcmp(ev.io.label, "STEP_PIXEL") == 0)
+					fsense.small_step = ch->row_size(ch) / cont->w;
+				if (strcmp(ev.io.label, "STEP_BYTE") == 0)
 					fsense.small_step = 1;
-				}
-				else if (strcmp(ev.io.label, "STEP_ROW") == 0){
+				else if (strcmp(ev.io.label, "STEP_ROW") == 0)
 					fsense.small_step = ch->row_size(ch);
-				}
-				else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0){
+				else if (strcmp(ev.io.label, "STEP_HALFPAGE") == 0)
 					fsense.large_step = 1;
-				}
-				else if (strcmp(ev.io.label, "STEP_PAGE") == 0){
+				else if (strcmp(ev.io.label, "STEP_PAGE") == 0)
 					fsense.large_step = 0;
-				}
 				else if (strncmp(ev.io.label, "CSTEP_", 6) == 0){
 					unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
 					if (sz > 0)
