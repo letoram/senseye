@@ -37,4 +37,7 @@ function spawn_alphamap(wnd)
 	defocus_window(nw);
 	wnd:add_zoom_handler(nw);
 	image_shader(canv, ashid);
+	window_shared(nw);
+
+	return nw;
 end

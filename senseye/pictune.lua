@@ -2,9 +2,8 @@
 -- License: 3-Clause BSD
 -- Reference: http://senseye.arcan-fe.com
 -- Description:
--- Picture Tuner is a set of tools and heuristics
--- for finding packing parameters to unencoded images
--- without header support.
+-- Picture Tuner is a set of tools and heuristics for finding packing
+-- parameters to unencoded images without header support.
 --
 -- Flow:
 --  [ colorspace unpacker:rendertarget] -> [tuner] -> autotune ?
@@ -12,57 +11,49 @@
 --  [auto ofset]
 --
 -- Details:
--- Color space unpack works on the assumption that though the
--- input data has been provided as RGBA, it may itself contain
--- more odd packed color formats and tries to generate a new
--- output buffer based on this.
+-- Color space unpack works on the assumption that though the input data has
+-- been provided as RGBA, it may itself contain more odd packed color formats
+-- and tries to generate a new output buffer based on this.
 --
--- Auto- adjust tuner works by placing evaluation tiles that
--- use a certain heuristic to evaluate if the current assumed
--- pitch is good or not (spatial relationships typically), then
--- adjust pitch and tries again until satisfied.
+-- Auto- adjust tuner works by placing evaluation tiles that use a certain
+-- heuristic to evaluate if the current assumed pitch is good or not (spatial
+-- relationships typically), then adjust pitch and tries again until satisfied.
 --
--- Lastly, auto-ofset uses edge detection to try and align any
--- hard edges that were found (which is typically screen borders
--- or the sharp discontinuity that happens when the starting
--- ofset is bad.
+-- Lastly, auto-ofset uses edge detection to try and align any hard edges that
+-- were found (which is typically screen borders or the sharp discontinuity
+-- that happens when the starting ofset is bad.
 --
 -- Limitations:
 --
---  This is a heuristic driven algorithm that is prone to
---  both false-positives and false negatives.
+--  This is a heuristic driven algorithm that is prone to both false-positives
+--  and false negatives.
 --
---  There is no support for planar images, only interleaved as we
---  don't know if we have the full image buffer or not in the active
---  sample window.
+--  There is no support for planar images, only interleaved as we don't know if
+--  we have the full image buffer or not in the active sample window.
 --
---  Input buffer size in relation to the width evaluated is
---  also important (as the sample window dimensions effectively
---  limit the maximum detectable width).
+--  Input buffer size in relation to the width evaluated is also important (as
+--  the sample window dimensions effectively limit the maximum detectable
+--  width).
 --
---  The auto- steps are effective for cases where you have a sample
---  window that is smaller than the images you want to detect, which
---  is typically the case.
+--  The auto- steps are effective for cases where you have a sample window that
+--  is smaller than the images you want to detect, which is typically the case.
 --
 -- Improvements:
 --
---  * Support many more color and tile- formats in unpacking
---  stage, possibly also add color formats to the auto-tuning
---  process.
+--  * Support many more color and tile- formats in unpacking stage, possibly
+--  also add color formats to the auto-tuning process.
 --
---  * Create a tuner shader that "zooms out" to skip having to slide
---  offset to see what is in the picture
+--  * Create a tuner shader that "zooms out" to skip having to slide offset to
+--  see what is in the picture
 --
---  * Switch between "all in one run" and "one evaluation
---  per frame", default could possibly be set using
---  the command-line synchronization strategy.
+--  * Switch between "all in one run" and "one evaluation per frame", default
+--  could possibly be set using the command-line synchronization strategy.
 --
---  * For "autostepping", look for a vertical edge to determine
---  when to use or autotuning based on sharp breaks in histogram
---  on a per row basis.
+--  * For "autostepping", look for a vertical edge to determine when to use or
+--  autotuning based on sharp breaks in histogram on a per row basis.
 --
---  * Use edge-detection to find and isolate blocks of text,
---  then OCR to automatically extract strings
+--  * Use edge-detection to find and isolate blocks of text, then OCR to
+--  automatically extract strings
 --
 --  * Propagate detected dimensions to rwstat(in sensor sampling support)
 --  in order to set a step size that would allow you to pan around inside
@@ -71,12 +62,18 @@
 --  * Detect starting row and height by rewinding (requires the step-size
 --  change), looking for sharp histogram changes per row.
 --
---  * When the 'favorites' feature is added, auto-add newly detected
---  images with their assumed stride and offset
+--  * When the 'favorites' feature is added, auto-add newly detected images
+--  with their assumed stride and offset
 --
--- This solution could also be broken out to a separate tool that
--- uses most of the same IPC / setup as senseye, but works automatically
--- (i.e. no UI, just headless).
+--  * Improve performance by packing multiple evaluations into the same
+--  readback as that is the limiting factor. This ideally needs support in
+--  arcan for UBO like per-vid set of shader arguments, but can be worked
+--  around temporarily by having multiple copies of the tuning shader built,
+--  set the tested width for each group being packed.
+--
+-- This solution could also be broken out to a separate tool that uses most of
+-- the same IPC / setup as senseye, but works automatically (i.e. no UI, just
+-- headless).
 --
 -- Developer notes:
 --

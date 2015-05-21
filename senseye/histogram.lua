@@ -153,11 +153,10 @@ local function force_update(nw)
 	stepframe_target(nw.calc_target);
 end
 
--- missing, comparison function. Possible candidates:
--- chisquare (perfect, 0.0, total: relative to hgram size), sum((h1[n]-h2[n])^2/(h1[n]+h2[n])),
--- correl (-1 .. 1), sum( hp1[n] * hp1[n] ) / sqrt( sum(hp1^2 * hp2^2) ) and
--- hp is h[n] - (1/256)*sum(h[n])
--- intersect ( 0.. 1) sum(min(h1[n], h2[n]))
+-- missing, comparison function. Possible candidates: chisquare (perfect, 0.0,
+-- total: relative to hgram size), sum((h1[n]-h2[n])^2/(h1[n]+h2[n])), correl
+-- (-1 .. 1), sum( hp1[n] * hp1[n] ) / sqrt( sum(hp1^2 * hp2^2) ) and hp is
+-- h[n] - (1/256)*sum(h[n]) intersect ( 0.. 1) sum(min(h1[n], h2[n]))
 
 function spawn_histogram(wnd)
 -- create composition buffer, intermediate buffer and histogram
@@ -218,10 +217,10 @@ function spawn_histogram(wnd)
 		end
 	end);
 
--- this might seem a bit odd, but since both uploads and
--- readbacks are asynchronous by default (and we don't want
--- the stalls imposed for synchronous transfers) we defer
--- histogram updates and lock them to the logical clock.
+-- this might seem a bit odd, but since both uploads and readbacks are
+-- asynchronous by default (and we don't want the stalls imposed for
+-- synchronous transfers) we defer histogram updates and lock them to the
+-- logical clock.
 	nw.source_handler = function(wnd, source, status)
 		if (status.kind == "frame") then
 			rendertarget_forceupdate(ibuf);

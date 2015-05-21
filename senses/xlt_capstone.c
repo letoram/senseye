@@ -489,12 +489,13 @@ int main(int argc, char** argv)
 {
 	setup_arch_lut();
 	int aind = -1, ch;
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum SHMIF_FLAGS confl = SHMIF_ACQUIRE_FATALFAIL;
 
 	while ((ch = getopt_long(argc, argv, "a:s:c:f:t:", longopts, NULL)) >= 0){
 	switch (ch){
 	case 'a' : aind = find_arch(optarg); break;
 	case 'f' : fmtstr = strdup(optarg); break;
+	case 'l' : confl = SHMIF_CONNECT_LOOP; break;
 	case 's' :
 		if (strcmp(optarg, "intel") == 0)
 			syntax = CS_OPT_SYNTAX_INTEL;
