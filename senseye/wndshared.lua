@@ -85,7 +85,7 @@ end
 local function dump_png(wnd)
 	local name = gen_dumpname(wnd.basename, "png");
 	local img = gen_dumpid(wnd);
-	save_screenshot(name, FORMAT_PNG_FLIP, img);
+	save_screenshot(name, FORMAT_PNG, img);
 	delete_image(img);
 	wnd:set_message(render_text(
 		menu_text_fontstr .. name .. " saved"), DEFAULT_TIMEOUT);
@@ -237,7 +237,7 @@ function setup_dispatch(dt)
 				image_set_txcos_default(ns, 1);
 				show_image(ns);
 				local buf = alloc_surface(VRESW, VRESH);
-				define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=30:noaudio",
+				define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=60:noaudio",
 					{ns}, {}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
 			end
 	end

@@ -14,7 +14,7 @@ local defaults = {
 	alpha_default = 30,
 	sample_default = 256,
 	hmatch_pct = 90,
-	show_help = 1
+	show_help = 0
 };
 
 function gconfig_set(key, val)

@@ -35,9 +35,9 @@ The short version for building arcan:
 
 Now you are ready to build the sensors and translators:
 
-   git clone https://github.com/letoram/senseye.git
-   mkdir senseye/build ; cd senseye/build
-   cmake ../senses
+    git clone https://github.com/letoram/senseye.git
+    mkdir senseye/build ; cd senseye/build
+    cmake ../senses
 
 It is possible to avoid installing arcan and using an in-source build with:
 
