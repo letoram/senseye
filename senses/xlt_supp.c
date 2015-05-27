@@ -11,6 +11,28 @@
 
 #include "xlt_supp.h"
 
+/*
+ * tracks basic/default setup that is copied to every new
+ * session that is spawned off in its own thread or process.
+ *
+ * sess is 'pending' while waiting for the subsegments that
+ * are planned to populate them
+ */
+struct xlt_context {
+	int cookie;
+
+	struct xlt_session* sess;
+	struct arg_arr* args;
+	struct arcan_shmif_cont main;
+
+	enum xlt_flags flags;
+
+	xlt_populate populate;
+	xlt_input input;
+	xlt_overlay overlay;
+	xlt_input overlay_input;
+};
+
 struct xlt_session {
 	uint8_t* buf;
 
@@ -22,6 +44,9 @@ struct xlt_session {
 
 	xlt_populate populate;
 	xlt_input input;
+	xlt_overlay overlay;
+	xlt_input overlay_input;
+
 	enum xlt_flags flags;
 
 	struct {
@@ -35,6 +60,7 @@ struct xlt_session {
 	} pending_update;
 
 	struct arcan_shmif_cont in;
+	struct arcan_shmif_cont olay;
 	struct arcan_shmif_cont out;
 };
 
@@ -121,7 +147,9 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 	if (ev->category == EVENT_TARGET){
 		if (ev->tgt.kind == TARGET_COMMAND_EXIT)
 			return false;
-
+	else if (ev->tgt.kind == TARGET_COMMAND_NEWSEGMENT){
+/* FIXME: map overlay */
+	}
 /* really weird packing sizes are ignored / clamped */
 	else if (ev->tgt.kind == TARGET_COMMAND_GRAPHMODE){
 		sess->pack_sz = ev->tgt.ioevs[0].iv;
@@ -142,6 +170,7 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 				width = width < 32 ? 32 : width;
 				height = height < 32 ? 32 : height;
 				arcan_shmif_resize(&sess->out, width, height);
+				arcan_shmif_resize(&sess->olay, width, height);
 				update_buffers(sess, false);
 			}
 		}
@@ -181,6 +210,14 @@ static void* process(void* inarg)
 	struct xlt_session* sess = inarg;
 	arcan_event ev;
 
+	if (sess->overlay){
+		ev.category = EVENT_EXTERNAL;
+		ev.ext.kind = EVENT_EXTERNAL_IDENT;
+/* only ident accepted on this subsegment */
+		sprintf((char*)ev.ext.message, "OVERLAY");
+		arcan_shmif_enqueue(&sess->out, &ev);
+	}
+
 /* two phase flush so that some events that can come in piles,
  * (input / displayhint) only apply the latest one */
 	while (arcan_shmif_wait(&sess->in, &ev)){
@@ -196,82 +233,151 @@ static void* process(void* inarg)
 	}
 
 end:
-	fprintf(stderr, "translator: lost translation process\n");
 	arcan_shmif_drop(&sess->in);
+	arcan_shmif_drop(&sess->olay);
 	arcan_shmif_drop(&sess->out);
 
 	return NULL;
 }
 
-bool xlt_setup(const char* tag, xlt_populate pop,
-	xlt_input inp, enum xlt_flags flags, enum SHMIF_FLAGS confl)
+static void setup_session(struct xlt_context* ctx, struct xlt_session* sess)
 {
-	struct arg_arr* darg;
-	struct xlt_session* pending;
-	assert(pop);
-	assert(tag);
+	memset(sess, '\0', sizeof(struct xlt_session));
+	sess->pack_sz = 1;
+	sess->input = ctx->input;
+	sess->populate = ctx->populate;
+	sess->overlay = ctx->overlay;
+	sess->overlay_input = ctx->overlay_input;
+	sess->flags = ctx->flags;
+}
 
+struct xlt_context* xlt_open(const char* ident,
+	enum xlt_flags flags, enum SHMIF_FLAGS confl)
+{
+	struct xlt_context* res = malloc(sizeof(struct xlt_context));
+	if (!res)
+		return NULL;
+	memset(res, '\0', sizeof(struct xlt_context));
+	res->cookie = 0xfeedface;
+
+	struct arg_arr* darg;
 	setenv("ARCAN_CONNPATH", "senseye", 0);
-	struct arcan_shmif_cont ctx = arcan_shmif_open(SEGID_ENCODER, confl, &darg);
+	struct arcan_shmif_cont mcon = arcan_shmif_open(SEGID_ENCODER, confl, &darg);
+
+	if (!mcon.addr){
+		free(res);
+		return NULL;
+	}
+
+	res->flags = flags;
 
 /* assume we're connected or have FATALFAIL at this point */
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_IDENT,
 	};
+	res->main = mcon;
 	snprintf((char*)ev.ext.message,
-		sizeof(ev.ext.message) / sizeof(ev.ext.message[0]), "%s", tag);
-	arcan_shmif_enqueue(&ctx, &ev);
+		sizeof(ev.ext.message) / sizeof(ev.ext.message[0]), "%s", ident);
+	arcan_shmif_enqueue(&res->main, &ev);
 
-	pending = malloc(sizeof(struct xlt_session));
+	return res;
+}
 
-reset_pending:
-	memset(pending, '\0', sizeof(struct xlt_session));
-	pending->pack_sz = 1;
-	pending->input = inp;
-	pending->populate = pop;
-	pending->flags = flags;
+void xlt_config(struct xlt_context* ctx,
+	xlt_populate pop, xlt_input inp, xlt_overlay overl, xlt_input inp_ov)
+{
+	ctx->sess = malloc(sizeof(struct xlt_session));
+	ctx->populate = pop;
+	ctx->input = inp;
+	ctx->overlay = overl;
+	ctx->overlay_input = inp_ov;
+	setup_session(ctx, ctx->sess);
+}
 
-	while (arcan_shmif_wait(&ctx, &ev)){
-		if (ev.category == EVENT_TARGET)
-			switch (ev.tgt.kind){
-			case TARGET_COMMAND_NEWSEGMENT:
-				if (ev.tgt.ioevs[1].iv == 1){
-					pending->in = arcan_shmif_acquire(&ctx, NULL,
-						SEGID_ENCODER, SHMIF_DISABLE_GUARD);
-				}
-				else{
-					pending->out = arcan_shmif_acquire(&ctx, NULL,
-						SEGID_SENSOR, SHMIF_DISABLE_GUARD);
-					pending->pack_sz = ev.tgt.ioevs[0].iv ? ev.tgt.ioevs[0].iv : 1;
-				}
+static bool process_event(struct xlt_context* ctx, arcan_event* ev)
+{
+	struct xlt_session* pending = ctx->sess;
 
-/* sweet spot for attempting fork + seccmp-bpf */
-				if (pending->in.addr && pending->out.addr){
-					pthread_t pth;
-
-					pending->unpack_sz = pending->pack_sz * pending->in.addr->w *
-						pending->in.addr->h;
-					if (-1 == pthread_create(&pth, NULL, process, pending)){
-						fprintf(stderr, "couldn't spawn translation thread, giving up.\n");
-						goto end;
-					}
-
-					pending = malloc(sizeof(struct xlt_session));
-					goto reset_pending;
-				}
-
-			break;
-			case TARGET_COMMAND_EXIT:
-				goto end;
-			default:
-			break;
-			}
+	if (ev->category == EVENT_TARGET)
+	switch (ev->tgt.kind){
+	case TARGET_COMMAND_NEWSEGMENT:
+	if (ev->tgt.ioevs[1].iv == 1){
+		pending->in = arcan_shmif_acquire(&ctx->main,
+			NULL, SEGID_ENCODER, SHMIF_DISABLE_GUARD);
+	}
+	else{
+		pending->out = arcan_shmif_acquire(&ctx->main,
+			NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+		pending->pack_sz = ev->tgt.ioevs[0].iv ? ev->tgt.ioevs[0].iv : 1;
 	}
 
-end:
-	arcan_shmif_drop(&ctx);
-	free(pending);
+/* sweet spot for attempting fork + seccmp-bpf */
+	if (pending->in.addr && pending->out.addr){
+		pthread_t pth;
+
+		pending->unpack_sz = pending->pack_sz * pending->in.w * pending->in.h;
+		if (-1 == pthread_create(&pth, NULL, process, pending)){
+			fprintf(stderr, "couldn't spawn translation thread, giving up.\n");
+			return false;
+		}
+
+		ctx->sess = malloc(sizeof(struct xlt_session));
+		setup_session(ctx, ctx->sess);
+	}
+
+	break;
+	case TARGET_COMMAND_EXIT:
+		return false;
+	default:
+	break;
+	}
 
 	return true;
+}
+
+bool xlt_pump(struct xlt_context* ctx)
+{
+	arcan_event ev;
+	int rc;
+
+	while ( (rc = arcan_shmif_poll(&ctx->main, &ev)) > 0)
+		process_event(ctx, &ev);
+
+	return rc == 0;
+}
+
+bool xlt_wait(struct xlt_context* ctx)
+{
+	arcan_event ev;
+
+	while (arcan_shmif_wait(&ctx->main, &ev))
+		process_event(ctx, &ev);
+
+	return true;
+}
+
+bool xlt_setup(const char* tag, xlt_populate pop,
+	xlt_input inp, enum xlt_flags flags, enum SHMIF_FLAGS confl)
+{
+	assert(pop);
+	assert(tag);
+
+	struct xlt_context* ctx = xlt_open(tag, flags, confl);
+	if (!ctx)
+		return false;
+
+	xlt_config(ctx, pop, inp, NULL, NULL);
+
+	return xlt_wait(ctx);
+}
+
+void xlt_free(struct xlt_context** ctx)
+{
+	if (!ctx || !(*ctx) || (*ctx)->cookie != 0xfeedface)
+		return;
+
+	arcan_shmif_drop(&(*ctx)->main);
+	free((*ctx)->sess);
+	*ctx = NULL;
 }

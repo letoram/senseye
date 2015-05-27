@@ -23,7 +23,7 @@ The short version for building arcan:
 
     [first, fix dependencies (freetype, openal, sdl1.2, luajit5.1, clang >= 3.1)
      for debian/ubuntu:
-     sudo apt-get install libfreetype6-dev libopenal-dev libsdl1.2-dev libluajit-5.1-dev)
+     sudo apt-get install libsqlite3-dev libfreetype6-dev libopenal-dev libsdl1.2-dev libluajit-5.1-dev)
     ]
 
     git clone https://github.com/letoram/arcan.git
@@ -70,6 +70,12 @@ Optionally one or more translators:
     ./xlt_dpipe /usr/bin/file - &
     ./xlt_hex &
     ./xlt_capstone -a x86-64 &
+
+Note that on OSX, the default libraries may not be in the search
+path for the linker:
+
+export DYLD_FALLBACK_LIBRARY_PATH=/usr/local/lib/arcan
+
 
 Repository
 =====

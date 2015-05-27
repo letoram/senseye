@@ -38,6 +38,8 @@ function activate_translator(wnd, value)
 		if (status.kind == "resized" and neww.dragmode == nil) then
 			neww:resize(status.width, status.height, true)
 			neww:drag(source, 0, 0);
+		elseif (status.lkind == "ident") then
+			neww.overlay_support = source;
 		end
 	end, wnd.size_cur
 	);
