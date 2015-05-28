@@ -76,7 +76,9 @@ static bool flush_output_events(struct xlt_session* sess)
 }
 
 /*
- * most likely something wrong / broken with this function
+ * recall that this does not compensate for mapping mode,
+ * so data may appear to be "wrong" if the underlying mapping
+ * is flawed.
  */
 static void populate(struct xlt_session* s)
 {
@@ -113,6 +115,14 @@ static inline void update_buffers(
 	if (sess->populate(newdata, &sess->in, &sess->out,
 		sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
 		sess->buf + sess->base_ofs)){
+
+			if (sess->overlay && sess->olay.addr &&
+				sess->overlay(newdata, &sess->in, &sess->olay, &sess->out,
+					sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
+					sess->buf + sess->base_ofs)){
+
+			}
+
 			arcan_shmif_signal(&sess->out, SHMIF_SIGVID);
 		sess->in.addr->vready = false;
 	}
@@ -142,13 +152,42 @@ static void event_commit(struct xlt_session* s)
 	}
 }
 
+static void overlay_event(struct xlt_session* sess)
+{
+	arcan_event ev;
+	while (arcan_shmif_poll(&sess->olay, &ev) != 0){
+		if (ev.category == EVENT_IO){
+			if (sess->overlay_input)
+				sess->overlay_input(&sess->olay, &ev);
+			continue;
+		}
+
+		if (ev.category != EVENT_TARGET)
+			continue;
+
+		if (ev.tgt.kind == TARGET_COMMAND_EXIT){
+			arcan_shmif_drop(&sess->olay);
+			return;
+		}
+
+		if (ev.tgt.kind == TARGET_COMMAND_DISPLAYHINT){
+			arcan_shmif_resize(&sess->olay,
+				ev.tgt.ioevs[0].iv, ev.tgt.ioevs[1].iv);
+		}
+	}
+}
+
 static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 {
 	if (ev->category == EVENT_TARGET){
 		if (ev->tgt.kind == TARGET_COMMAND_EXIT)
 			return false;
 	else if (ev->tgt.kind == TARGET_COMMAND_NEWSEGMENT){
-/* FIXME: map overlay */
+		if (sess->olay.addr)
+			arcan_shmif_drop(&sess->olay);
+
+		sess->olay = arcan_shmif_acquire(&sess->in, NULL, SEGID_MEDIA,
+			SHMIF_DISABLE_GUARD);
 	}
 /* really weird packing sizes are ignored / clamped */
 	else if (ev->tgt.kind == TARGET_COMMAND_GRAPHMODE){
@@ -170,7 +209,6 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 				width = width < 32 ? 32 : width;
 				height = height < 32 ? 32 : height;
 				arcan_shmif_resize(&sess->out, width, height);
-				arcan_shmif_resize(&sess->olay, width, height);
 				update_buffers(sess, false);
 			}
 		}

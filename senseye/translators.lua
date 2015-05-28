@@ -13,7 +13,37 @@
 -- the active subset on window
 --
 
-function activate_translator(wnd, value)
+local function overlay_cb(source, status)
+	if (status.kind == "terminated") then
+		delete_image(source);
+	end
+end
+
+local function toggle_overlay(wnd)
+
+	if (not valid_vid(wnd.xlt_overlay)) then
+		wnd.xlt_overlay = target_alloc(wnd.overlay_support, overlay_cb);
+		wnd.overlay_pause = false;
+	else
+		wnd.overlay_pause = not wnd.overlay_pause;
+		if (wnd.overlay_pause) then
+			target_suspend(wnd.xlt_overlay);
+		else
+			target_resume(wnd.xlt_overlay);
+		end
+	end
+
+	image_sharestorage(wnd.xlt_overlay, wnd.overlay);
+end
+
+function activate_translator(wnd, vtbl, a)
+	local value = vtbl[1];
+
+-- possibility of translator becoming invalid while menu is active
+	if (not valid_vid(value)) then
+		return;
+	end
+
 	local props = image_storage_properties(wnd.ctrl_id);
 	local interim = null_surface(props.width, props.height);
 
@@ -38,8 +68,9 @@ function activate_translator(wnd, value)
 		if (status.kind == "resized" and neww.dragmode == nil) then
 			neww:resize(status.width, status.height, true)
 			neww:drag(source, 0, 0);
-		elseif (status.lkind == "ident") then
+		elseif (status.kind == "ident") then
 			neww.overlay_support = source;
+			neww.activate_overlay = toggle_overlay;
 		end
 	end, wnd.size_cur
 	);
@@ -56,6 +87,7 @@ function activate_translator(wnd, value)
 	neww = wnd.wm:add_window(vid, {});
 	window_shared(neww);
 	neww.name = neww.name .. "_translator_" .. tostring(value);
+	neww.translator_name = vtbl[2];
 	neww.fullscreen_disabled = true;
 	target_displayhint(tgt, 256, 256);
 	neww:set_parent(wnd, ANCHOR_LL);

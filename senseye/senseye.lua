@@ -425,7 +425,7 @@ function translate_wh(source, status)
 			local lbl = string.gsub(status.message, "\\", "\\\\");
 
 			table.insert(translator_popup, {
-				value = source,
+				value = {source, lbl},
 				label = lbl
 			});
 			statusbar:set_message("Translator connected: " .. lbl, DEFAULT_TIMEOUT);

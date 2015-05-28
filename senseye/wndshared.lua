@@ -878,6 +878,28 @@ function copy_surface(vid)
 	return newimg;
 end
 
+local function overlay_popup(wnd)
+	local olist = {};
+	for i=1,#wnd.children do
+		if (wnd.children[i].overlay_support) then
+			table.insert(olist, {
+				label = wnd.children[i].translator_name,
+				handler = function()
+					wnd.children[i]:activate_overlay();
+				end
+			});
+		end
+	end
+
+	if (#olist > 0) then
+		return olist;
+	else
+		return {
+			label = "No Overlays Available"
+		};
+	end
+end
+
 local wnd_dump = {
 	{
 		label = "PNG",
@@ -907,6 +929,12 @@ subwnd_menu = {
 		label = "Translation...",
 		submenu = function()
 			return data_meta_popup[1].submenu();
+		end
+	},
+	{
+		label = "Overlay...",
+		submenu = function(wnd)
+			return overlay_popup(wnd);
 		end
 	},
 	{

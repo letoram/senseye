@@ -374,6 +374,7 @@ local function compsurf_wnd_resize(wnd, neww, newh, interm)
 	newh = newh < wnd.wm.min_h and wnd.wm.min_h or newh;
 
 	resize_image(wnd.canvas, neww, newh);
+	resize_image(wnd.overlay, neww, newh);
 
 	wnd.width = neww;
 	wnd.height = newh;
@@ -384,6 +385,10 @@ local function compsurf_wnd_resize(wnd, neww, newh, interm)
 	end
 
 	resize_image(wnd.anchor, neww, newh);
+
+	if (wnd.overlay_resize) then
+		wnd:overlay_resize(wnd.width, wnd.height);
+	end
 
 --	compsurf_wnd_repos(wnd);
 end
@@ -546,6 +551,11 @@ local function compsurf_next_window(ctx, wnd)
 	end
 end
 
+local function compsurf_wnd_overlay(ctx, source, rzhandle)
+	image_sharestorage(source, ctx.overlay);
+	ctx.overlay_resize = rzhandle;
+end
+
 local function compsurf_add_window(ctx, surf, opts)
 	local w = opts.width ~= nil and opts.width or ctx.def_ww;
 	local h = opts.height ~= nil and opts.height or ctx.def_wh;
@@ -558,6 +568,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		canvas = surf,
 		children = {},
 		autodelete = {},
+		overlay = null_surface(w, h),
 		deselect = compsurf_wnd_deselect,
 		select = compsurf_wnd_select,
 		destroy = compsurf_wnd_destroy,
@@ -568,6 +579,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		inactivate = compsurf_wnd_inactivate,
 		activate = compsurf_wnd_activate,
 		abs_xy = resolve_abs_xy,
+		set_overlay = compsurf_wnd_overlay,
 		set_parent = compsurf_wnd_parent,
 		set_bar = compsurf_wnd_bar,
 		set_border = compsurf_wnd_border,
@@ -615,13 +627,18 @@ local function compsurf_add_window(ctx, surf, opts)
 	};
 
 --	image_mask_set(wnd.anchor, MASK_UNPICKABLE);
+	image_mask_set(wnd.overlay, MASK_UNPICKABLE);
 	image_tracetag(wnd.anchor, wnd.name .. "_anchor");
 	image_tracetag(wnd.canvas, wnd.name .. "_canvas");
 
 	link_image(wnd.canvas, wnd.anchor);
 	link_image(wnd.anchor, ctx.canvas);
+	link_image(wnd.overlay, wnd.canvas);
 
 	image_inherit_order(wnd.canvas, true);
+	image_inherit_order(wnd.overlay, true);
+	order_image(wnd.overlay, 1);
+
 	resize_image(wnd.canvas, wnd.width, wnd.height);
 	show_image({wnd.canvas, wnd.anchor});
 

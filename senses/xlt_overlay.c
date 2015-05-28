@@ -44,17 +44,13 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	if (!buf)
 		return false;
 
-/* this is somewhat complicated in the sense that drawing need to be
- * more dynamic in terms of scale for things to line up with the pixels
- * beneath (which is a big part of the point) */
-
 	printf("populate overlay\n");
 	return true;
 }
 
 static bool over_inp(struct arcan_shmif_cont* cont, arcan_event* ev)
 {
-	printf("input on overlay\n");
+	printf("input %s on overlay\n", arcan_shmif_eventstr(ev, NULL, 0));
 	return false;
 }
 
