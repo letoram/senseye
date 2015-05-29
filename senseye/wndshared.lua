@@ -479,7 +479,8 @@ local function update_zoom_preview(wnd, x, y)
 		image_sharestorage(wnd.canvas, ms);
 		link_image(ms, wnd.canvas);
 		show_image(ms);
-		image_inherit_order(ms, 1);
+		image_inherit_order(ms, true);
+		order_image(ms, 2);
 		image_mask_set(ms, MASK_UNPICKABLE);
 		force_image_blend(ms, BLEND_NONE);
 		wnd.wm.meta_zoom = ms;

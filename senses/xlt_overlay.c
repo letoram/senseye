@@ -44,7 +44,15 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	if (!buf)
 		return false;
 
-	printf("populate overlay\n");
+/* we also need to communicate scale-factor and offset in order
+ * to determine if we should draw additional detail or not */
+
+	uint8_t rc = 0;
+	shmif_pixel* pxp = over->vidp;
+	for (size_t y = 0; y < over->h; y++)
+		for (size_t x = 0; x < over->w; x++, rc++, pxp++)
+			*pxp = RGBA(rc, 0, 0, rc > 127 ? rc : 0x00);
+
 	return true;
 }
 

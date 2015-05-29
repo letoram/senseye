@@ -20,20 +20,23 @@ local function overlay_cb(source, status)
 end
 
 local function toggle_overlay(wnd)
-
 	if (not valid_vid(wnd.xlt_overlay)) then
-		wnd.xlt_overlay = target_alloc(wnd.overlay_support, overlay_cb);
+		wnd.xlt_overlay = target_alloc(wnd.translator_out, overlay_cb);
 		wnd.overlay_pause = false;
+		table.insert(wnd.autodelete, wnd.xlt_overlay);
+		wnd.parent:set_overlay(wnd.xlt_overlay);
+		blend_image(wnd.parent.overlay, 0.5);
+-- missing, add handler for overlay_resize and a zoom-trigger that
+-- communicates the effective range / offset as that is needed to
+-- figure out the detailed information etc.
 	else
 		wnd.overlay_pause = not wnd.overlay_pause;
 		if (wnd.overlay_pause) then
-			target_suspend(wnd.xlt_overlay);
+			suspend_target(wnd.xlt_overlay);
 		else
-			target_resume(wnd.xlt_overlay);
+			resume_target(wnd.xlt_overlay);
 		end
 	end
-
-	image_sharestorage(wnd.xlt_overlay, wnd.overlay);
 end
 
 function activate_translator(wnd, vtbl, a)
@@ -169,6 +172,22 @@ function activate_translator(wnd, vtbl, a)
 			size = 1
 		};
 		neww.input_queue = iotbl;
+	end
+
+-- we treat the zoom action as analog motion, this is primarily needed
+-- by translators (as the whole databuffer is transmitted to the output
+-- segment then packed/repacked), then the translator is free to compute
+-- window start + width and height.
+	neww.zoom_link = function(self, wnd, txcos)
+		local iotbl = {
+			kind = "analog",
+			devid = 0,
+			subid = 9,
+			values = {txcos[1], txcos[2], txcos[3], txcos[4]}
+		};
+		target_input(tgt, iotbl);
+		iotbl.values = {txcos[5], txcos[6], txcos[7], txcos[8]};
+		target_input(tgt, iotbl);
 	end
 
 	wnd:add_zoom_handler(neww);

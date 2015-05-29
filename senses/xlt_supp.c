@@ -120,7 +120,7 @@ static inline void update_buffers(
 				sess->overlay(newdata, &sess->in, &sess->olay, &sess->out,
 					sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
 					sess->buf + sess->base_ofs)){
-
+				arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
 			}
 
 			arcan_shmif_signal(&sess->out, SHMIF_SIGVID);
