@@ -879,8 +879,28 @@ function copy_surface(vid)
 	return newimg;
 end
 
+--
+-- This only affects the visuals of the overlay, not its status
+--
+local function overlay_opa(wnd)
+	local mnu = {};
+	for i=0, 10, 2 do
+		table.insert(mnu, {label = tostring(i*10) .. "%", value=i*10});
+	end
+	mnu.handler = function(wnd, value)
+		blend_image(wnd.overlay, value / 100);
+	end
+	return mnu;
+end
+
 local function overlay_popup(wnd)
-	local olist = {};
+	local olist = {
+		{
+			label = "Opacity...",
+			submenu = overlay_opa
+		}
+	};
+
 	for i=1,#wnd.children do
 		if (wnd.children[i].overlay_support) then
 			table.insert(olist, {
@@ -895,9 +915,11 @@ local function overlay_popup(wnd)
 	if (#olist > 0) then
 		return olist;
 	else
-		return {
-			label = "No Overlays Available"
-		};
+		print("oempty lay");
+		return {{
+			label = "No Overlays Available",
+			handler = function() end
+		}};
 	end
 end
 

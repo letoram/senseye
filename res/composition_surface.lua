@@ -553,6 +553,7 @@ end
 
 local function compsurf_wnd_overlay(ctx, source, rzhandle)
 	image_sharestorage(source, ctx.overlay);
+	force_image_blend(ctx.overlay, BLEND_FORCE);
 	ctx.overlay_resize = rzhandle;
 end
 

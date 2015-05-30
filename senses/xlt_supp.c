@@ -49,6 +49,8 @@ struct xlt_session {
 
 	enum xlt_flags flags;
 
+	float zoom_range[8];
+
 	struct {
 		size_t ofs;
 		bool got_input;
@@ -109,6 +111,14 @@ static void populate(struct xlt_session* s)
 	}
 }
 
+static inline void update_overlay(struct xlt_session* sess, bool nd)
+{
+	if (sess->overlay && sess->olay.addr && sess->overlay(nd, &sess->in,
+		sess->zoom_range, &sess->olay, &sess->out,
+		sess->vpts, sess->unpack_sz, sess->buf))
+				arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
+}
+
 static inline void update_buffers(
 	struct xlt_session* sess, bool newdata)
 {
@@ -116,14 +126,10 @@ static inline void update_buffers(
 		sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
 		sess->buf + sess->base_ofs)){
 
-			if (sess->overlay && sess->olay.addr &&
-				sess->overlay(newdata, &sess->in, &sess->olay, &sess->out,
-					sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
-					sess->buf + sess->base_ofs)){
-				arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
-			}
+		if (newdata)
+			update_overlay(sess, newdata);
 
-			arcan_shmif_signal(&sess->out, SHMIF_SIGVID);
+		arcan_shmif_signal(&sess->out, SHMIF_SIGVID);
 		sess->in.addr->vready = false;
 	}
 }
@@ -233,6 +239,14 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 				sess->in.addr->w + ev->io.input.touch.x) * sess->pack_sz;
 			sess->pending_input.got_input = true;
 		}
+		if (ev->io.datatype == EVENT_IDATATYPE_ANALOG){
+			int ofs = ev->io.input.analog.subid == 0 ? 0 : 4;
+			for (int i = 0; i < 4; i++)
+			sess->zoom_range[i+ofs] = ev->io.input.analog.axisval[i] ?
+				(float)ev->io.input.analog.axisval[i] / 32767.0 : 0;
+			if (ofs)
+				update_overlay(sess, false);
+		}
 		if (sess->input && ev->category == EVENT_IO)
 			if (sess->input(&sess->out, ev))
 				update_buffers(sess, false);
@@ -287,6 +301,12 @@ static void setup_session(struct xlt_context* ctx, struct xlt_session* sess)
 	sess->overlay = ctx->overlay;
 	sess->overlay_input = ctx->overlay_input;
 	sess->flags = ctx->flags;
+	sess->zoom_range[2] = 1.0;
+	sess->zoom_range[3] = 0.0;
+	sess->zoom_range[4] = 1.0;
+	sess->zoom_range[5] = 1.0;
+	sess->zoom_range[6] = 0.0;
+	sess->zoom_range[7] = 1.0;
 }
 
 struct xlt_context* xlt_open(const char* ident,

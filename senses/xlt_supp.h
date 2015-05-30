@@ -23,9 +23,16 @@
 typedef bool (*xlt_populate)(bool newdata, struct arcan_shmif_cont* in,
 	struct arcan_shmif_cont* out, uint64_t pos, size_t buf_sz, uint8_t* buf);
 
+/*
+ * similar to xlt populate, but aligned to the base of the buffer (not
+ * the marker position) and provides details on the zoomed range relative
+ * to [in].
+ */
 typedef bool (*xlt_overlay)(bool newdata, struct arcan_shmif_cont* in,
-	struct arcan_shmif_cont* overlay, struct arcan_shmif_cont* out,
-	uint64_t pos, size_t buf_sz, uint8_t* buf);
+	float zoom_range[8], struct arcan_shmif_cont* overlay,
+	struct arcan_shmif_cont* out,
+	uint64_t pos, size_t buf_sz, uint8_t* buf
+);
 
 /*
  * called when there is an event that should be forwarded,

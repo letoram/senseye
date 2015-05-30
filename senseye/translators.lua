@@ -19,9 +19,10 @@ local function overlay_cb(source, status)
 	end
 end
 
-local function toggle_overlay(wnd)
+local function toggle_overlay(wnd, state)
 	if (not valid_vid(wnd.xlt_overlay)) then
 		wnd.xlt_overlay = target_alloc(wnd.translator_out, overlay_cb);
+		wnd:zoom_link(wnd.parent, image_get_txcos(wnd.parent.canvas));
 		wnd.overlay_pause = false;
 		table.insert(wnd.autodelete, wnd.xlt_overlay);
 		wnd.parent:set_overlay(wnd.xlt_overlay);
@@ -30,7 +31,7 @@ local function toggle_overlay(wnd)
 -- communicates the effective range / offset as that is needed to
 -- figure out the detailed information etc.
 	else
-		wnd.overlay_pause = not wnd.overlay_pause;
+		wnd.overlay_pause = (state ~= nil) and state or (not wnd.overlay_pause);
 		if (wnd.overlay_pause) then
 			suspend_target(wnd.xlt_overlay);
 		else
@@ -74,6 +75,7 @@ function activate_translator(wnd, vtbl, a)
 		elseif (status.kind == "ident") then
 			neww.overlay_support = source;
 			neww.activate_overlay = toggle_overlay;
+-- will transmit the current zoom-range and cause a refresh of the overlay
 		end
 	end, wnd.size_cur
 	);
@@ -179,14 +181,21 @@ function activate_translator(wnd, vtbl, a)
 -- segment then packed/repacked), then the translator is free to compute
 -- window start + width and height.
 	neww.zoom_link = function(self, wnd, txcos)
+		local vt = {};
+		for i=1,#txcos do
+			vt[i] = txcos[i] * 32767;
+		end
+
 		local iotbl = {
 			kind = "analog",
 			devid = 0,
-			subid = 9,
-			values = {txcos[1], txcos[2], txcos[3], txcos[4]}
+			subid = 0,
+			samples = {vt[1], vt[2], vt[3], vt[4]}
 		};
+
 		target_input(tgt, iotbl);
-		iotbl.values = {txcos[5], txcos[6], txcos[7], txcos[8]};
+		iotbl.subid = 1;
+		iotbl.samples = {vt[5], vt[6], vt[7], vt[8]};
 		target_input(tgt, iotbl);
 	end
 
