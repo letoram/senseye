@@ -35,7 +35,16 @@ local function toggle_overlay(wnd, state)
 		if (wnd.overlay_pause) then
 			suspend_target(wnd.xlt_overlay);
 		else
+			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
 			resume_target(wnd.xlt_overlay);
+		end
+	end
+
+	if (not wnd.overlay_pause) then
+		target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
+		wnd.parent.overlay_resize = function(pw, neww, newh)
+			target_displayhint(wnd.xlt_overlay, neww, newh);
+			wnd:zoom_link(wnd.parent, image_get_txcos(wnd.parent.canvas));
 		end
 	end
 end
@@ -75,6 +84,7 @@ function activate_translator(wnd, vtbl, a)
 		elseif (status.kind == "ident") then
 			neww.overlay_support = source;
 			neww.activate_overlay = toggle_overlay;
+
 -- will transmit the current zoom-range and cause a refresh of the overlay
 		end
 	end, wnd.size_cur

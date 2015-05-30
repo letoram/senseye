@@ -38,15 +38,18 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 }
 
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
-	float zoom_range[8], struct arcan_shmif_cont* over,
+	int zoom_range[8], struct arcan_shmif_cont* over,
 	struct arcan_shmif_cont* out, uint64_t pos,
 	size_t buf_sz, uint8_t* buf)
 {
 	if (!buf)
 		return false;
 
-/* we also need to communicate scale-factor and offset in order
- * to determine if we should draw additional detail or not */
+	int w = zoom_range[2] - zoom_range[0];
+	if (!w) w++;
+
+	int h = zoom_range[5] - zoom_range[1];
+	if (!h) h++;
 
 	uint8_t rc = 0;
 	shmif_pixel* pxp = over->vidp;

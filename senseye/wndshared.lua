@@ -666,10 +666,18 @@ function window_shared(wnd)
 				wnd.in_zoom = false;
 			else
 				local x1, y1, x2, y2 = get_positions(wnd.dz, wnd.width, wnd.height);
+				local sp = image_storage_properties(wnd.canvas);
+				local step_s = 1.0 / sp.width;
+				local step_t = 1.0 / sp.height;
+
 				wnd.zoom_ofs[1] = x1 / wnd.width;
+				wnd.zoom_ofs[1] = wnd.zoom_ofs[1] - math.fmod(wnd.zoom_ofs[1], step_s);
 				wnd.zoom_ofs[2] = y1 / wnd.height;
+				wnd.zoom_ofs[2] = wnd.zoom_ofs[2] - math.fmod(wnd.zoom_ofs[2], step_t);
 				wnd.zoom_ofs[3] = x2 / wnd.width;
+				wnd.zoom_ofs[3] = wnd.zoom_ofs[3] - math.fmod(wnd.zoom_ofs[3], step_s);
 				wnd.zoom_ofs[4] = y2 / wnd.height;
+				wnd.zoom_ofs[4] = wnd.zoom_ofs[4] - math.fmod(wnd.zoom_ofs[4], step_t);
 				wnd.in_zoom = true;
 				wnd:update_zoom();
 			end

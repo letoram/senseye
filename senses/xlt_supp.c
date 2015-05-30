@@ -113,9 +113,14 @@ static void populate(struct xlt_session* s)
 
 static inline void update_overlay(struct xlt_session* sess, bool nd)
 {
+	int zr[8];
+	for (int i=0; i < 8; i+=2)
+		zr[i] = sess->zoom_range[i] * sess->in.w;
+	for (int i=1; i < 8; i+=2)
+		zr[i] = sess->zoom_range[i] * sess->in.h;
+
 	if (sess->overlay && sess->olay.addr && sess->overlay(nd, &sess->in,
-		sess->zoom_range, &sess->olay, &sess->out,
-		sess->vpts, sess->unpack_sz, sess->buf))
+		zr, &sess->olay, &sess->out, sess->vpts, sess->unpack_sz, sess->buf))
 				arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
 }
 
@@ -171,6 +176,7 @@ static void overlay_event(struct xlt_session* sess)
 		if (ev.category != EVENT_TARGET)
 			continue;
 
+		printf("target event\n");
 		if (ev.tgt.kind == TARGET_COMMAND_EXIT){
 			arcan_shmif_drop(&sess->olay);
 			return;
@@ -280,6 +286,9 @@ static void* process(void* inarg)
 		while(arcan_shmif_poll(&sess->in, &ev) != 0)
 			if (!dispatch_event(sess, &ev))
 				goto end;
+
+		if (sess->olay.addr)
+			overlay_event(sess);
 
 		event_commit(sess);
 	}
