@@ -378,8 +378,10 @@ local function update_zoom(wnd)
 	local s2 = wnd.zoom_ofs[3];
 	local t2 = wnd.zoom_ofs[4];
 
-	local step_s = (s2 - s1) / wnd.width;
-	local step_t = (t2 - t1) / wnd.height;
+	local props = image_storage_properties(wnd.canvas);
+
+	local step_s = 1.0 / props.width;
+	local step_t = 1.0 / props.height;
 
 -- align against grid to lessen precision effects in linked windows
 	s1 = s1 - math.fmod(s1, step_s);
