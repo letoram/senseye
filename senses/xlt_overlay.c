@@ -58,8 +58,11 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* scale factors */
 	float b_w = (float)over->w / w;
 	float b_h = (float)over->h / h;
-	float d_w = ceil(b_w);
-	float d_h = ceil(b_h);
+	float d_w = round(b_w);
+	float d_h = round(b_h);
+
+	static char msg[] = "All good things to those that wait";
+	uint8_t ch = 0;
 
 /* draw as tiles, fill in with text if the tile is large enough */
 	for (size_t y = zoom_range[1]; y < zoom_range[3]; y++)
@@ -70,8 +73,13 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 
 /* we fight a lot of precision issues here, and the possibility that
  * we have a non-uniform sized output target, round each square upwards */
-			if (pxv > 200)
+			if (pxv > 200){
 				draw_box(over, xpos, ypos, d_w, d_h, RGBA(0xff, 0x00, 0x00, 0xff));
+
+				if (d_w > fontw && d_h > fonth)
+					draw_char(over, msg[ch = (ch + 1) % (sizeof(msg)-1)],
+						xpos + 1, ypos + 1, RGBA(0xff, 0xff, 0xff, 0xff));
+			}
 		}
 
 	return true;
