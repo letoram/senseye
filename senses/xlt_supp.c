@@ -49,7 +49,7 @@ struct xlt_session {
 
 	enum xlt_flags flags;
 
-	float zoom_range[8];
+	int zoom_range[4];
 
 	struct {
 		size_t ofs;
@@ -90,10 +90,11 @@ static void populate(struct xlt_session* s)
 		s->buf_sz = s->unpack_sz;
 	}
 
-/* we reset this as the likely interested
- * offset must have changed */
+/* we reset this as the likely interested offset must have changed */
 	s->base_ofs = 0;
 
+/* maintain a copy to be able to release vidp quicker, making room
+ * for a new frame */
 	if (s->pack_sz == 4)
 		memcpy(s->buf, s->in.vidp, s->unpack_sz);
 	else{
@@ -113,15 +114,10 @@ static void populate(struct xlt_session* s)
 
 static inline void update_overlay(struct xlt_session* sess, bool nd)
 {
-	int zr[8];
-	for (int i=0; i < 8; i+=2)
-		zr[i] = sess->zoom_range[i] * sess->in.w;
-	for (int i=1; i < 8; i+=2)
-		zr[i] = sess->zoom_range[i] * sess->in.h;
-
 	if (sess->overlay && sess->olay.addr && sess->overlay(nd, &sess->in,
-		zr, &sess->olay, &sess->out, sess->vpts, sess->unpack_sz, sess->buf))
-				arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
+		sess->zoom_range, &sess->olay, &sess->out,
+		sess->vpts, sess->unpack_sz, sess->buf))
+		arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
 }
 
 static inline void update_buffers(
@@ -176,7 +172,6 @@ static void overlay_event(struct xlt_session* sess)
 		if (ev.category != EVENT_TARGET)
 			continue;
 
-		printf("target event\n");
 		if (ev.tgt.kind == TARGET_COMMAND_EXIT){
 			arcan_shmif_drop(&sess->olay);
 			return;
@@ -200,6 +195,10 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 
 		sess->olay = arcan_shmif_acquire(&sess->in, NULL, SEGID_MEDIA,
 			SHMIF_DISABLE_GUARD);
+		sess->zoom_range[0] = 0;
+		sess->zoom_range[1] = 0;
+		sess->zoom_range[2] = sess->olay.w;
+		sess->zoom_range[3] = sess->olay.h;
 	}
 /* really weird packing sizes are ignored / clamped */
 	else if (ev->tgt.kind == TARGET_COMMAND_GRAPHMODE){
@@ -246,12 +245,9 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 			sess->pending_input.got_input = true;
 		}
 		if (ev->io.datatype == EVENT_IDATATYPE_ANALOG){
-			int ofs = ev->io.input.analog.subid == 0 ? 0 : 4;
 			for (int i = 0; i < 4; i++)
-			sess->zoom_range[i+ofs] = ev->io.input.analog.axisval[i] ?
-				(float)ev->io.input.analog.axisval[i] / 32767.0 : 0;
-			if (ofs)
-				update_overlay(sess, false);
+				sess->zoom_range[i] = ev->io.input.analog.axisval[i];
+			update_overlay(sess, false);
 		}
 		if (sess->input && ev->category == EVENT_IO)
 			if (sess->input(&sess->out, ev))
@@ -310,12 +306,6 @@ static void setup_session(struct xlt_context* ctx, struct xlt_session* sess)
 	sess->overlay = ctx->overlay;
 	sess->overlay_input = ctx->overlay_input;
 	sess->flags = ctx->flags;
-	sess->zoom_range[2] = 1.0;
-	sess->zoom_range[3] = 0.0;
-	sess->zoom_range[4] = 1.0;
-	sess->zoom_range[5] = 1.0;
-	sess->zoom_range[6] = 0.0;
-	sess->zoom_range[7] = 1.0;
 }
 
 struct xlt_context* xlt_open(const char* ident,

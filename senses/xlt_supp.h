@@ -29,7 +29,7 @@ typedef bool (*xlt_populate)(bool newdata, struct arcan_shmif_cont* in,
  * to [in].
  */
 typedef bool (*xlt_overlay)(bool newdata, struct arcan_shmif_cont* in,
-	int zoom_range[8], struct arcan_shmif_cont* overlay,
+	int zoom_area[4], struct arcan_shmif_cont* overlay,
 	struct arcan_shmif_cont* out,
 	uint64_t pos, size_t buf_sz, uint8_t* buf
 );

@@ -20,6 +20,7 @@ local function overlay_cb(source, status)
 end
 
 local function toggle_overlay(wnd, state)
+	local pp = image_storage_properties(wnd.parent.canvas);
 	if (not valid_vid(wnd.xlt_overlay)) then
 		wnd.xlt_overlay = target_alloc(wnd.translator_out, overlay_cb);
 		wnd:zoom_link(wnd.parent, image_get_txcos(wnd.parent.canvas));
@@ -27,6 +28,7 @@ local function toggle_overlay(wnd, state)
 		table.insert(wnd.autodelete, wnd.xlt_overlay);
 		wnd.parent:set_overlay(wnd.xlt_overlay);
 		blend_image(wnd.parent.overlay, 0.5);
+
 -- missing, add handler for overlay_resize and a zoom-trigger that
 -- communicates the effective range / offset as that is needed to
 -- figure out the detailed information etc.
@@ -35,17 +37,13 @@ local function toggle_overlay(wnd, state)
 		if (wnd.overlay_pause) then
 			suspend_target(wnd.xlt_overlay);
 		else
-			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
+			target_displayhint(wnd.xlt_overlay, pp.width, pp.height);
 			resume_target(wnd.xlt_overlay);
 		end
 	end
 
 	if (not wnd.overlay_pause) then
-		target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
-		wnd.parent.overlay_resize = function(pw, neww, newh)
-			target_displayhint(wnd.xlt_overlay, neww, newh);
-			wnd:zoom_link(wnd.parent, image_get_txcos(wnd.parent.canvas));
-		end
+		target_displayhint(wnd.xlt_overlay, pp.width, pp.height);
 	end
 end
 
@@ -186,26 +184,22 @@ function activate_translator(wnd, vtbl, a)
 		neww.input_queue = iotbl;
 	end
 
--- we treat the zoom action as analog motion, this is primarily needed
--- by translators (as the whole databuffer is transmitted to the output
--- segment then packed/repacked), then the translator is free to compute
--- window start + width and height.
+-- translate zoom texture coordinates back to their aligned sample points
 	neww.zoom_link = function(self, wnd, txcos)
-		local vt = {};
-		for i=1,#txcos do
-			vt[i] = txcos[i] * 32767;
-		end
-
 		local iotbl = {
 			kind = "analog",
 			devid = 0,
 			subid = 0,
-			samples = {vt[1], vt[2], vt[3], vt[4]}
+			samples = {}
 		};
 
-		target_input(tgt, iotbl);
-		iotbl.subid = 1;
-		iotbl.samples = {vt[5], vt[6], vt[7], vt[8]};
+		local props = image_storage_properties(neww.parent.canvas);
+		iotbl.samples[1] = math.floor(props.width * txcos[1]);
+		iotbl.samples[2] = math.floor(props.height * txcos[2]);
+		iotbl.samples[3] = math.ceil(props.width * txcos[5]);
+		iotbl.samples[4] = math.ceil(props.height * txcos[6]);
+
+		local h = neww.parent.height / ((txcos[6] - txcos[2]) * props.height);
 		target_input(tgt, iotbl);
 	end
 

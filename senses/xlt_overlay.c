@@ -21,15 +21,13 @@
 
 #include "xlt_supp.h"
 #include "font_8x8.h"
+#include <math.h>
 
 static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	struct arcan_shmif_cont* out, uint64_t pos, size_t buf_sz, uint8_t* buf)
 {
 	if (!buf)
 		return false;
-
-	if (in->addr->w != out->addr->w || in->addr->h != out->addr->h)
-		arcan_shmif_resize(out, in->addr->w, in->addr->h);
 
 	memcpy(out->vidp, in->vidp, out->addr->w *
 		out->addr->h * sizeof(shmif_pixel));
@@ -38,24 +36,43 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 }
 
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
-	int zoom_range[8], struct arcan_shmif_cont* over,
+	int zoom_range[4], struct arcan_shmif_cont* over,
 	struct arcan_shmif_cont* out, uint64_t pos,
 	size_t buf_sz, uint8_t* buf)
 {
+/* don't have any state hidden in over- tag */
 	if (!buf)
 		return false;
 
-	int w = zoom_range[2] - zoom_range[0];
-	if (!w) w++;
+/* need to clear (or track zoom + precision etc. which means its usually
+ * just cheaper to reset between updates */
+	int bpp = buf_sz / (in->w*in->h);
+	draw_box(over, 0, 0, over->w, over->h, RGBA(0x00, 0x00, 0x00, 0x00));
 
-	int h = zoom_range[5] - zoom_range[1];
-	if (!h) h++;
+	float w = zoom_range[2] - zoom_range[0];
+	float h = zoom_range[3] - zoom_range[1];
 
-	uint8_t rc = 0;
-	shmif_pixel* pxp = over->vidp;
-	for (size_t y = 0; y < over->h; y++)
-		for (size_t x = 0; x < over->w; x++, rc++, pxp++)
-			*pxp = RGBA(rc, 0, 0, rc > 127 ? rc : 0x00);
+	if (bpp != 1 || w < 0.0001 || h < 0.0001 || over->w < w || over->h < h)
+		return false;
+
+/* scale factors */
+	float b_w = (float)over->w / w;
+	float b_h = (float)over->h / h;
+	float d_w = ceil(b_w);
+	float d_h = ceil(b_h);
+
+/* draw as tiles, fill in with text if the tile is large enough */
+	for (size_t y = zoom_range[1]; y < zoom_range[3]; y++)
+		for (size_t x = zoom_range[0]; x < zoom_range[2]; x++){
+			uint8_t pxv = buf[bpp * (y * in->w + x)];
+			int xpos = round( (float)(x-zoom_range[0]) * b_w );
+			int ypos = round( (float)(y-zoom_range[1]) * b_h );
+
+/* we fight a lot of precision issues here, and the possibility that
+ * we have a non-uniform sized output target, round each square upwards */
+			if (pxv > 200)
+				draw_box(over, xpos, ypos, d_w, d_h, RGBA(0xff, 0x00, 0x00, 0xff));
+		}
 
 	return true;
 }
