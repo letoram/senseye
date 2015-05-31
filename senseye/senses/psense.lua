@@ -258,7 +258,11 @@ local fsrv_ev = {
 			warning(string.format("psense:resize(%d,%d) expected pow2 and w=h",
 				status.width, status.height));
 		end
+		stepframe_target(wnd.ctrl_id, 0);
 
+-- cheap solution but we cascade destroy all translators and other
+-- children as there are so many size- dependant edge conditions that
+-- this is really among the saner options
 		local torem = {};
 		for k,v in ipairs(wnd.children) do
 			table.insert(torem, v);
@@ -266,6 +270,7 @@ local fsrv_ev = {
 		for k, v in ipairs(torem) do
 			v:destroy();
 		end
+		hide_image(wnd.overlay);
 	end
 };
 
