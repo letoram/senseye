@@ -31,6 +31,8 @@
 #include "sense_supp.h"
 #include "rwstat.h"
 
+#define EPSILON 0.0000001f
+
 struct {
 	uint8_t* fmap;
 	pthread_mutex_t flock;
@@ -251,9 +253,12 @@ static int usage()
 {
 	printf("Usage: sense_file [options] filename\n"
 		"\t-W,--wrap \tenable wrapping at EOF\n"
-		"\t-w=,--width= \tpreview window width (default: 128)\n"
-		"\t-h=,--heigth= \tpreview window height (default: 512)\n"
-		"\t-?=,--help= \tthis text\n"
+		"\t-w x,--width=x \tpreview window width (default: 128)\n"
+		"\t-h x,--height=x \tpreview window height (default: 512)\n"
+		"\t-p x,--pcomp=x \thistogram row-row comparison in preview\n"
+		"\t               \targ. val (0.0 - 1.0) sets cutoff level\n"
+		"\t-d,--pdetail \tuse entire data range for pcomparison\n"
+		"\t-?,--help \tthis text\n"
 	);
 
 	return EXIT_SUCCESS;
@@ -263,9 +268,26 @@ static const struct option longopts[] = {
 	{"wrap",   no_argument,       NULL, 'w'},
 	{"width",  required_argument, NULL, 'w'},
 	{"height", required_argument, NULL, 'h'},
+	{"pcomp",  required_argument, NULL, 'p'},
+	{"pdetail",no_argument,       NULL, 'd'},
 	{"help",   required_argument, NULL, '?'},
 	{NULL, no_argument, NULL, 0}
 };
+
+float cmp_histo(int32_t* a, int32_t* b, float roww)
+{
+	float bcf = 0, sum_1 = 0, sum_2 = 0;
+	for (size_t i = 0; i < 256; i++){
+		float na = ((float)a[i]+EPSILON) / roww;
+		float nb = ((float)b[i]+EPSILON) / roww;
+		bcf += sqrt(na * nb);
+		sum_1 += na;
+		sum_2 += nb;
+	}
+	float rnd = floor(sum_1 + 0.5);
+	bcf = bcf > rnd ? rnd : bcf;
+	return 1.0 - sqrtf(rnd - bcf);
+}
 
 int main(int argc, char* argv[])
 {
@@ -275,12 +297,21 @@ int main(int argc, char* argv[])
 	size_t base = 256;
 	size_t p_w = 128;
 	size_t p_h = 512;
+	bool detailed = false;
+	float cutoff = NAN;
 	int ch;
 
-	while((ch = getopt_long(argc, argv, "Ww:h:?", longopts, NULL)) >= 0)
+	while((ch = getopt_long(argc, argv, "Ww:h:p:d?", longopts, NULL)) >= 0)
 	switch(ch){
 	case '?' :
 		return usage();
+	break;
+	case 'p' :
+		cutoff = strtof(optarg, NULL);
+		cutoff = (isinf(cutoff)||isnan(cutoff)||cutoff<=0.0||cutoff>1.0) ?
+			0.9 : cutoff;
+	break;
+	case 'd' : detailed = true;
 	break;
 	case 'W' :
 		fsense.wrap = true;
@@ -377,20 +408,41 @@ int main(int argc, char* argv[])
 	pthread_t pth;
 	pthread_create(&pth, NULL, data_loop, chan);
 
-/* rather crude sample, plan is to use overlay maps for more interesting
- * metadata in the other color channels (file-operation playback sequence,
- * page mapping, heap, stack, ...) */
+/* using histograms in preview to try and find edges between datatypes */
+	int32_t dr[256];
+	int32_t cr[256];
+
 	while (pos + step_sz < buf.st_size && row < c->h){
 		size_t cpos = pos;
 		for (size_t i = 0; i < c->w && pos < buf.st_size; i++){
 			c->vidp[row * c->w + i] = RGBA(
 				0x00, fsense.fmap[pos], 0x00, 0xff);
+
+			if (!(isnan(cutoff))){
+				if (detailed)
+					for (size_t j = 0; j < step_sz && pos < buf.st_size; j++)
+						dr[fsense.fmap[pos+j]]++;
+				else
+					dr[fsense.fmap[pos]]++;
+			}
+
 			pos += step_sz;
 		}
+/* can do this on the preview sample scale or detailed */
+		if (!isnan(cutoff)){
+			float val = cmp_histo(dr, cr, detailed ? step_sz * c->w : c->w);
+			memcpy(cr, dr, sizeof(dr));
+			memset(dr, '\0', sizeof(dr));
+			if (val < cutoff)
+				for(size_t i = 0; i < c->w; i++)
+					c->vidp[row * c->w + i] |= RGBA(0xff, 0x00, 0x00, 0x00);
+		}
 
+/* update events to maintain interactivity, may exit */
 		if (!senseye_pump(&cont, false))
 			goto done;
 
+/* draw preview- processing "edge" */
 		if (cpos > byte_threshold){
 			for (size_t i = 0; i < c->w && row < c->h; i++)
 				c->vidp[(row+1) * c->w + i] = RGBA(0xff, 0x00, 0x00, 0xff);

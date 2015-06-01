@@ -19,6 +19,10 @@ local function overlay_cb(source, status)
 	end
 end
 
+--
+-- performance consideration / tradeoff, overlays does not have to have
+-- a size that matches input or output data windows.
+--
 local function toggle_overlay(wnd, state)
 	local pp = image_storage_properties(wnd.parent.canvas);
 	if (not valid_vid(wnd.xlt_overlay)) then
@@ -26,7 +30,10 @@ local function toggle_overlay(wnd, state)
 		wnd:zoom_link(wnd.parent, image_get_txcos(wnd.parent.canvas));
 		wnd.overlay_pause = false;
 		table.insert(wnd.autodelete, wnd.xlt_overlay);
-		wnd.parent:set_overlay(wnd.xlt_overlay);
+		wnd.parent:set_overlay(wnd.xlt_overlay, function()
+			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
+		end);
+
 		blend_image(wnd.parent.overlay, 0.5);
 
 -- missing, add handler for overlay_resize and a zoom-trigger that
@@ -37,13 +44,13 @@ local function toggle_overlay(wnd, state)
 		if (wnd.overlay_pause) then
 			suspend_target(wnd.xlt_overlay);
 		else
-			target_displayhint(wnd.xlt_overlay, pp.width, pp.height);
+			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height); -- pp.width, pp.height);
 			resume_target(wnd.xlt_overlay);
 		end
 	end
 
 	if (not wnd.overlay_pause) then
-		target_displayhint(wnd.xlt_overlay, pp.width, pp.height);
+		target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height); --pp.width, pp.height);
 	end
 end
 
@@ -150,7 +157,6 @@ function activate_translator(wnd, vtbl, a)
 			return old_resize(wnd, w, h);
 		end
 
-		target_displayhint(tgt, w, h);
 		if (wnd.dragmode == nil) then
 			return;
 		else
@@ -199,7 +205,6 @@ function activate_translator(wnd, vtbl, a)
 		iotbl.samples[3] = math.ceil(props.width * txcos[5]);
 		iotbl.samples[4] = math.ceil(props.height * txcos[6]);
 
-		local h = neww.parent.height / ((txcos[6] - txcos[2]) * props.height);
 		target_input(tgt, iotbl);
 	end
 

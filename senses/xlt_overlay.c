@@ -44,6 +44,8 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	if (!buf)
 		return false;
 
+	printf("update, overlay dimensions: %d, %d\n", over->w, over->h);
+
 /* need to clear (or track zoom + precision etc. which means its usually
  * just cheaper to reset between updates */
 	int bpp = buf_sz / (in->w*in->h);
