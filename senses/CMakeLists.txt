@@ -8,9 +8,6 @@ include(ExternalProject)
 # minimum version.
 #
 option(ENABLE_CAPSTONE "Build Capstone- based Assembly translator" ON)
-option(ENABLE_IMG "Build with Image- translator (not working)" OFF)
-option(ENABLE_PEPE "Build PE- translator (not working)" OFF)
-option(ENABLE_MEMSENSE "Build with /proc/pid/mem translator (needs permissions)" ON)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	option(ENABLE_ASAN "Build with Address-Sanitizer, (gcc >= 4.8, clang >= 3.1)" OFF)
@@ -48,18 +45,12 @@ else()
 	find_package(arcan_shmif REQUIRED)
 endif()
 
-# apply options
-
-if(ENABLE_MEMSENSE)
-	set(SENSE_MEM sense_mem)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	set(SENSE_MEM sense_osxmem.c)
 endif()
 
-if (ENABLE_PEPE)
-	set(XLT_PEPE xlt_pepe)
-endif()
-
-if (ENABLE_IMG)
-	set(XLT_IMG xlt_img)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+	set(SENSE_MEM sense_linmem.c)
 endif()
 
 if (ENABLE_CAPSTONE)
@@ -77,8 +68,6 @@ set(TRANSLATORS
 	xlt_dpipe
 	xlt_ascii
 	${XLT_CAPSTONE}
-	${XLT_PEPE}
-	${XLT_IMG}
 	${DEBUG_XLT}
 )
 
@@ -86,7 +75,6 @@ set(SENSES
 	sense_pipe
 	sense_file
 	sense_mfile
-	${SENSE_MEM}
 )
 
 foreach(xlt ${TRANSLATORS})
@@ -94,6 +82,12 @@ foreach(xlt ${TRANSLATORS})
 	target_link_libraries(${xlt} xlt_supp)
 	install(TARGETS ${xlt} DESTINATION bin)
 endforeach()
+
+if (SENSE_MEM)
+	add_executable(sense_mem ${SENSE_MEM})
+	target_link_libraries(sense_mem sense_supp)
+	install(TARGETS ${sense} DESTINATION bin)
+endif()
 
 foreach(sense ${SENSES})
 	add_executable(${sense} "${sense}.c")

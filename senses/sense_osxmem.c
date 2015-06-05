@@ -1,30 +1,12 @@
 /*
- * Copyright 2014-2015, Björn Ståhl
+ * Copyright:
+ * 2015, Joshua Hill, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
  * Description: This sensor periodically monitors the memory pages of a process
- * providing data similar to fsense. It is rather slow, naive and crude -
- * relying on being able to ptrace having access to /proc/pid/mem interface,
- * which any ol' DRM will disable on first breath.
- *
- * Possible improvements include:
- *
- *  - Extend with solutions for other environments: gdb/lldb plugin
- *
- *  - Being able to run as a process parasite; inject, grab another thread,
- *    handle the obvious "program unmapped memory while being read" race.
- *    Other sneaky option would be inject + fork and use COW semantics
- *    to protect us.
- *
- *  - Use the alpha channel for good: pattern/entropy encoding support already
- *    provides us with 254 different highlight groups. Combine that with a
- *    classifier like capstone and we can get a quick overview of changes in
- *    +x pages, useful for those nasty JITs, polymorphs and unpackers.
- *
- *  - Better / real (optional) process control semantics
+ * providing data similar to fsense. It is similar to sense_linmem, but using
+ * OSX- native calls.
  */
-#define _LARGEFILE64_SOURCE
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -45,7 +27,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-#include <sys/ptrace.h>
+#include <mach/mach.h>
 
 #include "sense_supp.h"
 #include "font_8x8.h"
@@ -53,16 +35,18 @@
 
 struct page_ch {
 	struct senseye_ch* channel;
-	int fd;
-	uintptr_t base;
+	vm_address_t base;
 	size_t size;
 };
 
 struct {
 /* tracing and synchronization */
-	bool ptrace;
+	bool suspended;
 	pid_t pid;
+	task_t task;
 	pthread_mutex_t plock;
+	vm_address_t address;
+	off_t offset;
 
 /* cursor tracking */
 	ssize_t sel;
@@ -81,27 +65,52 @@ static void update_preview(shmif_pixel ccol);
 void* data_loop(void*);
 
 /*
- * try to acquire a handle into the memory of the process
- * at a specific base and width, if successful, spawn a new
- * data connection to senseye.
+ * attempt to read the requested number of bytes from
+ * the process and write it into the buffer
  */
-static void launch_addr(uintptr_t base, size_t size)
+static size_t task_read(vm_address_t addr, void* buffer, size_t size)
 {
-	char wbuf[sizeof("/proc//mem") + 8];
-	snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) msense.pid);
-	int fd = open(wbuf, O_RDONLY);
-	if (-1 == fd){
-		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx open (%s) failed, %s\n",
-			base, size, wbuf, strerror(errno));
-		return;
+	kern_return_t kr = KERN_SUCCESS;
+	vm_size_t count = 0;
+
+	size_t to_read = 0;
+	size_t have_read = 0;
+
+	while(size > 0) {
+		to_read = (size > 0x800) ? 0x800 : size;
+		count = to_read;
+
+		kr = vm_read_overwrite(msense.task,
+			addr, to_read, (vm_address_t) buffer, &count);
+
+		if(kr != KERN_SUCCESS){
+			fprintf(stderr, "Couldn't read 0x%zx bytes from 0x%lx\n", size, addr);
+			return 0;
+		}
+		else if(count != to_read){
+			fprintf(stderr, "Weird read of 0x%zx bytes from 0x%lx\n", size, addr);
+		}
+
+		addr += to_read;
+		size -= to_read;
+		have_read += to_read;
+		buffer = ((uint8_t*) buffer) + to_read;
 	}
 
-	if (-1 == lseek64(fd, base, SEEK_SET)){
-		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx  couldn't seek, %s\n",
-			base, size, strerror(errno));
-		close(fd);
-		return;
-	}
+	return have_read;
+}
+
+/*
+ * try to acquire a handle into the memory of the process at a specific base
+ * and width, if successful, spawn a new data connection to senseye.
+ */
+static void launch_addr(vm_address_t base, size_t size)
+{
+	char wbuf[128];
+	memset(wbuf, '\0', sizeof(wbuf));
+
+	msense.offset = 0;
+	msense.address = base;
 
 /* or calculate base by sqrt -> prev POT */
 	snprintf(wbuf, sizeof(wbuf), "%d@%" PRIxPTR, (int)msense.pid, base);
@@ -110,7 +119,6 @@ static void launch_addr(uintptr_t base, size_t size)
 	if (NULL == ch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
 			"couldn't open data channel\n", base, size);
-		close(fd);
 		return;
 	}
 
@@ -119,12 +127,10 @@ static void launch_addr(uintptr_t base, size_t size)
 	if (NULL == pch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
 			"couldn't setup processing storage\n", base, size);
-		close(fd);
 		return;
 	}
 
 	pch->channel = ch;
-	pch->fd = fd;
 	pch->base = base;
 	pch->size = size;
 
@@ -133,14 +139,13 @@ static void launch_addr(uintptr_t base, size_t size)
 			"couldn't spawn processing thread\n", base, size);
 		ch->close(ch);
 		free(pch);
-		close(fd);
 		return;
 	}
 }
 
 /*
- * basic input mapping for the control- channel UI,
- * check senseye/senses/msense_main.lua
+ * basic input mapping for the control- channel UI, check
+ * senseye/senses/msense_main.lua
  */
 static void control_event(struct senseye_cont* cont, arcan_event* ev)
 {
@@ -170,10 +175,7 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 			refresh = true;
 		}
 		else if (strcmp(ev->io.label, "SELECT") == 0){
-			if (!msense.ptrace)
-				fprintf(stderr, "cannot inspect segment, ptrace support disabled.\n");
-			else
-				launch_addr(msense.sel_base, msense.sel_size);
+			launch_addr(msense.sel_base, msense.sel_size);
 		}
 	}
 
@@ -190,23 +192,36 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 }
 
-static size_t synch_copy(struct rwstat_ch* ch, int fd, uint8_t* buf, size_t nb)
+static size_t synch_copy(struct rwstat_ch* ch,
+	struct page_ch* pch, uint8_t* buf, size_t nb)
 {
 	ch->switch_clock(ch, RW_CLK_BLOCK);
 	pthread_mutex_lock(&msense.plock);
 
-	ssize_t nr = read(fd, buf, nb);
-	if (-1 == nr){
-		fprintf(stderr, "error reading from memory (%s)\n", strerror(errno));
+	size_t nr = task_read(pch->base, buf, pch->size);
+
+	if(0 == nr) {
+		fprintf(stderr, "error reading 0x%zx bytes from address 0x%lx\n",
+			nb, msense.address);
 		nr = 0;
 	}
 
 	if (nr != nb)
 		memset(buf + nr, '\0', nb - nr);
 
-#ifdef PTRACE_PRCTL
-	ptrace(PTRACE_CONT, msense.pid, NULL, NULL);
-#endif
+
+/*
+ * Doesn't make much sense to resume this constantly when we
+ * only suspended it in the beginning. Need to find a better
+ * place (if it's even needed)
+
+	kr = task_resume(msense.task);
+	if(KERN_SUCCESS != kr) {
+		fprintf(stderr, "Couldn't resume our task with pid %d, reason %s\n",
+			msense.pid, mach_error_string(kr));
+	}
+	msense.suspended = false;
+*/
 
 	pthread_mutex_unlock(&msense.plock);
 
@@ -223,8 +238,13 @@ void* data_loop(void* th_data)
 	struct rwstat_ch* ch = pch->channel->in;
 	struct arcan_shmif_cont* cont = ch->context(ch);
 
+	ssize_t nc = 0;
 	size_t buf_sz = ch->left(ch);
 	uint8_t* buf = malloc(buf_sz);
+	if(NULL == buf) {
+		fprintf(stderr, "Couldn't allocate memory for this page\n");
+		goto error;
+	}
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
@@ -234,10 +254,13 @@ void* data_loop(void* th_data)
 
 	ch->event(ch, &ev);
 
-	off64_t cofs = lseek64(pch->fd, 0, SEEK_CUR);
-	goto seek0;
+	nc = synch_copy(ch, pch, buf, buf_sz);
+	if (0 == nc)
+		fprintf(stderr, "Couldn't read from address 0x%lx at offset 0x%llx\n",
+			msense.address, msense.offset);
 
-	while (buf && arcan_shmif_wait(cont, &ev) != 0){
+	while (arcan_shmif_wait(cont, &ev) != 0){
+
 		if (rwstat_consume_event(ch, &ev)){
 			continue;
 		}
@@ -245,53 +268,52 @@ void* data_loop(void* th_data)
 		if (ch->left(ch) > buf_sz){
 			free(buf);
 			buf_sz = ch->left(ch);
+
 			buf = malloc(buf_sz);
+			if(NULL == buf) {
+				fprintf(stderr, "Couldn't allocate memory for this page\n");
+				goto error;
+			}
 		}
+
+		nc = synch_copy(ch, pch, buf, buf_sz);
+		if (0 == nc)
+			fprintf(stderr, "Couldn't read from address 0x%lx at offset 0x%llx\n",
+				msense.address, msense.offset);
+
 
 		if (ev.category == EVENT_TARGET)
 		switch(ev.tgt.kind){
-		case TARGET_COMMAND_EXIT:
+		case TARGET_COMMAND_EXIT:{
 			return NULL;
-		break;
+		}
 
 		case TARGET_COMMAND_DISPLAYHINT:{
 			size_t base = ev.tgt.ioevs[0].iv;
-			if (base > 0 && (base & (base - 1)) == 0 &&
-				arcan_shmif_resize(cont, base, base))
-				ch->resize(ch, base);
+			if (base > 0 && (base & (base - 1)) == 0){
+				if(arcan_shmif_resize(cont, base, base))
+					ch->resize(ch, base);
+			}
+			break;
 		}
 
 		case TARGET_COMMAND_STEPFRAME:{
-			ssize_t nc;
 			if (ev.tgt.ioevs[0].iv == 0){
-seek0:
-				nc = synch_copy(ch, pch->fd, buf, buf_sz);
-
+				nc = synch_copy(ch, pch, buf, buf_sz);
 				if (0 == nc)
-					fprintf(stderr, "Couldn't read from ofset (%llu: %s)\n",
-						(unsigned long long) cofs, strerror(errno));
-
-				if (-1 == lseek64(pch->fd, -nc, SEEK_CUR)){
-					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
-					goto error;
-				}
-				cofs = lseek64(pch->fd, 0, SEEK_CUR);
+					fprintf(stderr, "Couldn't read from address 0x%lx at offset 0x%llx\n",
+						msense.address, msense.offset);
 			}
 			else if (ev.tgt.ioevs[0].iv == 1){
-				ssize_t left = pch->base + pch->size - cofs;
-				if (left == 0)
-					goto seek0;
-
-				if (left > buf_sz)
-					cofs = lseek64(pch->fd, buf_sz, SEEK_CUR);
-
-				goto seek0;
+				nc = synch_copy(ch, pch, buf, buf_sz);
+				if (0 == nc)
+					fprintf(stderr, "Couldn't read from address 0x%lx at offset 0x%llx\n",
+						msense.address, msense.offset);
 			}
 			else if (ev.tgt.ioevs[0].iv == -1){
-				cofs = lseek64(pch->fd, cofs - buf_sz >= pch->base ?
-					cofs - buf_sz : pch->base, SEEK_SET);
-				goto seek0;
+
 			}
+			break;
 		}
 		default:
 		break;
@@ -304,19 +326,37 @@ error:
 	return NULL;
 }
 
-static FILE* get_map_descr(pid_t pid)
-{
-	char wbuf[sizeof("/proc//maps") + 20];
-	snprintf(wbuf, sizeof(wbuf), "/proc/%d/maps", (int) msense.pid);
-	FILE* fpek = fopen(wbuf, "r");
-	return fpek;
+size_t get_vmmap_entries(task_t task) {
+	size_t n = 0;
+	vm_size_t size = 0;
+	vm_address_t address = 0;
+	kern_return_t kr = KERN_SUCCESS;
+
+	while (1) {
+		uint32_t nesting_depth;
+		mach_msg_type_number_t count;
+		struct vm_region_submap_info_64 info;
+
+		count = VM_REGION_SUBMAP_INFO_COUNT_64;
+		kr = vm_region_recurse_64(msense.task,
+			&address, &size, &nesting_depth, (vm_region_info_64_t)&info, &count);
+		if (kr == KERN_INVALID_ADDRESS) {
+				break;
+		} else if (kr) {
+			mach_error("vm_region:", kr);
+			break; /* last region done */
+		}
+		if (info.is_submap) {
+			nesting_depth++;
+		} else {
+			address += size;
+			n++;
+		}
+	}
+
+	return n;
 }
 
-/*
- * more complex here than in other senses due to the dynamic
- * nature of proc/pid/maps and that the currently selected
- * item won't fit in the allocated output buffer.
- */
 static void update_preview(shmif_pixel ccol)
 {
 /* clear window */
@@ -329,27 +369,19 @@ static void update_preview(shmif_pixel ccol)
 	draw_text(c, "x ", col*(fontw+1), 0, RGBA(0x55, 0x55, 0xff, 0xff)); col += 2;
 	draw_text(c, "rw ", col*(fontw+1), 0, RGBA(0xff, 0xff, 0x55, 0xff));col += 3;
 	draw_text(c, "rx ", col*(fontw+1), 0, RGBA(0xff, 0x55, 0xff, 0xff));col += 3;
-  draw_text(c, "wx ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0xff, 0xff));col += 3;
+	draw_text(c, "wx ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0xff, 0xff));col += 3;
 	draw_text(c, "rwx", col*(fontw+1), 0, RGBA(0xff, 0xff, 0xff, 0xff));
-
-	FILE* fpek = get_map_descr(msense.pid);
-	if (!fpek){
-		fprintf(stderr, "couldn't open proc/pid/maps for reading.\n");
-		exit(EXIT_FAILURE);
-	}
 
 	struct page {
 		long long addr, endaddr, offset, inode;
 		char perm[6];
- 		char device[16];
+		char device[16];
 	};
 
 /* populate list of entries, first get limit */
-	size_t count;
-	for (count = 0; !feof(fpek); count++)
-		while(fgetc(fpek) != '\n' && !feof(fpek))
-			;
-	fseek(fpek, 0, SEEK_SET);
+		size_t count = 0;
+		kern_return_t kr = KERN_SUCCESS;
+		count = get_vmmap_entries(msense.task);
 
 /* then fill VLA of page struct with the interesting ones,
  * need to be careful about TOCTU overflow */
@@ -357,20 +389,56 @@ static void update_preview(shmif_pixel ccol)
 	memset(pcache, '\0', sizeof(struct page) * count);
 
 	size_t ofs = 0;
-	while(!feof(fpek) && ofs < count){
-		int ret = fscanf(fpek, "%llx-%llx %5s %llx %5s %llx",
-			&pcache[ofs].addr, &pcache[ofs].endaddr, pcache[ofs].perm,
-			&pcache[ofs].offset, pcache[ofs].device, &pcache[ofs].inode);
+	vm_size_t size = 0;
+	vm_address_t address = 0;
+	uint32_t nesting_depth = 0;
+	mach_msg_type_number_t region_count = 0;
+	struct vm_region_submap_info_64 info;
 
-		if (0 == ret){
-				while (fgetc(fpek) != '\n' && !feof(fpek))
-					;
-			continue;
+	while(ofs < count) {
+		region_count = 0;
+		nesting_depth = 0;
+		memset(&info, '\0', sizeof(struct vm_region_submap_info_64));
+
+		while (1) {
+			region_count = VM_REGION_SUBMAP_INFO_COUNT_64;
+			kr = vm_region_recurse_64(msense.task, &address, &size, &nesting_depth,
+					(vm_region_info_64_t)&info, &region_count);
+
+			if(KERN_SUCCESS != kr)
+				break;
+
+			if (info.is_submap) {
+				nesting_depth++;
+				continue;
+			}
+			else
+				break;
 		}
 
-		if (!msense.skip_inode || (msense.skip_inode && pcache[ofs].inode == 0))
-			ofs++;
+		if(KERN_SUCCESS != kr) {
+			if(KERN_INVALID_ADDRESS == kr) {
+				fprintf(stderr, "Couldn't get infomation for address 0x%lx\n", address);
+			}
+			break;
+		}
+
+		if(size == 0)
+			break;
+
+		pcache[ofs].addr = address;
+		pcache[ofs].endaddr = address + size;
+		pcache[ofs].inode = 0;
+		pcache[ofs].offset = 0;
+		if(info.protection & VM_PROT_READ) pcache[ofs].perm[0] = 'r';
+		if(info.protection & VM_PROT_WRITE) pcache[ofs].perm[1] = 'w';
+		if(info.protection & VM_PROT_EXECUTE) pcache[ofs].perm[2] = 'x';
+		pcache[ofs].device[0] = '\0';
+
+		address += size;
+		ofs++;
 	}
+
 	if (0 == ofs)
 		return;
 
@@ -385,18 +453,13 @@ static void update_preview(shmif_pixel ccol)
 	msense.sel_page = nl;
 
 	int page = 0;
- 	if (msense.sel > 0)
+	if (msense.sel > 0)
 		page = msense.sel / nl;
 
 	ofs = page * nl;
 
 	int y = fonth + 1;
 	int cc = msense.sel % nl;
-
-/* each step requires reprocessing the proc entry, expensive
- * but provides a somewhat more accurate view (inotify etc. doesn't
- * do anything on proc, so other option to work with a cache would
- * be to take advantage of ptrace. */
 
 	while (y < c->addr->h && ofs < count){
 		uint8_t r = pcache[ofs].perm[0] == 'r' ? 0xff : 0x55;
@@ -423,12 +486,12 @@ static void update_preview(shmif_pixel ccol)
 	}
 
 	draw_box(c, 0, ((msense.sel % nl)+1) * (fonth+1), fontw, fonth, ccol);
-	fclose(fpek);
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 }
 
 int main(int argc, char* argv[])
 {
+	kern_return_t kr;
 	struct senseye_cont cont;
 	struct arg_arr* aarr;
 	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
@@ -440,13 +503,12 @@ int main(int argc, char* argv[])
 
 	msense.pid = strtol(argv[1], NULL, 10);
 
-	FILE* fp = get_map_descr(msense.pid);
-	if (!fp){
-		fprintf(stderr, "Couldn't open /proc/%d/maps, reason: %s\n",
-			(int) msense.pid, strerror(errno));
+	kr = task_for_pid(mach_task_self(), msense.pid, &msense.task);
+	if(kr != KERN_SUCCESS) {
+		fprintf(stderr, "Couldn't open task port for pid %d, reason: %s\n",
+			(int) msense.pid, mach_error_string(kr));
 		return EXIT_FAILURE;
 	}
-	fclose(fp);
 
 	if (!senseye_connect(NULL, stderr, &cont, &aarr, connectfl))
 		return EXIT_FAILURE;
@@ -457,19 +519,15 @@ int main(int argc, char* argv[])
 	if (!arcan_shmif_resize(cont.context(&cont), desw, 512))
 		return EXIT_FAILURE;
 
-#ifdef PTRACE_PRCTL
-	if (-1 == ptrace(PTRACE_ATTACH, msense.pid, NULL, NULL)){
-		fprintf(stderr, "ptrace(%d) failed, page "
-			"inspection disabled\n", (int)msense.pid);
-		msense.ptrace = false;
+/*
+	kr = task_suspend(msense.task);
+	if(KERN_SUCCESS != kr) {
+		fprintf(stderr, "Couldn't suspend task from pid %d, reason %s\n",
+			(int) msense.pid, mach_error_string(kr));
+		return EXIT_FAILURE;
 	}
-	else{
-		msense.ptrace = true;
-		waitpid(msense.pid, NULL, 0);
-	}
-#else
-	msense.ptrace = true;
-#endif
+	msense.suspended = true;
+*/
 
 	msense.cont = &cont;
 	pthread_mutex_init(&msense.plock, NULL);
