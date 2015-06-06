@@ -294,18 +294,50 @@ local pop = { {
 	submenu = color_sub }
 };
 
+local zpop = {
+	{
+	label = "Random Corrupt",
+	name = "random_corrupt",
+	handler = function(wnd)
+		local iotbl = {kind = "analog", devid = 1, subid = 0,
+			samples = wnd.corrupt};
+		target_input(wnd.ctrl_id, iotbl);
+	end
+	},
+	{
+	label = "0xff Corrupt",
+	name = "ff_corrupt",
+	handler = function(wnd)
+		local iotbl = {kind = "analog", devid = 0, subid = 0xff,
+			samples = wnd.corrupt};
+		target_input(wnd.ctrl_id, iotbl);
+	end
+	},
+	{
+	label = "0x41 Corrupt",
+	name = "a_corrupt",
+	handler = function(wnd)
+		local iotbl = {kind = "analog", devid = 0, subid = 0x41,
+			samples = wnd.corrupt};
+		target_input(wnd.ctrl_id, iotbl);
+	end
+	}
+};
+
 return {
 	name = "psense", -- identifier in tracetags for debugging
 	source_listener = fsrv_ev, -- need to listen to some events to track stream
 	map = coord_map, -- translate from position in window to stream
 	dispatch_sub = disp, -- sensor specific keybindings
 	popup_sub = pop, -- sensor specific popup,
+	rwstat = true, -- we follow the event protocol used with rwstat.c
 	init = function(wnd)
 		wnd.ofs = 0;
 		wnd.seek = function() end
 		wnd.size_cur = 3; -- default packing mode is 2
 		target_flags(wnd.ctrl_id, TARGET_VSTORE_SYNCH);
 		wnd.dynamic_zoom = true;
+		wnd.zoom_meta_popup = zpop;
 		target_graphmode(wnd.ctrl_id, gconfig_get("map_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("pack_default"));
 		target_graphmode(wnd.ctrl_id, gconfig_get("alpha_default"));

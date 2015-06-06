@@ -472,7 +472,7 @@ local function resize_zone(wnd)
 end
 
 local function update_zoom_preview(wnd, x, y)
-	if (not wnd.zoom_preview) then
+	if (not wnd.zoom_preview or wnd.in_zoom) then
 		return;
 	end
 
@@ -519,11 +519,13 @@ local function motion_2d(wnd, vid, x, y)
 end
 
 --
--- sort out position and dimensions for a canvas clipped dynamic selection
+-- order 2 points that form a square so we get a texel-aligned, surface
+-- normalized square that accounts for a zoom-level
 --
 local function get_positions(dz, maxw, maxh)
 	local x1, y1, x2, y2;
 
+-- clamp and reorder
 	if (dz[1] < dz[3]) then
 		x1 = dz[1];
 		x2 = dz[3];
@@ -547,7 +549,36 @@ local function get_positions(dz, maxw, maxh)
 	x2 = x2 == x1 and x1 + 1 or x2;
 	y2 = y2 == y1 and y1 + 1 or y2;
 
-	return x1, y1, x2, y2;
+	return {x1, y1, x2, y2};
+end
+
+local function pos_to_surface(inp, maxw, maxh, srfw, srfh, zoom)
+-- from window- space to surface relative
+	local pos = {};
+	pos[1] = inp[1] / maxw;
+	pos[2] = inp[2] / maxh;
+	pos[3] = inp[3] / maxw;
+	pos[4] = inp[4] / maxh;
+
+	local step_s = 1.0 / srfw;
+	local step_t = 1.0 / srfh;
+
+-- account for zoom
+	local sfx = (zoom[3] - zoom[1]);
+	local sfy = (zoom[4] - zoom[2]);
+
+	pos[1] = zoom[1] + sfx * pos[1];
+	pos[2] = zoom[2] + sfy * pos[2];
+	pos[3] = zoom[1] + sfx * pos[3];
+	pos[4] = zoom[2] + sfy * pos[4];
+
+-- align to grid
+	pos[1] = pos[1] - math.fmod(pos[1], step_s);
+	pos[2] = pos[2] - math.fmod(pos[2], step_t);
+	pos[3] = pos[3] + math.fmod(pos[3], step_s);
+	pos[4] = pos[4] + math.fmod(pos[4], step_t);
+
+	return pos;
 end
 
 local function wnd_resize(wnd, vid, x, y)
@@ -600,9 +631,14 @@ local function wnd_drag(wnd, vid, x, y)
 		if (wnd.dz) then
 			wnd.dz[3] = wnd.dz[3] + x;
 			wnd.dz[4] = wnd.dz[4] + y;
-			local x1,y1,x2,y2 = get_positions(wnd.dz, wnd.width, wnd.height);
-			move_image(wnd.dzv, x1, y1);
-			resize_image(wnd.dzv, x2-x1, y2-y1);
+			local pos = get_positions(wnd.dz, wnd.width, wnd.height);
+			move_image(wnd.dzv, pos[1], pos[2]);
+			if (wnd.wm.meta_detail and wnd.wm.meta) then
+			image_color(wnd.dzv, 255, 0, 0);
+			else
+				image_color(wnd.dzv, 255, 255, 255);
+			end
+			resize_image(wnd.dzv, pos[3] - pos[1], pos[4] - pos[2]);
 		else
 			local props = image_surface_resolve_properties(wnd.canvas);
 			local mx = mouse_state().press_x;
@@ -659,32 +695,39 @@ function window_shared(wnd)
 	wnd.drop = function(wnd, vid, x, y)
 		wnd.dragmode = nil;
 		if (wnd.dynamic_zoom and wnd.dz) then
-			if (wnd.in_zoom) then
+			if (wnd.wm.meta_detail and wnd.wm.meta and wnd.zoom_meta_popup) then
+				local inp = get_positions(wnd.dz, wnd.width, wnd.height);
+				local sp = image_storage_properties(wnd.canvas);
+				local pos = pos_to_surface(inp,
+					wnd.width, wnd.height, sp.width, sp.height, wnd.zoom_ofs);
+
+				wnd.corrupt = {
+					math.floor(pos[1] * sp.width),
+					math.floor(pos[2] * sp.height),
+					math.ceil(pos[3] * sp.width),
+					math.ceil(pos[4] * sp.height)
+				};
+
+				table.insert(
+					spawn_popupmenu(wm, wnd.zoom_meta_popup).autodelete, wnd.dzv);
+			elseif (wnd.in_zoom) then
 				wnd.zoom_ofs[1] = 0.0;
 				wnd.zoom_ofs[2] = 0.0;
 				wnd.zoom_ofs[3] = 1.0;
 				wnd.zoom_ofs[4] = 1.0;
 				wnd:update_zoom();
 				wnd.in_zoom = false;
+				delete_image(wnd.dzv);
 			else
-				local x1, y1, x2, y2 = get_positions(wnd.dz, wnd.width, wnd.height);
+				local pos = get_positions(wnd.dz, wnd.width, wnd.height);
 				local sp = image_storage_properties(wnd.canvas);
-				local step_s = 1.0 / sp.width;
-				local step_t = 1.0 / sp.height;
-
-				wnd.zoom_ofs[1] = x1 / wnd.width;
-				wnd.zoom_ofs[1] = wnd.zoom_ofs[1] - math.fmod(wnd.zoom_ofs[1], step_s);
-				wnd.zoom_ofs[2] = y1 / wnd.height;
-				wnd.zoom_ofs[2] = wnd.zoom_ofs[2] - math.fmod(wnd.zoom_ofs[2], step_t);
-				wnd.zoom_ofs[3] = x2 / wnd.width;
-				wnd.zoom_ofs[3] = wnd.zoom_ofs[3] - math.fmod(wnd.zoom_ofs[3], step_s);
-				wnd.zoom_ofs[4] = y2 / wnd.height;
-				wnd.zoom_ofs[4] = wnd.zoom_ofs[4] - math.fmod(wnd.zoom_ofs[4], step_t);
+				wnd.zoom_ofs = pos_to_surface(pos,
+					wnd.width, wnd.height, sp.width, sp.height, {0.0, 0.0, 1.0, 1.0});
 				wnd.in_zoom = true;
 				wnd:update_zoom();
+				delete_image(wnd.dzv);
 			end
 
-			delete_image(wnd.dzv);
 			wnd.dz = nil;
 		end
 	end
@@ -925,7 +968,6 @@ local function overlay_popup(wnd)
 	if (#olist > 0) then
 		return olist;
 	else
-		print("oempty lay");
 		return {{
 			label = "No Overlays Available",
 			handler = function() end
