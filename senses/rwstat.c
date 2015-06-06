@@ -560,8 +560,49 @@ static void ch_wind(struct rwstat_ch* ch, off_t ofs)
 	ch->priv->cnt_total = ofs;
 }
 
+static shmif_pixel pack_byte(uint8_t val, bool rand, int pack)
+{
+	shmif_pixel r = rand ? RGBA(random(),
+		random(), random(), random()) : RGBA(val, val, val, val);
+
+	if (pack != PACK_TIGHT)
+		r |= RGBA(0x00, 0x00, 0x00, 0xff);
+
+	return r;
+}
+
+static void ch_damage(struct rwstat_ch* ch, uint8_t val, bool rand,
+	uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
+{
+	struct rwstat_ch_priv* chp = ch->priv;
+	struct arcan_shmif_cont* cont = chp->cont;
+
+/* useless in this setting */
+	if (chp->map == MAP_TUPLE)
+		return;
+
+	if (y2 > cont->h || x2 > cont->w)
+		return;
+
+	for (size_t y = y1; y < y2; y++)
+		for (size_t x = x1; x < x2; x++)
+			cont->vidp[y*chp->cont->pitch+x] = pack_byte(val, rand, chp->pack);
+
+/* don't increment the counter, we stay at the same position etc.
+ * just send the new damaged buffer. If we want to do fault-injection,
+ * it'll need to be on the sensor- level */
+	arcan_shmif_signal(chp->cont, SHMIF_SIGVID);
+}
+
 bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 {
+	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_ANALOG){
+		ch_damage(ch, ev->io.input.analog.subid, ev->io.input.analog.devid != 0,
+			ev->io.input.analog.axisval[0], ev->io.input.analog.axisval[1],
+			ev->io.input.analog.axisval[2], ev->io.input.analog.axisval[3]
+		);
+	}
+
 	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)
 		return false;
 
