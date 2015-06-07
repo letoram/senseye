@@ -127,11 +127,6 @@ function activate_translator(wnd, vtbl, a)
 	end
 
 	neww.input_sym = function(self, sym)
-		if (sym ~= "LEFT" and sym ~= "RIGHT" and sym ~= "UP"
-			and sym ~= "DOWN" and sym ~= "TAB") then
-			return;
-		end
-
 		local iotbl = {
 			kind = "digital",
 			active = "true",

@@ -99,7 +99,9 @@ local function zoom_position(wnd, x, y, click)
 			if (v.zoom_position) then
 				local r, g, b, a;
 				image_access_storage(wnd.canvas, function(tbl, w, h)
-					r, g, b, a = tbl:get(x, y, 4);
+					if (x < w and y < h) then
+						r, g, b, a = tbl:get(x, y, 4);
+					end
 				end);
 				v:zoom_position(wnd, x, y, r, g, b, a, click);
 			end
