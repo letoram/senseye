@@ -633,8 +633,8 @@ local function wnd_drag(wnd, vid, x, y)
 			wnd.dz[4] = wnd.dz[4] + y;
 			local pos = get_positions(wnd.dz, wnd.width, wnd.height);
 			move_image(wnd.dzv, pos[1], pos[2]);
-			if (wnd.wm.meta_detail and wnd.wm.meta) then
-			image_color(wnd.dzv, 255, 0, 0);
+			if (wnd.zoom_popup) then
+				image_color(wnd.dzv, 255, 0, 0);
 			else
 				image_color(wnd.dzv, 255, 255, 255);
 			end
@@ -695,7 +695,7 @@ function window_shared(wnd)
 	wnd.drop = function(wnd, vid, x, y)
 		wnd.dragmode = nil;
 		if (wnd.dynamic_zoom and wnd.dz) then
-			if (wnd.wm.meta_detail and wnd.wm.meta and wnd.zoom_meta_popup) then
+			if (wnd.zoom_popup and wnd.zoom_meta_popup) then
 				local inp = get_positions(wnd.dz, wnd.width, wnd.height);
 				local sp = image_storage_properties(wnd.canvas);
 				local pos = pos_to_surface(inp,
@@ -707,7 +707,7 @@ function window_shared(wnd)
 					math.ceil(pos[3] * sp.width),
 					math.ceil(pos[4] * sp.height)
 				};
-
+				wnd.zoom_popup = not wnd.zoom_popup;
 				table.insert(
 					spawn_popupmenu(wm, wnd.zoom_meta_popup).autodelete, wnd.dzv);
 			elseif (wnd.in_zoom) then
@@ -792,6 +792,10 @@ function window_shared(wnd)
 -- or if no window, switch to children
 	wnd.dispatch[BINDINGS["POPUP"]] = function(wnd)
 		local wm = wnd.wm;
+		if (wnd.dynamic_zoom) then
+			wnd.zoom_popup = not wnd.zoom_popup;
+			return;
+		end
 
 		if (wm.fullscreen or wm.selected == nil) then
 			return;
