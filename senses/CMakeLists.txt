@@ -67,6 +67,7 @@ set(TRANSLATORS
 	xlt_hex
 	xlt_dpipe
 	xlt_ascii
+	xlt_img
 	${XLT_CAPSTONE}
 	${DEBUG_XLT}
 )
