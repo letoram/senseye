@@ -36,18 +36,22 @@
 struct ent {
 	uint8_t* map;
 	size_t map_sz;
+	ssize_t ofs;
+	bool locked;
 	int fd;
 	const char* arg;
 };
 
 static struct {
 	shmif_pixel border;
+	shmif_pixel border_lock;
 	shmif_pixel pad;
 	shmif_pixel diff;
 	shmif_pixel match;
 }
 color = {
 	.border = RGBA(0xff, 0x00, 0x00, 0xff),
+	.border_lock = RGBA(0xff, 0xff, 0x00, 0xff),
 	.pad = RGBA(0x00, 0x00, 0x00, 0xff),
 	.diff = RGBA(0x00, 0xff, 0x00, 0xff),
 	.match = RGBA(0x00, 0x00, 0x00, 0xff)
@@ -180,6 +184,9 @@ static void draw_tile(struct arcan_shmif_cont* dst,
 {
 	size_t ntw = base*base;
 	size_t step = pack_szlut[mode];
+	ent->ofs = (ent->ofs < 0 && -1 * ent->ofs > pos) ? -pos : ent->ofs;
+	pos += ent->ofs;
+
 	size_t end = pos + ntw * step;
 
 	if (end > ent->map_sz)
@@ -223,11 +230,13 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 		if (x + base > dst->w){
 			x = 0;
 			if (border)
-				draw_box(dst, 0, y + base, dst->w, border, color.border);
+				draw_box(dst, 0, y + base, dst->w, border, entries[i].locked ?
+					color.border_lock : color.border);
 			y += base + border;
 		}
 		else if (border)
-			draw_box(dst, x - border, y, border, base, color.border);
+			draw_box(dst, x - border, y, border, base, entries[i].locked ?
+				color.border_lock : color.border);
 	}
 
 	arcan_event ev = {
@@ -246,8 +255,7 @@ static int resize_base(struct arcan_shmif_cont* cont,
 	int npr = ceil(sqrtf(n));
 	int nr = ceil((float)n / (float)npr);
 
-	if (!arcan_shmif_resize(cont,
-		(npr * (base + border)) - border, nr * (base+border) - border)){
+	if (!arcan_shmif_resize(cont, npr * (base + border), nr * (base+border))){
 		fprintf(stderr, "Couldn't resize shmif segment, try with a smaller number "
 			" of tiles or a smaller base dimension.\n");
 		return 0;
@@ -304,6 +312,7 @@ int main(int argc, char* argv[])
 		return usage();
 	}
 
+	size_t focus_count = 0;
 	size_t min_r, max_r, n_ent = argc - optind;
 	struct ent* entries = load_context(argv + optind, n_ent, &min_r, &max_r);
 	if (entries == NULL)
@@ -379,14 +388,24 @@ int main(int argc, char* argv[])
 					refresh_diff(&diffcont, entries, n_ent, base, pack_mode, ofs);
 			break;
 			case TARGET_COMMAND_STEPFRAME:{
+				int iev = ev.tgt.ioevs[0].iv;
+				int sign = (iev > 0) - (iev < 0);
 				size_t small = small_step;
 				size_t large = large_step * pack_szlut[pack_mode];
 
-				switch (ev.tgt.ioevs[0].iv){
-				case -1: ofs  = ofs > small ? ofs - small : 0; break;
-				case -2: ofs  = ofs > large ? ofs - large : 0; break;
-				case  1: ofs += small; break;
-				case  2: ofs += large; break;
+				if (focus_count)
+					for(size_t i = 0; i < n_ent; i++){
+						if (entries[i].locked){
+							entries[i].ofs += (sign) * (abs(ev.tgt.ioevs[0].iv) == 2 ?
+								large : small);
+						}
+					}
+				else
+					switch (ev.tgt.ioevs[0].iv){
+					case -1: ofs  = ofs > small ? ofs - small : 0; break;
+					case -2: ofs  = ofs > large ? ofs - large : 0; break;
+					case  1: ofs += small; break;
+					case  2: ofs += large; break;
 				}
 				REFRESH();
 			}
@@ -413,6 +432,16 @@ int main(int argc, char* argv[])
 				large_step = (base * base) >> 1;
 			else if (strcmp(ev.io.label, "STEP_PAGE") == 0)
 				large_step = base * base;
+			else if (strncmp(ev.io.label, "FOCUS_", 6) == 0){
+				unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
+				if (sz < n_ent){
+					entries[sz].locked = !entries[sz].locked;
+					focus_count += entries[sz].locked ? 1 : -1;
+					REFRESH();
+				}
+				else
+					fprintf(stderr, "Ignored focus-requests (%d out of bounds)\n", sz);
+			}
 			else if (strncmp(ev.io.label, "CSTEP_", 6) == 0){
 				unsigned sz = strtoul(&ev.io.label[6], NULL, 10);
 				if (sz > 0)

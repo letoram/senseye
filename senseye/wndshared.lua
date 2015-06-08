@@ -15,6 +15,7 @@
 --  table.remove_match  find one occurence of (tbl, match) and remove
 --  repos_window(wnd)   handle for automated positioning
 --  copy_surface(vid)   readback and create a new raw surface
+--  translate_2d(wnd, vid, x, y) get coordinates accounting for zoom
 --
 
 -- some more complex window setups are kept separately
@@ -333,7 +334,7 @@ function focus_window(wnd)
 	end
 end
 
-local function translate_2d(wnd, vid, x, y)
+function translate_2d(wnd, vid, x, y)
 -- figure out surface relative coordinate
 	local oprops = image_storage_properties(wnd.canvas);
 	local rprops = image_surface_resolve_properties(wnd.canvas);
@@ -350,7 +351,7 @@ local function translate_2d(wnd, vid, x, y)
 	x = math.floor(x * oprops.width);
 	y = math.floor(y * oprops.height);
 
-	return x, y;
+	return (x < 0 and 0 or x), (y < 0 and 0 or y);
 end
 
 --
@@ -794,7 +795,7 @@ function window_shared(wnd)
 -- or if no window, switch to children
 	wnd.dispatch[BINDINGS["POPUP"]] = function(wnd)
 		local wm = wnd.wm;
-		if (wnd.dynamic_zoom) then
+		if (wnd.dz) then
 			wnd.zoom_popup = not wnd.zoom_popup;
 			return;
 		end

@@ -75,6 +75,33 @@ table.insert(pop, {
 	end
 });
 
+local function spawn_mfsense_pc(wnd)
+	local res = {};
+	local p = image_storage_properties(wnd.ctrl_id);
+	local x = 0;
+	local t = 0;
+	local w = wnd.base / p.width;
+	local h = wnd.base / p.height;
+
+	for i=1,wnd_tile_count do
+		res[i] = {x>0 and x/p.width or 0, y > 0 and y/p.height or y};
+		res[i][3] = res[i][1] + w;
+		res[i][4] = res[i][2] + h;
+		x = x + wnd.base + wnd.tile_border;
+		if (x > p.width) then
+			x = 0;
+			y = y + wnd.base + wnd.tile_border;
+		end
+	end
+	spawn_pointcloud_multi(wnd, set);
+end
+
+table.insert(pop, {
+	label = "Comparison Model",
+	name = "mfsense_pointcloud",
+	handler = spawn_mfsense_pc
+});
+
 -- similar to psense with some things added that didn't
 -- belong to the main window before
 local slisth = {
@@ -169,6 +196,17 @@ local rtbl = {
 	init = function(wnd)
 		wnd.ofs = 0;
 		wnd.dynamic_zoom = true;
+
+		wnd.dblclick = function()
+			local x, y = translate_2d(wnd, BADID, mouse_xy());
+			local col = (x > 0) and math.floor(x/(wnd.base + wnd.tile_border)) or 0;
+			local row = (y > 0) and math.floor(y/(wnd.base + wnd.tile_border)) or 0;
+			local cpr = math.floor(image_storage_properties(
+				wnd.ctrl_id).width / wnd.base);
+			local iotbl = {kind = "digital", active = true,
+				label = "FOCUS_" .. tostring(row * cpr + col)};
+			target_input(wnd.ctrl_id, iotbl);
+		end
 
 -- probably a cute formula to this but the odd # border misalign
 -- makes it somewhat irritating, just replicate the drawing formulae
