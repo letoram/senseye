@@ -226,17 +226,16 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 /* flood-fill "draw_tile", this could well be thread- split per tile */
 	for (size_t i = 0; i < n_entries && y <= dst->h - base; i++){
 		draw_tile(dst, &entries[i], pos, x, y, mode, base);
-		x = x + base + border;
-		if (x + base > dst->w){
-			x = 0;
-			if (border)
-				draw_box(dst, 0, y + base, dst->w, border, entries[i].locked ?
+		if (border)
+			draw_box(dst, x + base, y, border, base, entries[i].locked ?
 					color.border_lock : color.border);
+			x += base + border;
+		if (x + base > dst->w){
+			if (border)
+				draw_box(dst, 0, y + base, dst->w, border, color.border);
+			x = 0;
 			y += base + border;
 		}
-		else if (border)
-			draw_box(dst, x - border, y, border, base, entries[i].locked ?
-				color.border_lock : color.border);
 	}
 
 	arcan_event ev = {
@@ -255,7 +254,8 @@ static int resize_base(struct arcan_shmif_cont* cont,
 	int npr = ceil(sqrtf(n));
 	int nr = ceil((float)n / (float)npr);
 
-	if (!arcan_shmif_resize(cont, npr * (base + border), nr * (base+border))){
+	if (!arcan_shmif_resize(cont, npr * (base +
+		border), nr * (base+border) - border)){
 		fprintf(stderr, "Couldn't resize shmif segment, try with a smaller number "
 			" of tiles or a smaller base dimension.\n");
 		return 0;
