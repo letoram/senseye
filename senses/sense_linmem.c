@@ -48,6 +48,10 @@ struct {
 	pid_t pid;
 	pthread_mutex_t plock;
 
+/* page table scanning / cache */
+	struct page* pcache;
+	size_t pcache_sz;
+
 /* cursor tracking */
 	ssize_t sel;
 	size_t sel_lim, sel_page;
@@ -62,6 +66,7 @@ struct {
 };
 
 static void update_preview(shmif_pixel ccol);
+static struct page* get_map_descr(pid_t pid, bool filter, size_t* count);
 void* data_loop(void*);
 
 /*
@@ -129,7 +134,6 @@ static void launch_addr(uintptr_t base, size_t size)
 static void control_event(struct senseye_cont* cont, arcan_event* ev)
 {
 	bool refresh = false;
-
 	if (ev->category == EVENT_IO){
 		if (strcmp(ev->io.label, "UP") == 0){
 			msense.sel = (msense.sel - 1 < 0) ? msense.sel_lim - 1 : msense.sel - 1;
@@ -159,8 +163,13 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 			else
 				launch_addr(msense.sel_base, msense.sel_size);
 		}
+		else if (strcmp(ev->io.label, "r") == 0 || strcmp(ev->io.label, "f") == 0){
+			free(msense.pcache);
+			msense.pcache = get_map_descr(msense.pid,
+				strcmp(ev->io.label, "f") == 0, &msense.pcache_sz);
+			refresh = true;
+		}
 	}
-
 	if (ev->category == EVENT_TARGET &&
 		ev->tgt.kind == TARGET_COMMAND_DISPLAYHINT){
 		size_t width = ev->tgt.ioevs[0].iv;
@@ -288,60 +297,37 @@ error:
 	return NULL;
 }
 
-static FILE* get_map_descr(pid_t pid)
+struct page {
+	long long addr, endaddr, offset, inode;
+	char perm[6];
+ 	char device[16];
+};
+
+static struct page* get_map_descr(pid_t pid, bool filter, size_t* count)
 {
+	static int mdescr = -1;
 	char wbuf[sizeof("/proc//maps") + 20];
 	snprintf(wbuf, sizeof(wbuf), "/proc/%d/maps", (int) msense.pid);
 	FILE* fpek = fopen(wbuf, "r");
-	return fpek;
-}
 
-/*
- * more complex here than in other senses due to the dynamic
- * nature of proc/pid/maps and that the currently selected
- * item won't fit in the allocated output buffer.
- */
-static void update_preview(shmif_pixel ccol)
-{
-/* clear window */
-	struct arcan_shmif_cont* c = msense.cont->context(msense.cont);
-	draw_box(c, 0, 0, c->addr->w, c->addr->h, RGBA(0x00, 0x00, 0x00, 0xff));
-
-	int col = 1;
-	draw_text(c, "r ", col*(fontw+1), 0, RGBA(0xff, 0x55, 0x55, 0xff)); col += 2;
-	draw_text(c, "w ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0x55, 0xff)); col += 2;
-	draw_text(c, "x ", col*(fontw+1), 0, RGBA(0x55, 0x55, 0xff, 0xff)); col += 2;
-	draw_text(c, "rw ", col*(fontw+1), 0, RGBA(0xff, 0xff, 0x55, 0xff));col += 3;
-	draw_text(c, "rx ", col*(fontw+1), 0, RGBA(0xff, 0x55, 0xff, 0xff));col += 3;
-	draw_text(c, "wx ", col*(fontw+1), 0, RGBA(0x55, 0xff, 0xff, 0xff));col += 3;
-	draw_text(c, "rwx", col*(fontw+1), 0, RGBA(0xff, 0xff, 0xff, 0xff));
-
-	FILE* fpek = get_map_descr(msense.pid);
-	if (!fpek){
-		fprintf(stderr, "couldn't open proc/pid/maps for reading.\n");
-		exit(EXIT_FAILURE);
+	if (-1 == mdescr && filter){
+		snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) msense.pid);
+		mdescr = open(wbuf, O_RDONLY);
 	}
 
-	struct page {
-		long long addr, endaddr, offset, inode;
-		char perm[6];
- 		char device[16];
-	};
-
 /* populate list of entries, first get limit */
-	size_t count;
-	for (count = 0; !feof(fpek); count++)
+	for (*count = 0; !feof(fpek); (*count)++)
 		while(fgetc(fpek) != '\n' && !feof(fpek))
 			;
 	fseek(fpek, 0, SEEK_SET);
 
-/* then fill VLA of page struct with the interesting ones,
- * need to be careful about TOCTU overflow */
-	struct page pcache[count];
-	memset(pcache, '\0', sizeof(struct page) * count);
+/* note there is a time-of-check-time-of-use-risk here */
+	size_t pcache_sz = *count * sizeof(struct page);
+	struct page* pcache = malloc(pcache_sz);
+	memset(pcache, '\0', pcache_sz);
 
 	size_t ofs = 0;
-	while(!feof(fpek) && ofs < count){
+	while(!feof(fpek) && ofs < *count){
 		int ret = fscanf(fpek, "%llx-%llx %5s %llx %5s %llx",
 			&pcache[ofs].addr, &pcache[ofs].endaddr, pcache[ofs].perm,
 			&pcache[ofs].offset, pcache[ofs].device, &pcache[ofs].inode);
@@ -352,35 +338,80 @@ static void update_preview(shmif_pixel ccol)
 			continue;
 		}
 
-		if (!msense.skip_inode || (msense.skip_inode && pcache[ofs].inode == 0))
+/* usually the file- mapped pages aren't that interesting in this context */
+		if (!msense.skip_inode || (msense.skip_inode && pcache[ofs].inode == 0)){
+			if (filter){
+				char junk[4096];
+				if (-1 == lseek64(mdescr, pcache[ofs].addr, SEEK_SET))
+					continue;
+				if (-1 == read(mdescr, junk, 4096))
+					continue;
+			}
 			ofs++;
+		}
 	}
-	if (0 == ofs)
-		return;
 
-	count = ofs-1;
+	if (-1 != mdescr)
+		close(mdescr);
+
+	if (ofs <= 1){
+		free(pcache);
+		*count = 0;
+		return NULL;
+	}
+
+	*count = ofs-1;
+	return pcache;
+}
+
+/*
+ * more complex here than in other senses due to the dynamic nature of
+ * proc/pid/maps and that the currently selected item won't fit in the
+ * allocated output buffer.
+ */
+static void update_preview(shmif_pixel ccol)
+{
+	size_t rowsz = fonth+1;
+	size_t y = rowsz;
+	size_t colw = fontw+1;
+
+	shmif_pixel white = RGBA(0xff, 0xff, 0xff, 0xff);
+	struct arcan_shmif_cont* c = msense.cont->context(msense.cont);
+	draw_box(c, 0, 0, c->w, y*2, RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_box(c, 0, y*2, c->w, c->h, RGBA(0x00,0x00,0x00,0xff));
+
+	int col = 1;
+	draw_text(c, "r  ", col*colw, 0, RGBA(0xff, 0x55, 0x55, 0xff)); col += 2;
+	draw_text(c, "w  ", col*colw, 0, RGBA(0x55, 0xff, 0x55, 0xff)); col += 2;
+	draw_text(c, "x  ", col*colw, 0, RGBA(0x55, 0x55, 0xff, 0xff)); col += 2;
+	draw_text(c, "rw ", col*colw, 0, RGBA(0xff, 0xff, 0x55, 0xff)); col += 3;
+	draw_text(c, "rx ", col*colw, 0, RGBA(0xff, 0x55, 0xff, 0xff)); col += 3;
+	draw_text(c, "wx ", col*colw, 0, RGBA(0x55, 0xff, 0xff, 0xff)); col += 3;
+	draw_text(c, "rwx", col*colw, 0, white);
+	draw_text(c, "(r)efresh, (f)ilter", 2, y, white);
+	y += rowsz;
+
+	size_t count = msense.pcache_sz;
+	if (count == 0){
+		draw_text(c, "couldn't read mappings", 2, y, white);
+		arcan_shmif_signal(c, SHMIF_SIGVID);
+		return;
+	}
+
+	struct page* pcache = msense.pcache;
 
 /* clamp */
 	if (msense.sel >= count)
 		msense.sel = count - 1;
-
 	msense.sel_lim = count;
-	size_t nl = (c->addr->h - fonth - 1) / (fonth + 1);
+	size_t nl = (c->addr->h - y) / rowsz;
 	msense.sel_page = nl;
-
 	int page = 0;
  	if (msense.sel > 0)
 		page = msense.sel / nl;
-
-	ofs = page * nl;
-
-	int y = fonth + 1;
+	size_t ofs = page * nl;
 	int cc = msense.sel % nl;
-
-/* each step requires reprocessing the proc entry, expensive
- * but provides a somewhat more accurate view (inotify etc. doesn't
- * do anything on proc, so other option to work with a cache would
- * be to take advantage of ptrace. */
+	size_t start = y;
 
 	while (y < c->addr->h && ofs < count){
 		uint8_t r = pcache[ofs].perm[0] == 'r' ? 0xff : 0x55;
@@ -402,12 +433,12 @@ static void update_preview(shmif_pixel ccol)
 			(int)((pcache[ofs].endaddr - pcache[ofs].addr) / 1024));
 
 		draw_text(c, wbuf, fontw + 1, y, col);
-		y += fonth + 1;
+		y += rowsz;
 		ofs++;
 	}
 
-	draw_box(c, 0, ((msense.sel % nl)+1) * (fonth+1), fontw, fonth, ccol);
-	fclose(fpek);
+/* cursor */
+	draw_box(c, 0, start + ((msense.sel % nl)) * rowsz, fontw, fonth, ccol);
 	arcan_shmif_signal(c, SHMIF_SIGVID);
 }
 
@@ -423,14 +454,11 @@ int main(int argc, char* argv[])
 	}
 
 	msense.pid = strtol(argv[1], NULL, 10);
-
-	FILE* fp = get_map_descr(msense.pid);
-	if (!fp){
-		fprintf(stderr, "Couldn't open /proc/%d/maps, reason: %s\n",
-			(int) msense.pid, strerror(errno));
+	msense.pcache = get_map_descr(msense.pid, false, &msense.pcache_sz);
+	if (!msense.pcache){
+		fprintf(stderr, "Couldn't open/parse /proc/%d/maps\n", (int) msense.pid);
 		return EXIT_FAILURE;
 	}
-	fclose(fp);
 
 	if (!senseye_connect(NULL, stderr, &cont, &aarr, connectfl))
 		return EXIT_FAILURE;
@@ -458,6 +486,7 @@ int main(int argc, char* argv[])
 	msense.cont = &cont;
 	pthread_mutex_init(&msense.plock, NULL);
 
+	msense.pcache = get_map_descr(msense.pid, false, &msense.pcache_sz);
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;

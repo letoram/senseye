@@ -46,6 +46,18 @@ local rtbl = {
 			end
 			wnd.old_drop(wnd, vid, x, y);
 		end
+		wnd.input_sym = function(self, sym)
+			if (self.dispatch[sym] ~= nil) then
+				self.dispatch[sym](self);
+			else
+				local iotbl = {
+					kind = "digital",
+					active = "true",
+					label = sym;
+				};
+				target_input(wnd.ctrl_id, iotbl);
+			end
+		end
 	end
 };
 
