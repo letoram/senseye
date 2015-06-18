@@ -8,23 +8,27 @@
 --
 
 -- prepare a window suitable for showing / navigating one model
-local function modelwnd(wnd, model, shader)
+function create_model_window(wnd, model, shader, nozoom)
 -- 1. render the zoomed view to a texture that we use as LUT
-	local props = image_storage_properties(wnd.ctrl_id);
-	local isurf = alloc_surface(props.width, props.height);
-	local csurf = null_surface(props.width, props.height);
-	force_image_blend(csurf, BLEND_NONE);
-	force_image_blend(isurf, BLEND_NONE);
-	image_sharestorage(wnd.ctrl_id, csurf);
-	show_image(csurf);
-	define_rendertarget(isurf, {csurf},
-		RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
-	rendertarget_forceupdate(isurf);
-	image_sharestorage(isurf, model);
+	local props, isurf, csurf;
+
+	if (not nozoom) then
+		props = image_storage_properties(wnd.ctrl_id);
+		isurf = alloc_surface(props.width, props.height);
+		csurf = null_surface(props.width, props.height);
+		force_image_blend(csurf, BLEND_NONE);
+		force_image_blend(isurf, BLEND_NONE);
+		image_sharestorage(wnd.ctrl_id, csurf);
+		show_image(csurf);
+		define_rendertarget(isurf, {csurf},
+			RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, 0);
+		rendertarget_forceupdate(isurf);
+		image_sharestorage(isurf, model);
+	end
 
 -- 2. create an offscreen rendertarget for our 3d pipeline, and add a camera
 	local rtgt = alloc_surface(VRESW, VRESH);
-	define_rendertarget(rtgt, {model, box}, RENDERTARGET_DETACH,
+	define_rendertarget(rtgt, {model}, RENDERTARGET_DETACH,
 		RENDERTARGET_NOSCALE, -1, RENDERTARGET_FULL);
 
 	local camera = null_surface(1, 1);
@@ -37,21 +41,29 @@ local function modelwnd(wnd, model, shader)
 
 -- 3. take the rendertarget and set as the window canvas
 	local nw = wnd.wm:add_window(rtgt, {});
-	switch_shader(nw, model, shader);
-
-	nw.zoom_link = function(self, wnd, txcos)
-		image_set_txcos(csurf, txcos);
-		rendertarget_forceupdate(isurf);
+	if (shader) then
+		switch_shader(nw, model, shader);
 	end
 
-	nw.source_handler = function(wnd, source, status)
-		if (status.kind == "frame") then
+	if (not nozoom) then
+		nw.zoom_link = function(self, wnd, txcos)
+			image_set_txcos(csurf, txcos);
 			rendertarget_forceupdate(isurf);
 		end
-	end
 
-	wnd:add_zoom_handler(nw);
-	table.insert(wnd.source_listener, nw);
+		wnd.zoom_link = function(wnd, parent, txcos)
+			image_set_txcos(model, txcos);
+		end
+
+		nw.source_handler = function(wnd, source, status)
+			if (status.kind == "frame") then
+				rendertarget_forceupdate(isurf);
+			end
+		end
+
+		wnd:add_zoom_handler(nw);
+		table.insert(wnd.source_listener, nw);
+	end
 
 	nw:set_parent(wnd, ANCHOR_UR);
 	defocus_window(nw)
@@ -67,16 +79,17 @@ local function modelwnd(wnd, model, shader)
 	table.insert(nw.autodelete, isurf);
 	table.insert(nw.autodelete, rtgt);
 
-	rotate3d_model(model, nw.xang, nw.yang, nw.zang);
+	nw.rotate_set = {model};
+	nw.rotate = function(wnd)
+		for i,v in ipairs(nw.rotate_set) do
+			rotate3d_model(v, nw.xang, nw.yang, nw.zang);
+		end
+	end
 
 -- grab the shared window handlers, but replace / extend
 	window_shared(nw);
 
 	nw.fullscreen_input = function(wnd, iotbl)
-	end
-
-	wnd.zoom_link = function(wnd, parent, txcos)
-		image_set_txcos(model, txcos);
 	end
 
 --	wnd.parent:add_zoom_handler(wnd);
@@ -92,7 +105,7 @@ local function modelwnd(wnd, model, shader)
 	nw.tick = function(wnd, step)
 		if (wnd.spinning) then
 			wnd.zang = math.abs(wnd.zang + 0.5 * step, 360.0);
-			rotate3d_model(wnd.model, wnd.xang, wnd.yang, wnd.zang);
+			wnd:rotate();
 		end
 	end
 
@@ -105,7 +118,7 @@ local function modelwnd(wnd, model, shader)
 		if (nw.mmode == "rotate") then
 			nw.yang = nw.yang + dy;
 			nw.zang = nw.zang + dx;
-			rotate3d_model(nw.model, nw.xang, nw.yang, nw.zang);
+			nw:rotate();
 		else
 			forward3d_model(nw.camera, -0.1 * dy);
 			strafe3d_model(nw.camera, 0.1 * dx);
@@ -142,7 +155,9 @@ local function modelwnd(wnd, model, shader)
 	nw.dispatch[BINDINGS["MODE_TOGGLE"]] = function(wnd)
 		wnd.shind = (wnd.shind + 1 > #shaders_3dview_pcloud and 1 or
 			wnd.shind + 1);
-		switch_shader(wnd, wnd.model, shaders_3dview_pcloud[wnd.shind]);
+		if (shader) then
+			switch_shader(wnd, wnd.model, shaders_3dview_pcloud[wnd.shind]);
+		end
 	end
 
 	nw.dispatch[BINDINGS["TOGGLE_3DSPIN"]] = function(wnd)
@@ -175,7 +190,7 @@ local model_menu = {
 			wnd.xang = 0.0;
 			wnd.yang = 5.0;
 			wnd.zang = 0.0;
-			rotate3d_model(wnd.model, wnd.xang, wnd.yang, wnd.zang);
+			wnd:rotate();
 			move3d_model(wnd.camera, 0.0, 0.0, 0.0);
 			forward3d_model(wnd.camera, -4.0);
 			wnd.spinning = nil;
@@ -220,7 +235,7 @@ function spawn_pointcloud(wnd)
 	local pc = build_pointcloud(props.width * props.height, 2);
 	force_image_blend(pc, BLEND_ADD);
 
-	local new = modelwnd(wnd, pc, shaders_3dview_pcloud[1]);
+	local new = create_model_window(wnd, pc, shaders_3dview_pcloud[1]);
 	new.shader_group = shaders_3dview_pcloud;
 	new.popup = merge_menu(pc_menu, model_menu);
 	new.name = new.name .. "_pointcloud";
@@ -242,7 +257,7 @@ local function spawn_plane(wnd)
 	local base = props.width / 2.0;
 	local plane = build_3dplane(-1.0, -1.0, 1.0,
 		1.0, -1.0, 1.0 / base, 1.0 / base, 1);
-	local new = modelwnd(wnd, plane, shaders_3dview_plane[1]);
+	local new = create_model_window(wnd, plane, shaders_3dview_plane[1]);
 	new.shader_group = shaders_3dview_plane;
 	new.popup = merge_menu(plane_menu, model_menu);
 	new.name = new.name .. "_plane";

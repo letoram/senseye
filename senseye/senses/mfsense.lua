@@ -76,24 +76,48 @@ table.insert(pop, {
 });
 
 local function spawn_mfsense_pc(wnd)
-	local res = {};
+	local shid = shaders_3dview_pcloud_multi[1].shid;
+
+	local pcs = {};
 	local p = image_storage_properties(wnd.ctrl_id);
 	local x = 0;
-	local t = 0;
+	local y = 0;
 	local w = wnd.base / p.width;
 	local h = wnd.base / p.height;
+	shader_uniform(shid, "txshift", "ffff", 0, 0, w, h);
 
-	for i=1,wnd_tile_count do
-		res[i] = {x>0 and x/p.width or 0, y > 0 and y/p.height or y};
-		res[i][3] = res[i][1] + w;
-		res[i][4] = res[i][2] + h;
+	local wh, fr = math.modf(p.width / (wnd.base + wnd.tile_border));
+
+-- 1. need to subtract borders
+	for i=1,wnd.tile_count do
+		local msh = shader_ugroup(shid);
+		local s1 = x > 0 and x/p.width or 0;
+		local t1 = y > 0 and y/p.height or 0;
+
+		shader_uniform(msh, "txshift", "ffff", s1, t1, w, h);
 		x = x + wnd.base + wnd.tile_border;
-		if (x > p.width) then
+		if (x >= p.width) then
 			x = 0;
 			y = y + wnd.base + wnd.tile_border;
 		end
+		pcs[i] = build_pointcloud(wnd.base * wnd.base, 2);
+		image_sharestorage(wnd.ctrl_id, pcs[i]);
+		image_shader(pcs[i], msh);
 	end
-	spawn_pointcloud_multi(wnd, set);
+
+	local new = create_model_window(wnd, pcs[1],
+		shaders_3dview_pcloud_multi[1], true);
+
+	image_sharestorage(wnd.ctrl_id, pcs[1]);
+	image_shader(pcs[1], shid);
+
+	new.name = new.name .. "_pointcloud_multi";
+	for i=2,#pcs do
+		move3d_model(pcs[i], 0.0, 0.1 * (i-1), 0.0);
+		show_image(pcs[i]);
+		table.insert(new.rotate_set, pcs[i]);
+		rendertarget_attach(new.rendertarget, pcs[i], RENDERTARGET_DETACH);
+	end
 end
 
 table.insert(pop, {
@@ -196,6 +220,7 @@ local rtbl = {
 	init = function(wnd)
 		wnd.ofs = 0;
 		wnd.dynamic_zoom = true;
+		target_verbose(wnd.ctrl_id);
 
 		wnd.dblclick = function()
 			local x, y = translate_2d(wnd, BADID, mouse_xy());

@@ -33,8 +33,8 @@ BINDINGS["BACKWARD"]      = "LEFT"
 
 -- global
 BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
-BINDINGS["POINTSZ_INC"]   = "F7"
-BINDINGS["POINTSZ_DEC"]   = "F8"
+BINDINGS["POINTSZ_INC"]   = "p"
+BINDINGS["POINTSZ_DEC"]   = "o"
 BINDINGS["CANCEL"]        = "ESCAPE"
 
 -- 3d model based windows

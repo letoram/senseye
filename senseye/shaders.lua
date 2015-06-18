@@ -248,12 +248,81 @@ local pc_disp_v = [[
 		intens = (dv.r + dv.g + dv.b) / 3.0;
 		vert.x    = 2.0 * texcoord.s - 1.0;
 		vert.y    = 2.0 * texcoord.t - 1.0;
-		vert.z    = 2.0 * intens - 1.0;
+		vert.z    = 0.0; /* 2.0 * intens - 1.0; */
 		gl_Position = (projection * modelview) * vert;
 		gl_PointSize = point_sz;
 		texco = texcoord;
 	}
 ]];
+
+local pc_mdisp_v = [[
+uniform mat4 modelview;
+uniform mat4 projection;
+uniform float point_sz;
+uniform vec4 txshift;
+uniform sampler2D map_tu0;
+
+attribute vec2 texcoord;
+varying vec2 texco;
+
+attribute vec4 vertex;
+varying float intens;
+
+void main(){
+	texco = texcoord;
+	texco.s = txshift[0] + texco.s * txshift[2];
+	texco.t = txshift[1] + texco.t * txshift[3];
+	vec4 dv = texture2D(map_tu0, texco);
+	intens = (dv.r + dv.g + dv.b) / 3.0;
+	vec4 vert = vertex;
+	vert.x = 2.0 * texcoord.s - 1.0;
+ 	vert.z = 2.0 * texcoord.t - 1.0;
+	vert.y = 0.0;
+
+	gl_PointSize = point_sz;
+	gl_Position = (projection * modelview) * vert;
+}
+]];
+
+local pc_mlut_f = [[
+	uniform sampler2D map_tu0;
+	uniform sampler2D map_tu1;
+
+	uniform vec4 txshift;
+
+	varying vec2 texco;
+	varying float intens;
+
+	void main(){
+		vec3 col = texture2D(map_tu1, vec2(intens, 0.0)).rgb;
+		vec2 nt = texco;
+
+		if (texco.s > txshift[2] || texco.t > txshift[3]){
+			nt.s = texco.s + txshift[2];
+			if (nt.s > 1.0){
+				nt.s = 0.0;
+				nt.t = texco.t + txshift[3];
+			}
+			vec3 col = texture2D(map_tu0, nt).rgb;
+			float nintens = (col.r + col.g + col.b) / 3.0;
+			if (int(intens * 255.0) != int(nintens * 255.0))
+				discard;
+		}
+
+		gl_FragColor = vec4(col.rgb, 1.0);
+	}
+]];
+
+shaders_3dview_pcloud_multi = {
+	{
+		name = "Layered",
+		description = [[source ind determines z-val]],
+		fragment = pc_mlut_f,
+		vertex = pc_mdisp_v,
+		translate = pc_xl_disp,
+		lookup = true
+	}
+};
 
 shaders_3dview_pcloud = {
 	{
@@ -302,6 +371,7 @@ shader_groups = {
 	shaders_2dview,
 	shaders_3dview_plane,
 	shaders_3dview_pcloud,
+	shaders_3dview_pcloud_multi,
 	shaders_1dplot
 };
 
@@ -345,6 +415,10 @@ function shader_pcloud_pointsz(val)
 	for k,v in ipairs(shaders_3dview_pcloud) do
 		shader_uniform(v.shid, "point_sz", "f", PERSIST, val);
 	end
+
+	for k,v in ipairs(shaders_3dview_pcloud_multi) do
+		shader_uniform(v.shid, "point_sz", "f", PERSIST, val);
+	end
 end
 
 function shader_update_range(wnd, low, high)
@@ -358,7 +432,7 @@ function shader_update_range(wnd, low, high)
 	end
 end
 
-function switch_shader(wnd, target, shtbl)
+function switch_shader(wnd, target, shtbl, rec)
 	if (shtbl == nil) then
 		shtbl = wnd.shtbl;
 	end
@@ -387,6 +461,12 @@ function switch_shader(wnd, target, shtbl)
 		image_framesetsize(target, 2, FRAMESET_MULTITEXTURE);
 		set_image_as_frame(target, dst, 1);
 		wnd.active_lut = dst;
+
+		if (rec == nil and wnd.rotate_set) then
+			for i=2,#wnd.rotate_set do
+				switch_shader(wnd, wnd.rotate_set[i], shtbl, true);
+			end
+		end
 	end
 
 	if (shtbl.uniforms) then

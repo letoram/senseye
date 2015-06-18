@@ -33,9 +33,27 @@
 
 #include "font_8x8.h"
 
+enum cmp_op {
+	CMP_NORMAL = 0,
+	CMP_AND,
+	CMP_ADD,
+	CMP_DEC,
+	CMP_XOR,
+	CMP_CUSTOM
+};
+
+struct ent;
+
 struct ent {
 	uint8_t* map;
 	size_t map_sz;
+
+	struct ent* set;
+	size_t set_sz;
+	enum cmp_op cmp_op;
+	void(*set_cmp)(struct arcan_shmif_cont* out, struct ent* src,
+		size_t x, size_t y, size_t w);
+
 	ssize_t ofs;
 	bool locked;
 	int fd;
