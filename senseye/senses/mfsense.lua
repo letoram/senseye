@@ -85,6 +85,7 @@ local function spawn_mfsense_pc(wnd)
 	local w = wnd.base / p.width;
 	local h = wnd.base / p.height;
 	shader_uniform(shid, "txshift", "ffff", 0, 0, w, h);
+	shader_uniform(shid, "match", "b", 1);
 
 	local wh, fr = math.modf(p.width / (wnd.base + wnd.tile_border));
 
@@ -95,6 +96,7 @@ local function spawn_mfsense_pc(wnd)
 		local t1 = y > 0 and y/p.height or 0;
 
 		shader_uniform(msh, "txshift", "ffff", s1, t1, w, h);
+		shader_uniform(msh, "match", "b", 1);
 		x = x + wnd.base + wnd.tile_border;
 		if (x >= p.width) then
 			x = 0;
@@ -117,6 +119,17 @@ local function spawn_mfsense_pc(wnd)
 		show_image(pcs[i]);
 		table.insert(new.rotate_set, pcs[i]);
 		rendertarget_attach(new.rendertarget, pcs[i], RENDERTARGET_DETACH);
+	end
+
+	new.match = 1;
+	new.dispatch[BINDINGS["MODE_TOGGLE"]] = function()
+		new.match = not new.match;
+		for k,v in ipairs(new.rotate_set) do
+			shader_uniform(image_shader(v), "match", "b", new.match and 1 or 0);
+		end
+		shader_uniform(image_shader(new.model), "match", "b",
+			new.match and 1 or 0);
+		new:set_message("Compare: " .. (new.match and "Match" or "Mismatch"));
 	end
 end
 
@@ -192,8 +205,8 @@ local function zoom_ofs(wnd, ofs)
 	local p = image_storage_properties(wnd.ctrl_id);
 
 	for i=0,ofs-1 do
-		x = x + wnd.base + wnd.tile_border;
-		if (x > p.width) then
+		x = x + wnd.base + wnd.tile_border + 1;
+		if (x >= p.width) then
 			x = 0;
 			y = y + wnd.base + wnd.tile_border;
 		end
@@ -201,10 +214,10 @@ local function zoom_ofs(wnd, ofs)
 
 	wnd.zoom_ofs[1] = x > 0 and x / p.width or 0;
 	wnd.zoom_ofs[2] = y > 0 and y / p.height or 0;
-	wnd.zoom_ofs[3] = wnd.zoom_ofs[1] + wnd.base / p.width;
-	wnd.zoom_ofs[4] = wnd.zoom_ofs[2] + wnd.base / p.height;
+	wnd.zoom_ofs[3] = wnd.zoom_ofs[1] + (wnd.base-1) / p.width;
+	wnd.zoom_ofs[4] = wnd.zoom_ofs[2] + (wnd.base-1) / p.height;
 	wnd.in_zoom = true;
-	wnd:update_zoom();
+	wnd:update_zoom(true);
 end
 
 -- menu items for tile sizes, should remove:

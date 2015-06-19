@@ -375,7 +375,7 @@ function defocus_window(wnd, nw)
 	end
 end
 
-local function update_zoom(wnd)
+local function update_zoom(wnd, nalign)
 	local s1 = wnd.zoom_ofs[1];
 	local t1 = wnd.zoom_ofs[2];
 	local s2 = wnd.zoom_ofs[3];
@@ -387,12 +387,14 @@ local function update_zoom(wnd)
 	local step_t = 1.0 / props.height;
 
 -- align against grid to lessen precision effects in linked windows
-	s1 = s1 - math.fmod(s1, step_s);
-	t1 = t1 - math.fmod(t1, step_t);
-	s2 = s2 + math.fmod(s2, step_s);
-	t2 = t2 + math.fmod(t2, step_t);
-	t2 = t2 > 1.0 and 1.0 or t2;
-	s2 = s2 > 1.0 and 1.0 or s2;
+	if (not nalign) then
+		s1 = s1 - math.fmod(s1, step_s);
+		t1 = t1 - math.fmod(t1, step_t);
+		s2 = s2 + math.fmod(s2, step_s);
+		t2 = t2 + math.fmod(t2, step_t);
+		t2 = t2 > 1.0 and 1.0 or t2;
+		s2 = s2 > 1.0 and 1.0 or s2;
+	end
 
 	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
 	image_set_txcos(wnd.canvas, txcos);

@@ -289,6 +289,7 @@ local pc_mlut_f = [[
 	uniform sampler2D map_tu1;
 
 	uniform vec4 txshift;
+	uniform bool match;
 
 	varying vec2 texco;
 	varying float intens;
@@ -305,7 +306,7 @@ local pc_mlut_f = [[
 			}
 			vec3 col = texture2D(map_tu0, nt).rgb;
 			float nintens = (col.r + col.g + col.b) / 3.0;
-			if (int(intens * 255.0) != int(nintens * 255.0))
+			if (int(intens * 255.0) != int(nintens * 255.0) && match)
 				discard;
 		}
 
