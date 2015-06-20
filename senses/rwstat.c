@@ -166,17 +166,28 @@ static inline void pack_bytes(
 	break;
 	}
 
+	uint8_t alpha = 0xff;
 	switch (chp->pack){
 	case PACK_TIGHT:
-		val = RGBA(buf[0], buf[1], buf[2], buf[3]);
+		val = RGBA(buf[0], buf[1], buf[2], 0x00);
+		alpha = buf[3];
 	break;
 	case PACK_TNOALPHA:
-		val = RGBA(buf[0], buf[1], buf[2], chp->alpha[ofs]);
+		val = RGBA(buf[0], buf[1], buf[2], 0x00);
+		alpha = chp->alpha[ofs];
 	break;
 	case PACK_INTENS:
-		val = RGBA(buf[0], buf[0], buf[0], chp->alpha[ofs]);
+		val = RGBA(buf[0], buf[0], buf[0], 0x00);
+		alpha = chp->alpha[ofs];
 	break;
 	}
+
+	if (chp->amode == RW_ALPHA_DELTA){
+		shmif_pixel vp = chp->cont->vidp[y * chp->cont->pitch + x];
+		alpha = 0xff * ((vp & 0x00ffffff) != val);
+	}
+
+	val |= RGBA(0, 0, 0, alpha);
 
 	chp->cont->vidp[ y * chp->cont->pitch + x ] = val;
 }
@@ -292,6 +303,7 @@ static void ch_step(struct rwstat_ch* ch)
 
 	if (chp->amode == RW_ALPHA_ENTBASE)
 		update_entalpha(chp, chp->ent_base);
+
 	else if (chp->amode == RW_ALPHA_PTN)
 		update_ptnalpha(chp);
 
@@ -464,11 +476,15 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 static void ch_alpha(struct rwstat_ch* ch, enum rwstat_alpha amode)
 {
 	struct rwstat_ch_priv* chp = ch->priv;
-	if (amode != ch->priv->amode){
+
+	if (amode != chp->amode){
 		chp->amode = amode;
-		if (0 == amode)
+
+		if (amode == RW_ALPHA_FULL)
 			memset(ch->priv->alpha, 0xff, ch->priv->base * ch->priv->base);
-		if (amode >= RW_ALPHA_ENTBASE){
+		else if (amode == RW_ALPHA_PTN)
+			memset(ch->priv->alpha, 0x00, ch->priv->base * ch->priv->base);
+		else if (amode >= RW_ALPHA_ENTBASE){
 			chp->amode = RW_ALPHA_ENTBASE;
 			amode -= RW_ALPHA_ENTBASE;
 
@@ -479,6 +495,9 @@ static void ch_alpha(struct rwstat_ch* ch, enum rwstat_alpha amode)
 				chp->base % chp->ent_base != 0)
 				chp->ent_base = chp->base;
 		}
+
+		chp->status_dirty = true;
+		ch_step(ch);
 	}
 }
 
@@ -637,11 +656,13 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 	break;
 	case 31:
 		done = (ch->switch_alpha(ch, RW_ALPHA_PTN), true);
+	case 32:
+		done = (ch->switch_alpha(ch, RW_ALPHA_DELTA), true);
 	break;
 	}
 
-	if (ev->tgt.ioevs[0].iv >= 32){
-		ch->switch_alpha(ch, RW_ALPHA_ENTBASE + ev->tgt.ioevs[0].iv - 32);
+	if (ev->tgt.ioevs[0].iv >= 33){
+		ch->switch_alpha(ch, RW_ALPHA_ENTBASE + ev->tgt.ioevs[0].iv - 33);
 		done = true;
 	}
 

@@ -61,29 +61,34 @@ local alpha_sub = {
 		value = 1
 	},
 	{
-		label = "Entropy (base width)",
+		label = "Delta Distance",
 		name  = "alpha_default",
 		value = 2
 	},
 	{
+		label = "Entropy (base width)",
+		name  = "alpha_default",
+		value = 3
+	},
+	{
 		label = "Entropy (8 bytes)",
 		name = "alpha_default",
-		value = 5,
+		value = 4
 	},
 	{
 		label = "Entropy (16 bytes)",
 		name = "alpha_default",
-		value = 6,
+		value = 8
 	},
 	{
 		label = "Entropy (32 bytes)",
 		name = "alpha_default",
-		value = 7,
+		value = 9
 	},
 	{
 		label = "Entropy (64 bytes)",
 		name = "alpha_default",
-		value = 8,
+		value = 10
 	},
 };
 

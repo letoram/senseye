@@ -21,8 +21,9 @@ enum rwstat_clock {
  */
 enum rwstat_alpha {
 	RW_ALPHA_FULL    = 0, /* 0xff, opaque                                 */
-	RW_ALPHA_ENTBASE = 1, /* entropy encoded, channel base determines wnd */
- 	RW_ALPHA_PTN     = 2, /* 0xff or signal ID (defined by each pattern)  */
+ 	RW_ALPHA_PTN     = 1, /* 0xff or signal ID (defined by each pattern)  */
+	RW_ALPHA_DELTA   = 2, /* value distance changed from last frame       */
+	RW_ALPHA_ENTBASE = 3, /* entropy encoded, channel base determines wnd */
 };
 
 /*
