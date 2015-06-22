@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <math.h>
 #include <getopt.h>
@@ -42,18 +43,31 @@ enum cmp_op {
 	CMP_CUSTOM
 };
 
-struct ent;
+static const char* cmp_tbl[] = {
+	"NORMAL",
+	"AND",
+	"ADD",
+	"DEC",
+	"XOR",
+	NULL
+};
+
+enum pack_mode {
+	PACK_INTENS = 0,
+	PACK_TIGHT,
+	PACK_TNOALPHA
+};
 
 struct ent {
 	uint8_t* map;
 	size_t map_sz;
 
-	struct ent* set;
+	struct ent** set;
 	size_t set_sz;
 	enum cmp_op cmp_op;
-	void(*set_cmp)(struct arcan_shmif_cont* out, struct ent* src,
-		size_t x, size_t y, size_t w);
-
+	void(*set_cmp)(struct arcan_shmif_cont* out,
+		struct ent** src, size_t n_src, size_t x, size_t y,
+		enum pack_mode mode, ssize_t ofs);
 	ssize_t ofs;
 	bool locked;
 	int fd;
@@ -75,12 +89,6 @@ color = {
 	.match = RGBA(0x00, 0x00, 0x00, 0xff)
 };
 
-enum pack_mode {
-	PACK_INTENS = 0,
-	PACK_TIGHT,
-	PACK_TNOALPHA
-};
-
 static size_t pack_szlut[] = {
 	1, 4, 3
 };
@@ -89,7 +97,9 @@ static int usage()
 {
 	const char* const argp[] = {
 		"-d,--nodiff", "disable diff subwindow",
-		"-s,--border=val", "set border width (0..10), default: 1",
+		"-sval,--border=val", "set border width (0..10), default: 1",
+		"-ca,b,op,--comp=a,b,op", "add comparison tile "
+			"(op: AND, OR, ADD, DEC, XOR)",
 		"-?,--help", "this text"
 	};
 
@@ -107,10 +117,12 @@ static const struct option longopts[] = {
 	{"nodiff", no_argument,       NULL, 'd'},
 	{"help",   no_argument,       NULL, '?'},
 	{"border", required_argument, NULL, 's'},
+	{"comp",   required_argument, NULL, 'c'},
 	{NULL, no_argument, NULL, 0}
 };
 
-struct ent* load_context(char** files, size_t nfiles, size_t* min, size_t* max)
+struct ent* load_context(char** files, size_t nfiles,
+	size_t lim, size_t* min, size_t* max)
 {
 	struct ent* res = malloc(sizeof(struct ent) * nfiles);
 	memset(res, '\0', sizeof(struct ent) * nfiles);
@@ -184,6 +196,7 @@ static void draw_dtile(struct arcan_shmif_cont* dst,
 		for (size_t col = x; col < x+base; col++, pos += step){
 			shmif_pixel pxbuf[n_ents];
 			for (size_t i = 0; i < n_ents; i++)
+				if (ents[i].cmp_op == CMP_NORMAL)
 				pxbuf[i] = pos+step+ents[i].ofs >= ents[i].map_sz ? color.pad :
 					pack_pixel(mode, ents[i].map + pos + ents[i].ofs);
 
@@ -230,7 +243,7 @@ static void refresh_diff(struct arcan_shmif_cont* dst,
 	struct ent* entries, size_t n_entries, size_t base,
 	enum pack_mode mode, size_t pos)
 {
-	draw_dtile(dst, entries, n_entries, pos, 0, 0,mode, base);
+	draw_dtile(dst, entries, n_entries, pos, 0, 0, mode, base);
 	arcan_shmif_signal(dst, SHMIF_SIGVID | SHMIF_SIGBLK_NONE);
 }
 
@@ -243,7 +256,11 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 
 /* flood-fill "draw_tile", this could well be thread- split per tile */
 	for (size_t i = 0; i < n_entries && y <= dst->h - base; i++){
-		draw_tile(dst, &entries[i], pos, x, y, mode, base);
+		if (entries[i].cmp_op == CMP_NORMAL)
+			draw_tile(dst, &entries[i], pos, x, y, mode, base);
+		else
+			; /* FIXME: MISSING */
+
 		if (border)
 			draw_box(dst, x + base, y, border, base, entries[i].locked ?
 					color.border_lock : color.border);
@@ -297,6 +314,40 @@ static inline void send_streaminfo(struct arcan_shmif_cont* cont,
 	arcan_shmif_enqueue(cont, &ev);
 }
 
+static int parse_ncarg(struct ent* entries,
+	size_t n_ent, char** ncarg, size_t ncargc)
+{
+	for (size_t i = 0; i < ncargc; i++){
+		char* t1 = strtok(ncarg[i], ",");
+		char* t2 = strtok(NULL, ",");
+		char* t3 = strtok(NULL, ",");
+		if (!t1 || !t2 || !t3)
+			return i;
+
+		long i1 = strtol(t1, NULL, 10);
+		long i2 = strtol(t2, NULL, 10);
+		if (i1 >= 0 && i1 < n_ent && i2 >= 0 && i2 < n_ent && i1 != i2){
+			size_t cind = 0;
+			for (; cmp_tbl[cind] != NULL; cind++){
+				if (strcasecmp(cmp_tbl[cind], t3) == 0){
+					struct ent* ent = &entries[n_ent + 1];
+					memset(ent, '\0', sizeof(struct ent));
+					ent->set = malloc(sizeof(struct ent*) * 2);
+					ent->set_sz = 2;
+					ent->cmp_op = cind;
+					break;
+				}
+			}
+			if (cmp_tbl[cind] == NULL)
+				return i;
+		}
+		else
+			return i;
+	}
+
+	return ncargc;
+}
+
 int main(int argc, char* argv[])
 {
 	struct arcan_shmif_cont cont;
@@ -311,7 +362,10 @@ int main(int argc, char* argv[])
 	bool difftile = true;
 	int ch;
 
-	while((ch = getopt_long(argc, argv, "db:?", longopts, NULL)) >= 0)
+	char* ncarg[argc];
+	size_t ncargc = 0;
+
+	while((ch = getopt_long(argc, argv, "db:c:?", longopts, NULL)) >= 0)
 	switch(ch){
 	case '?' :
 		return usage();
@@ -319,6 +373,9 @@ int main(int argc, char* argv[])
 	case 'b' :
 		border = strtoul(optarg, NULL, 10);
 		border = border > 9 ? 9 : border;
+	break;
+	case 'c' :
+		ncarg[ncargc++] = strdup(optarg);
 	break;
 	case 'd' :
 		difftile = true;
@@ -330,11 +387,23 @@ int main(int argc, char* argv[])
 		return usage();
 	}
 
+/* parse ncarg, add new entries for each, set up callback function */
+
 	size_t focus_count = 0;
 	size_t min_r, max_r, n_ent = argc - optind;
-	struct ent* entries = load_context(argv + optind, n_ent, &min_r, &max_r);
+	struct ent* entries = load_context(argv + optind,
+		n_ent, n_ent + ncargc, &min_r, &max_r);
+
 	if (entries == NULL)
 		return EXIT_FAILURE;
+
+	int ncarg_ok = parse_ncarg(entries, n_ent, ncarg, ncargc);
+	if (ncarg_ok != ncargc){
+		printf("Error: couldn't parse comparison tile %d (arg: %s)\n",
+			ncarg_ok, ncarg[ncarg_ok]);
+		return EXIT_FAILURE;
+	}
+	n_ent += ncargc;
 
 	if (NULL == getenv("ARCAN_CONNPATH"))
 		setenv("ARCAN_CONNPATH", "senseye", 0);

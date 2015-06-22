@@ -76,7 +76,9 @@ table.insert(pop, {
 });
 
 local function spawn_mfsense_pc(wnd)
-	local shid = shaders_3dview_pcloud_multi[1].shid;
+	local shid = shader_ugroup(
+		shaders_3dview_pcloud_multi[1].shid
+	);
 
 	local pcs = {};
 	local p = image_storage_properties(wnd.ctrl_id);
