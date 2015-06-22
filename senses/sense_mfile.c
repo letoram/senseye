@@ -65,9 +65,6 @@ struct ent {
 	struct ent** set;
 	size_t set_sz;
 	enum cmp_op cmp_op;
-	void(*set_cmp)(struct arcan_shmif_cont* out,
-		struct ent** src, size_t n_src, size_t x, size_t y,
-		enum pack_mode mode, ssize_t ofs);
 	ssize_t ofs;
 	bool locked;
 	int fd;
@@ -182,6 +179,50 @@ static inline shmif_pixel pack_pixel(enum pack_mode mode, uint8_t* buf)
 	return RGBA(0xde, 0xad, 0xbe, 0xef);
 }
 
+/* caller guarantees that buffer fits packing mode */
+static inline shmif_pixel mpack_pixel(enum pack_mode mode,
+	uint8_t* buf_a, uint8_t* buf_b, enum cmp_op op)
+{
+	uint8_t r, r2, g, g2, b, b2, a, a2;
+	r = g = b = buf_a[0];
+	r2 = g2 = b2 = buf_b[0];
+	a = a2 = 0xff;
+
+	switch (op){
+	case CMP_AND:
+		r &= r2;  g &= g2; b &= b2;
+	break;
+	case CMP_ADD:
+
+	break;
+	case CMP_DEC:
+	break;
+	case CMP_XOR:
+	break;
+	default:
+	break;
+	}
+	return RGBA(r, g, b, a);
+}
+
+static void base_cmp(struct arcan_shmif_cont* dst, struct ent* tile,
+		struct ent** src, size_t n_src, size_t pos, size_t x, size_t y,
+		enum pack_mode mode, ssize_t base)
+{
+	size_t step = pack_szlut[mode];
+	struct ent* src_a = tile->set[0];
+	struct ent* src_b = tile->set[1];
+
+	for (size_t row = y; row < y+base; row++)
+		for (size_t col = x; col < x+base; col++, pos += step){
+			dst->vidp[row*dst->pitch+col] =
+				(pos+step+src_a->ofs >= src_a->map_sz) &&
+				(pos+step+src_b->ofs >= src_b->map_sz) ? color.pad :
+					mpack_pixel(mode, src_a->map + pos + src_a->ofs,
+						src_b->map + pos + src_b->ofs, tile->cmp_op);
+	}
+}
+
 /*
  * sweep all entries and generate a 1-bit tile that indicates if the input
  * files match or diff at each packing position
@@ -259,7 +300,7 @@ static void refresh_data(struct arcan_shmif_cont* dst,
 		if (entries[i].cmp_op == CMP_NORMAL)
 			draw_tile(dst, &entries[i], pos, x, y, mode, base);
 		else
-			; /* FIXME: MISSING */
+			base_cmp(dst, &entries[i], &entries, n_entries, pos, x, y, mode, base);
 
 		if (border)
 			draw_box(dst, x + base, y, border, base, entries[i].locked ?
