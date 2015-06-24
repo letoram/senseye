@@ -121,8 +121,8 @@ static const struct option longopts[] = {
 struct ent* load_context(char** files, size_t nfiles,
 	size_t lim, size_t* min, size_t* max)
 {
-	struct ent* res = malloc(sizeof(struct ent) * nfiles);
-	memset(res, '\0', sizeof(struct ent) * nfiles);
+	struct ent* res = malloc(sizeof(struct ent) * lim);
+	memset(res, '\0', sizeof(struct ent) * lim);
 	*max = 0;
 	*min = INT_MAX;
 
@@ -188,20 +188,37 @@ static inline shmif_pixel mpack_pixel(enum pack_mode mode,
 	r2 = g2 = b2 = buf_b[0];
 	a = a2 = 0xff;
 
+	if (mode != PACK_INTENS){
+		g = buf_a[1];
+		b = buf_a[2];
+		g2 = buf_b[1];
+		b2 = buf_b[2];
+
+		if (mode == PACK_TIGHT){
+			a = buf_a[3];
+			a2 = buf_b[3];
+		}
+	}
+
 	switch (op){
 	case CMP_AND:
-		r &= r2;  g &= g2; b &= b2;
+		r &= r2; g &= g2; b &= b2; a &= a2;
 	break;
 	case CMP_ADD:
-
+		r += r2; g += g2; b += b2; a += a2;
 	break;
 	case CMP_DEC:
+		r -= r2; g -= g2; b -= b2; a -= a2;
 	break;
 	case CMP_XOR:
+		r ^= r2; g ^= g2; b ^= b2; a ^= a2;
 	break;
 	default:
 	break;
 	}
+	if (mode != PACK_TNOALPHA)
+		a = 0xff;
+
 	return RGBA(r, g, b, a);
 }
 
@@ -371,10 +388,12 @@ static int parse_ncarg(struct ent* entries,
 			size_t cind = 0;
 			for (; cmp_tbl[cind] != NULL; cind++){
 				if (strcasecmp(cmp_tbl[cind], t3) == 0){
-					struct ent* ent = &entries[n_ent + 1];
+					struct ent* ent = &entries[n_ent + i];
 					memset(ent, '\0', sizeof(struct ent));
 					ent->set = malloc(sizeof(struct ent*) * 2);
 					ent->set_sz = 2;
+					ent->set[0] = &entries[i1];
+					ent->set[1] = &entries[i2];
 					ent->cmp_op = cind;
 					break;
 				}
