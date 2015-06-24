@@ -132,6 +132,19 @@ function create_model_window(wnd, model, shader, nozoom)
 	nw.dispatch[BINDINGS["ZOOM"]] = function(wnd)
 	end
 
+	nw.point_sz = gconfig_get("point_size");
+
+	nw.dispatch[BINDINGS["POINTSZ_INC"]] = function(wm)
+		nw.point_sz = nw.point_sz + 0.5;
+		shader_uniform(image_shader(nw.model), "point_sz", "f", nw.point_sz);
+	end
+
+	nw.dispatch[BINDINGS["POINTSZ_DEC"]] = function(wm)
+		nw.point_sz = nw.point_sz - 0.5;
+		nw.point_sz = nw.point_sz < 1.0 and 1.0 or nw.point_sz;
+		shader_uniform(image_shader(nw.model), "point_sz", "f", nw.point_sz);
+	end
+
 	nw.dispatch[BINDINGS["STEP_FORWARD"]] = function(wnd)
 		forward3d_model(wnd.camera, 0.2);
 	end

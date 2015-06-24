@@ -248,7 +248,7 @@ local pc_disp_v = [[
 		intens = (dv.r + dv.g + dv.b) / 3.0;
 		vert.x    = 2.0 * texcoord.s - 1.0;
 		vert.y    = 2.0 * texcoord.t - 1.0;
-		vert.z    = 0.0; /* 2.0 * intens - 1.0; */
+		vert.z    = 2.0 * intens - 1.0;
 		gl_Position = (projection * modelview) * vert;
 		gl_PointSize = point_sz;
 		texco = texcoord;
@@ -300,17 +300,19 @@ local pc_mlut_f = [[
 
 		if (texco.s > txshift[2] || texco.t > txshift[3]){
 			nt.s = texco.s + txshift[2];
-			if (nt.s > 1.0){
+			if (nt.s > 1.0 + 0.5 * txshift[2]){
 				nt.s = 0.0;
 				nt.t = texco.t + txshift[3];
 			}
-			vec3 col = texture2D(map_tu0, nt).rgb;
+			vec3 col2 = texture2D(map_tu0, nt).rgb;
 			float nintens = (col.r + col.g + col.b) / 3.0;
 			if (int(intens * 255.0) != int(nintens * 255.0) && match)
 				discard;
+			else
+				gl_FragColor = vec4(col.rgb, 1.0);
 		}
-
-		gl_FragColor = vec4(col.rgb, 1.0);
+		else
+			gl_FragColor = vec4(col.rgb, 1.0);
 	}
 ]];
 
@@ -414,10 +416,6 @@ build_shader(nil, [[
 
 function shader_pcloud_pointsz(val)
 	for k,v in ipairs(shaders_3dview_pcloud) do
-		shader_uniform(v.shid, "point_sz", "f", PERSIST, val);
-	end
-
-	for k,v in ipairs(shaders_3dview_pcloud_multi) do
 		shader_uniform(v.shid, "point_sz", "f", PERSIST, val);
 	end
 end

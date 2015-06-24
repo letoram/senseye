@@ -33,8 +33,6 @@ BINDINGS["BACKWARD"]      = "LEFT"
 
 -- global
 BINDINGS["SCREENSHOT"]    = "PRINT" -- meta for specific window
-BINDINGS["POINTSZ_INC"]   = "p"
-BINDINGS["POINTSZ_DEC"]   = "o"
 BINDINGS["CANCEL"]        = "ESCAPE"
 
 -- 3d model based windows
@@ -44,6 +42,8 @@ BINDINGS["STEP_FORWARD"]   = "w"
 BINDINGS["STEP_BACKWARD"]  = "s"
 BINDINGS["STRAFE_LEFT"]    = "a"
 BINDINGS["STRAFE_RIGHT"]   = "d"
+BINDINGS["POINTSZ_INC"]   = "p"
+BINDINGS["POINTSZ_DEC"]   = "o"
 
 -- pattern finder
 BINDINGS["PFIND_INC"] = "RIGHT" -- increase match threshold

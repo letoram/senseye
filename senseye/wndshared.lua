@@ -245,19 +245,6 @@ function setup_dispatch(dt)
 			end
 	end
 
-	dt[BINDINGS["POINTSZ_INC"]] = function(wm)
-		point_sz = point_sz + 0.5;
-		gconfig_set("point_size", point_sz);
-		shader_pcloud_pointsz(point_sz);
-	end
-
-	dt[BINDINGS["POINTSZ_DEC"]] = function(wm)
-		point_sz = point_sz - 0.5;
-		point_sz = point_sz < 1.0 and 1.0 or point_sz;
-		gconfig_set("point_size", point_sz);
-		shader_pcloud_pointsz(point_sz);
-	end
-
 	dt[BINDINGS["HELP"]] = function(wm)
 		show_help();
 	end

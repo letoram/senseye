@@ -526,6 +526,11 @@ static void ch_free(struct rwstat_ch** ch)
 	}
 	free(chp->patterns);
 
+	if (chp->buf){
+		free(chp->buf);
+		free(chp->alpha);
+	}
+
 	memset((*ch)->priv, '\0', sizeof(struct rwstat_ch_priv));
 	free((*ch)->priv);
 	memset(*ch, '\0', sizeof(struct rwstat_ch));

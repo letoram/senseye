@@ -97,6 +97,11 @@ local function spawn_mfsense_pc(wnd)
 		local s1 = x > 0 and x/p.width or 0;
 		local t1 = y > 0 and y/p.height or 0;
 
+-- account for precision issues
+		if (t1 / h ~= 0) then
+			t1 = t1 + math.fmod(t1, h);
+		end
+
 		shader_uniform(msh, "txshift", "ffff", s1, t1, w, h);
 		shader_uniform(msh, "match", "b", 1);
 		x = x + wnd.base + wnd.tile_border;
@@ -112,15 +117,35 @@ local function spawn_mfsense_pc(wnd)
 	local new = create_model_window(wnd, pcs[1],
 		shaders_3dview_pcloud_multi[1], true);
 
+-- need to repeat as create_model overrides
 	image_sharestorage(wnd.ctrl_id, pcs[1]);
 	image_shader(pcs[1], shid);
 
 	new.name = new.name .. "_pointcloud_multi";
+	local ystep = 1.0 / #pcs;
 	for i=2,#pcs do
-		move3d_model(pcs[i], 0.0, 0.1 * (i-1), 0.0);
-		show_image(pcs[i]);
+		move3d_model(pcs[i], 0.0, ystep * (i-1), 0.0);
+		blend_image(pcs[i], 0.9);
 		table.insert(new.rotate_set, pcs[i]);
 		rendertarget_attach(new.rendertarget, pcs[i], RENDERTARGET_DETACH);
+	end
+
+	new.set_pointsz = function(sz)
+		new.point_sz = sz;
+		for k,v in ipairs(new.rotate_set) do
+			shader_uniform(image_shader(v), "point_sz", "f", new.point_sz);
+		end
+		shader_uniform(image_shader(new.model), "point_sz", "f", new.point_sz);
+	end
+
+	new.set_pointsz(gconfig_get("point_size"));
+
+	new.dispatch[BINDINGS["POINTSZ_INC"]] = function()
+		new.set_pointsz(new.point_sz + 0.5);
+	end
+
+	new.dispatch[BINDINGS["POINTSZ_DEC"]] = function()
+		new.set_pointsz(new.point_sz < 1.5 and 1.0 or new.point_sz - 0.5);
 	end
 
 	new.match = 1;
@@ -133,6 +158,8 @@ local function spawn_mfsense_pc(wnd)
 			new.match and 1 or 0);
 		new:set_message("Compare: " .. (new.match and "Match" or "Mismatch"));
 	end
+
+	print(new, new.dispatch[BINDINGS["POINTSZ_INC"]]);
 end
 
 table.insert(pop, {
