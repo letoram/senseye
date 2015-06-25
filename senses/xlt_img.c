@@ -30,8 +30,10 @@ enum view_mode {
 #define STBI_NO_PNM
 #define STBI_NO_PSD
 #define STBI_IMAGE_STATIC
-#define STBI_NO_FAILURE_STRINGS
 #include "stb_image.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 
 struct scanres {
 	uint8_t magic;
@@ -127,9 +129,10 @@ static size_t scan(uint8_t* buf, size_t buf_sz,
 				oc[j]++;
 				if (oc[j] >= magic[j].used){
 					out->magic = j;
-					out->ofs = i-magic[j].used;
+					out->ofs = i-(magic[j].used-1);
 					out++;
 					rc++;
+/* possibly validate / hint by decoding header as well */
 					oc[j] = 0;
 				}
 			}
@@ -233,7 +236,6 @@ alloc_nv:
 
 		if (ctx->found){
 			int w, h, f;
-
 			uint8_t* res = stbi_load_from_memory(
 				(stbi_uc const*) buf + ctx->items[0].ofs, buf_sz - ctx->items[0].ofs,
 				&w, &h, &f, ARCAN_SHMPAGE_VCHANNELS);
@@ -241,17 +243,34 @@ alloc_nv:
 				char scratch[32];
 				snprintf(scratch, 32, "decoded %s [%d * %d]",
 					magic[ctx->items[0].magic].ident, w, h);
+
 				draw_text(out, scratch,
 					(fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
-				free(buf);
+
+				y+=fonth+2;
+
+				stbir_resize_uint8(
+					res, w, h, 0,
+					out->addr, out->w, out->h, 0,
+				4);
+
+				free(res);
 			}
-			else
+			else{
 				draw_text(out, "Decoding failed",
 					(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+				const char* msg = stbi_failure_reason();
+				if (msg)
+					draw_text(out, msg, (fontw+1)*2, y+fonth+2,
+						RGBA(0xff, 0x00, 0x00, 0xff));
+			}
 		}
-		else
+		else{
 			draw_text(out, "No supported formats found",
 				(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+			draw_text(out, stbi_failure_reason(),
+				(fontw+1)*2, y+fonth+2, RGBA(0xff, 0x00, 0x00, 0xff));
+		}
 		return true;
 	}
 	break;

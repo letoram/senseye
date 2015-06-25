@@ -193,8 +193,8 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 		if (sess->olay.addr)
 			arcan_shmif_drop(&sess->olay);
 
-		sess->olay = arcan_shmif_acquire(&sess->in, NULL, SEGID_MEDIA,
-			SHMIF_DISABLE_GUARD);
+		sess->olay = arcan_shmif_acquire(&sess->in,
+			NULL, SEGID_MEDIA, SHMIF_DISABLE_GUARD);
 		sess->zoom_range[0] = 0;
 		sess->zoom_range[1] = 0;
 		sess->zoom_range[2] = sess->olay.w;
@@ -212,6 +212,7 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 				"will clamp to 4 bytes, expect corruption.\n", sess->pack_sz);
 				sess->pack_sz = 4;
 			}
+			sess->unpack_sz = sess->pack_sz * sess->in.w * sess->in.h;
 		}
 		else if (ev->tgt.kind == TARGET_COMMAND_DISPLAYHINT){
 			if ((sess->flags & XLT_DYNSIZE)){

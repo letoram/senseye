@@ -432,7 +432,7 @@ function translate_wh(source, status)
 		end
 	elseif (status.kind == "terminated") then
 		for k,v in ipairs(translator_popup) do
-			if (v.value == source) then
+			if (v.value[1] == source) then
 				table.remove(translator_popup, k);
 				statusbar:set_message("Lost translator: " ..
 					tostring(v.label), DEFAULT_TIMEOUT);
