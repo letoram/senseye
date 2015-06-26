@@ -433,7 +433,7 @@ function translate_wh(source, status)
 			for i,v in ipairs(wm.windows) do
 				if (v.translator_name == status.message and not valid_vid(
 					v.ctrl_id, TYPE_FRAMESERVER)) then
-					activate_translator(v.parent, {source, lbl}, v);
+					activate_translator(v.parent, {source, lbl}, 0, v);
 				end
 			end
 		end

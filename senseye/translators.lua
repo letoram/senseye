@@ -66,7 +66,7 @@ end
 -- wnd : parent
 -- vtbl : {source, label} paired in table due to popupwnd restriction
 -- srcwnd : if set, means don't create window but replace canvas
-function activate_translator(wnd, vtbl, srcwnd)
+function activate_translator(wnd, vtbl, ign, srcwnd)
 	local value = vtbl[1];
 
 -- possibility of translator becoming invalid while menu is active
@@ -118,6 +118,7 @@ function activate_translator(wnd, vtbl, srcwnd)
 -- gets tracked and deleted properly as well
 	if (srcwnd) then
 		neww = srcwnd;
+		print(debug.traceback());
 		delete_image(neww.canvas);
 		neww.canvas = vid;
 		show_image(neww.canvas);
