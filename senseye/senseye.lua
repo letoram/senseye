@@ -429,6 +429,13 @@ function translate_wh(source, status)
 				label = lbl
 			});
 			statusbar:set_message("Translator connected: " .. lbl, DEFAULT_TIMEOUT);
+
+			for i,v in ipairs(wm.windows) do
+				if (v.translator_name == status.message and not valid_vid(
+					v.ctrl_id, TYPE_FRAMESERVER)) then
+					activate_translator(v.parent, {source, lbl}, v);
+				end
+			end
 		end
 	elseif (status.kind == "terminated") then
 		for k,v in ipairs(translator_popup) do

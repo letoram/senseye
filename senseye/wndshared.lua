@@ -937,6 +937,7 @@ local function overlay_opa(wnd)
 		table.insert(mnu, {label = tostring(i*10) .. "%", value=i*10});
 	end
 	mnu.handler = function(wnd, value)
+		wnd.overlay_opa = value / 100;
 		blend_image(wnd.overlay, value / 100);
 	end
 	return mnu;

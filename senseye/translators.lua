@@ -16,6 +16,15 @@
 local function overlay_cb(source, status)
 	if (status.kind == "terminated") then
 		delete_image(source);
+
+		for i=1, #wm.windows do
+			if (wm.windows[i].xlt_overlay == source) then
+				wm.windows[i].xlt_overlay = nil;
+				table.remove_match(wm.windows[i].autodelete, source);
+				return;
+			end
+		end
+-- overlay allocated but nothing assigned
 	end
 end
 
@@ -34,7 +43,7 @@ local function toggle_overlay(wnd, state)
 			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
 		end);
 
-		blend_image(wnd.parent.overlay, 0.5);
+		blend_image(wnd.parent.overlay, wnd.overlay_opa and wnd.overlay_opa or 0.5);
 
 -- missing, add handler for overlay_resize and a zoom-trigger that
 -- communicates the effective range / offset as that is needed to
@@ -44,17 +53,20 @@ local function toggle_overlay(wnd, state)
 		if (wnd.overlay_pause) then
 			suspend_target(wnd.xlt_overlay);
 		else
-			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height); -- pp.width, pp.height);
+			target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
 			resume_target(wnd.xlt_overlay);
 		end
 	end
 
 	if (not wnd.overlay_pause) then
-		target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height); --pp.width, pp.height);
+		target_displayhint(wnd.xlt_overlay, wnd.parent.width, wnd.parent.height);
 	end
 end
 
-function activate_translator(wnd, vtbl, a)
+-- wnd : parent
+-- vtbl : {source, label} paired in table due to popupwnd restriction
+-- srcwnd : if set, means don't create window but replace canvas
+function activate_translator(wnd, vtbl, srcwnd)
 	local value = vtbl[1];
 
 -- possibility of translator becoming invalid while menu is active
@@ -104,19 +116,31 @@ function activate_translator(wnd, vtbl, a)
 
 -- hook the output to a new window, and make sure the output buffer
 -- gets tracked and deleted properly as well
-	neww = wnd.wm:add_window(vid, {});
-	window_shared(neww);
+	if (srcwnd) then
+		neww = srcwnd;
+		delete_image(neww.canvas);
+		neww.canvas = vid;
+		show_image(neww.canvas);
+		image_inherit_order(neww.canvas, true);
+		link_image(neww.canvas, neww.anchor);
+		resize_image(neww.canvas, srcwnd.width, srcwnd.height);
+		--target_displayhint(tgt, srcwnd.width, srcwnd.height);
+	else
+		neww = wnd.wm:add_window(vid, {});
+		window_shared(neww);
+		target_displayhint(tgt, 256, 256);
+	end
+
 	neww.name = neww.name .. "_translator_" .. tostring(value);
 	neww.translator_name = vtbl[2];
 	neww.fullscreen_disabled = true;
-	target_displayhint(tgt, 256, 256);
 	neww:set_parent(wnd, ANCHOR_LL);
 	neww.reposition = repos_window;
 	neww.translator_out = tgt;
 	neww.ctrl_id = vid;
 	neww:select();
 
-	scale_image(vid, 1.0, 1.0);
+	--scale_image(vid, 1.0, 1.0);
 	image_tracetag(vid, string.format("translator:%d - output", value));
 
 	neww.source_handler = function(wnd, source, status)
