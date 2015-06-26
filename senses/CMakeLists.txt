@@ -33,6 +33,7 @@ add_compile_options(
 	-Wall
 	-Wno-unused-function # -Wuseless-warning
 	-Wno-unused-value
+	-Wno-unused-variable
 	-D__UNIX
 	-D_POSIX_C_SOURCE=200809L
 	-DGNU_SOURCE

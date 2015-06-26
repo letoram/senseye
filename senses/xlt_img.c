@@ -251,7 +251,7 @@ alloc_nv:
 
 				stbir_resize_uint8(
 					res, w, h, 0,
-					out->addr, out->w, out->h, 0,
+					out->vidp, out->w, out->h, 0,
 				4);
 
 				free(res);
