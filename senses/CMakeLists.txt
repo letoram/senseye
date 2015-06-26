@@ -26,6 +26,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		xlt_seqver
 		xlt_verify
 		xlt_overlay
+		xlt_crash
 	)
 endif()
 
