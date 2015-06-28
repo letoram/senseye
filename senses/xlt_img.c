@@ -29,6 +29,8 @@ enum view_mode {
 #define STBI_NO_PIC
 #define STBI_NO_PNM
 #define STBI_NO_PSD
+#define STBI_NO_HDR
+#define STBI_NO_LINEAR
 #define STBI_IMAGE_STATIC
 #include "stb_image.h"
 
@@ -181,8 +183,10 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	struct xlti_ctx* ctx = out->user;
 
 	if (!buf){
-		if (ctx)
+		if (ctx){
 			free(ctx->items);
+			ctx->items = NULL;
+		}
 		free(out->user);
 		out->user = NULL;
 		return false;
@@ -190,7 +194,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 	if (!ctx){
 		ctx = out->user = malloc(sizeof(struct xlti_ctx));
-		memset(ctx, sizeof(struct xlti_ctx), '\0');
+		memset(ctx, '\0', sizeof(struct xlti_ctx));
 		ctx->current = VIEW_LIST;
 		ctx->found = -1;
 		goto alloc_nv;
@@ -252,7 +256,7 @@ alloc_nv:
 					y+=fonth+2;
 
 					stbir_resize_uint8(
-						res, w, h+y, 0,
+						res, w, h, 0,
 						(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0,
 					4);
 
