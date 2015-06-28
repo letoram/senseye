@@ -236,33 +236,37 @@ alloc_nv:
 
 		if (ctx->found){
 			int w, h, f;
-			uint8_t* res = stbi_load_from_memory(
-				(stbi_uc const*) buf + ctx->items[0].ofs, buf_sz - ctx->items[0].ofs,
-				&w, &h, &f, ARCAN_SHMPAGE_VCHANNELS);
-			if (res){
-				char scratch[32];
-				snprintf(scratch, 32, "decoded %s [%d * %d]",
-					magic[ctx->items[0].magic].ident, w, h);
+			for (size_t i = 0; i < 1 && ctx->found; i++){
+				uint8_t* res = stbi_load_from_memory(
+					(stbi_uc const*) buf + ctx->items[i].ofs, buf_sz - ctx->items[i].ofs,
+					&w, &h, &f, ARCAN_SHMPAGE_VCHANNELS
+				);
+				if (res){
+					char scratch[64];
+					snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
+						pos + ctx->items[i].ofs, magic[ctx->items[i].magic].ident, w, h);
 
-				draw_text(out, scratch,
-					(fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
+					draw_text(out, scratch,
+						(fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
 
-				y+=fonth+2;
+					y+=fonth+2;
 
-				stbir_resize_uint8(
-					res, w, h, 0,
-					out->vidp, out->w, out->h, 0,
-				4);
+					stbir_resize_uint8(
+						res, w, h+y, 0,
+						(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0,
+					4);
 
-				free(res);
-			}
-			else{
-				draw_text(out, "Decoding failed",
-					(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
-				const char* msg = stbi_failure_reason();
-				if (msg)
-					draw_text(out, msg, (fontw+1)*2, y+fonth+2,
-						RGBA(0xff, 0x00, 0x00, 0xff));
+					free(res);
+					break;
+				}
+				else{
+					draw_text(out, "Decoding failed",
+						(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+					const char* msg = stbi_failure_reason();
+					if (msg)
+						draw_text(out, msg, (fontw+1)*2, y+fonth+2,
+							RGBA(0xff, 0x00, 0x00, 0xff));
+				}
 			}
 		}
 		else{
