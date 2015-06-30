@@ -55,6 +55,9 @@ struct xlti_ctx {
 	struct scanres* items;
 	enum view_mode current, last;
 	bool invalidated;
+
+	bool over_inv;
+	size_t over_pos, over_count;
 };
 
 struct {
@@ -150,6 +153,49 @@ static size_t scan(uint8_t* buf, size_t buf_sz,
 				oc[j] = 0;
 
 	return rc;
+}
+
+/* big optimization here would be tracking if the state of the page
+ * is "already empty" and avoid the memset and possibly transfer */
+static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
+	int zoom_ofs[4], struct arcan_shmif_cont* over,
+	struct arcan_shmif_cont* out, uint64_t pos,
+	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
+{
+	struct xlti_ctx* ctx = out->user;
+/* don't have any state hidden in over- tag */
+	if (!buf)
+		return false;
+
+	memset(over->vidp, '\0', sizeof(shmif_pixel) * over->h * over->pitch);
+
+	if (ctx->over_pos < pos)
+		return true;
+
+/* scale factors */
+	float w = zoom_ofs[2] - zoom_ofs[0];
+	float h = zoom_ofs[3] - zoom_ofs[1];
+
+	float b_w = (float)over->w / w;
+	float b_h = (float)over->h / h;
+	float d_w = round(b_w);
+	float d_h = round(b_h);
+
+	size_t ofs = ctx->over_pos - pos;
+	size_t x1, y1, x2, y2;
+	xlt_ofs_coord(sess, ofs, &x1, &y1);
+	xlt_ofs_coord(sess, ofs + ctx->over_count, &x2, &y2);
+
+	while (x1 != x2 || y1 != y2){
+		over->vidp[y1 * over->pitch + x1] = RGBA(0x00, 0xff, 0x00, 0xff);
+
+		x1++;
+		if (x1 >= over->w){
+			x1 = 0; y1++;
+		}
+	}
+
+	return true;
 }
 
 static size_t draw_header(struct arcan_shmif_cont* c, struct xlti_ctx* ctx)
@@ -291,6 +337,9 @@ alloc_nv:
 				};
 				uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
 				if (res){
+					ctx->over_inv = true;
+					ctx->over_pos = pos + ctx->items[i].ofs;
+					ctx->over_count = inf.fpos;
 					char scratch[64];
 					snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
 						pos + ctx->items[i].ofs, magic[ctx->items[i].magic].ident, w, h);
@@ -340,7 +389,13 @@ alloc_nv:
 int main(int argc, char** argv)
 {
 	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	struct xlt_context* ctx = xlt_open("IMG", XLT_DYNSIZE, confl);
+	if (!ctx)
+		return EXIT_FAILURE;
 
-	return xlt_setup("IMG", populate, input, XLT_DYNSIZE, confl) == true ?
-		EXIT_SUCCESS : EXIT_FAILURE;
+	xlt_config(ctx, populate, input, over_pop, NULL);
+	xlt_wait(ctx);
+	xlt_free(&ctx);
+
+	return EXIT_SUCCESS;
 }

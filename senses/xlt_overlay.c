@@ -38,13 +38,11 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	int zoom_range[4], struct arcan_shmif_cont* over,
 	struct arcan_shmif_cont* out, uint64_t pos,
-	size_t buf_sz, uint8_t* buf)
+	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
 {
 /* don't have any state hidden in over- tag */
 	if (!buf)
 		return false;
-
-	printf("update, overlay dimensions: %d, %d\n", over->w, over->h);
 
 /* need to clear (or track zoom + precision etc. which means its usually
  * just cheaper to reset between updates */

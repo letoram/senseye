@@ -28,10 +28,12 @@ typedef bool (*xlt_populate)(bool newdata, struct arcan_shmif_cont* in,
  * the marker position) and provides details on the zoomed range relative
  * to [in].
  */
+struct xlt_session;
 typedef bool (*xlt_overlay)(bool newdata, struct arcan_shmif_cont* in,
 	int zoom_area[4], struct arcan_shmif_cont* overlay,
 	struct arcan_shmif_cont* out,
-	uint64_t pos, size_t buf_sz, uint8_t* buf
+	uint64_t pos, size_t buf_sz, uint8_t* buf,
+	struct xlt_session*
 );
 
 /*
@@ -77,6 +79,14 @@ void xlt_config(struct xlt_context*,
 	xlt_populate, xlt_input,
 /* seperate input function for overlay */
 	xlt_overlay, xlt_input);
+
+/*
+ * Used on an input context that is assigned as an overlay,
+ * get the x and y coordinates that corresponds to the specified
+ * ofset, taking packing mode into account.
+ */
+void xlt_ofs_coord(struct xlt_session* sess,
+	size_t ofs, size_t* x, size_t* y);
 
 /*
  * pump the context event loop manually, will flush and then

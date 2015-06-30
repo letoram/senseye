@@ -116,8 +116,24 @@ static inline void update_overlay(struct xlt_session* sess, bool nd)
 {
 	if (sess->overlay && sess->olay.addr && sess->overlay(nd, &sess->in,
 		sess->zoom_range, &sess->olay, &sess->out,
-		sess->vpts, sess->unpack_sz, sess->buf))
+		sess->vpts, sess->unpack_sz, sess->buf, sess))
 		arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
+}
+
+void xlt_ofs_coord(struct xlt_session* sess,
+	size_t ofs, size_t* x, size_t* y)
+{
+	if (ofs > 0)
+		ofs = (ofs / sess->unpack_sz) + (ofs % sess->unpack_sz);
+
+	if (ofs > 0){
+		*y = ofs / sess->in.w;
+		*x = ofs - (*y * sess->in.w);
+	}
+	else{
+		*x = 0;
+		*y = 0;
+	}
 }
 
 static inline void update_buffers(
@@ -127,8 +143,7 @@ static inline void update_buffers(
 		sess->vpts + sess->base_ofs, sess->unpack_sz - sess->base_ofs,
 		sess->buf + sess->base_ofs)){
 
-		if (newdata)
-			update_overlay(sess, newdata);
+		update_overlay(sess, newdata);
 
 		arcan_shmif_signal(&sess->out, SHMIF_SIGVID);
 		sess->in.addr->vready = false;

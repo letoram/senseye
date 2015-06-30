@@ -14,7 +14,7 @@ static int ccount;
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	int zoom_range[4], struct arcan_shmif_cont* over,
 	struct arcan_shmif_cont* out, uint64_t pos,
-	size_t buf_sz, uint8_t* buf)
+	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
 {
 	if (!buf)
 		return false;
