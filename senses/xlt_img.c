@@ -7,6 +7,14 @@
  * sampled / packed buffer for that to be possible, this depends on the
  * base dimensions and the active packing mode).
  * Status: Incomplete, does not work.
+ *
+ *  - replace load_from_memory with load_from_callbacks so we can track
+ *  the number of used bytes. If overlay is present, fill the area consumed
+ *  by the last decode.
+ *
+ *  - missing manual navigation in list mode
+ *
+ *  - output ofs in header as well
  */
 
 #include <inttypes.h>
@@ -172,6 +180,42 @@ static size_t draw_header(struct arcan_shmif_cont* c, struct xlti_ctx* ctx)
 	return fonth + 6;
 }
 
+struct stbi_inf {
+	uint8_t* buf;
+	size_t buf_sz;
+	size_t fpos;
+};
+
+static int stbi_cb_read(void* user, char* data, int sz)
+{
+	struct stbi_inf* inf = user;
+	sz = inf->buf_sz - inf->fpos > sz ? sz : inf->buf_sz - inf->fpos;
+	memcpy(data, &inf->buf[inf->fpos], sz);
+	inf->fpos += sz;
+	return sz;
+}
+
+static void stbi_cb_skip(void* user, int n)
+{
+	struct stbi_inf* inf = user;
+	if (n > 0)
+		inf->fpos = inf->fpos + n > inf->buf_sz ? inf->buf_sz : inf->fpos + n;
+	else
+		inf->fpos = (-1 * n) > inf->fpos ? 0 : inf->fpos + n;
+}
+
+static int stbi_cb_eof(void* user)
+{
+	struct stbi_inf* inf = user;
+	return (inf->fpos >= inf->buf_sz);
+}
+
+static stbi_io_callbacks stbi_cb = {
+	.read = stbi_cb_read,
+	.skip = stbi_cb_skip,
+	.eof = stbi_cb_eof
+};
+
 /* for the overlay, simply draw the regions that were found during each
  * decode, and if we have a specialized handler (that can show header data),
  * invoke that */
@@ -241,15 +285,17 @@ alloc_nv:
 		if (ctx->found){
 			int w, h, f;
 			for (size_t i = 0; i < 1 && ctx->found; i++){
-				uint8_t* res = stbi_load_from_memory(
-					(stbi_uc const*) buf + ctx->items[i].ofs, buf_sz - ctx->items[i].ofs,
-					&w, &h, &f, ARCAN_SHMPAGE_VCHANNELS
-				);
+				struct stbi_inf inf = {
+					.buf = buf + ctx->items[i].ofs,
+					.buf_sz = buf_sz - ctx->items[i].ofs
+				};
+				uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
 				if (res){
 					char scratch[64];
 					snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
 						pos + ctx->items[i].ofs, magic[ctx->items[i].magic].ident, w, h);
 
+/* inf fpos hints at the number of bytes consumed */
 					draw_text(out, scratch,
 						(fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
 
