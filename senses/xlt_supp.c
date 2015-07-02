@@ -124,7 +124,7 @@ void xlt_ofs_coord(struct xlt_session* sess,
 	size_t ofs, size_t* x, size_t* y)
 {
 	if (ofs > 0)
-		ofs = (ofs / sess->unpack_sz) + (ofs % sess->unpack_sz);
+		ofs = (ofs / sess->pack_sz) + (ofs % sess->pack_sz);
 
 	if (ofs > 0){
 		*y = ofs / sess->in.w;

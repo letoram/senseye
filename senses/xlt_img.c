@@ -56,7 +56,7 @@ struct xlti_ctx {
 	enum view_mode current, last;
 	bool invalidated;
 
-	bool over_inv;
+	int over_state;
 	size_t over_pos, over_count;
 };
 
@@ -178,20 +178,28 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 
 	float b_w = (float)over->w / w;
 	float b_h = (float)over->h / h;
-	float d_w = round(b_w);
-	float d_h = round(b_h);
+	float d_w = ceil(b_w);
+	float d_h = ceil(b_h);
 
 	size_t ofs = ctx->over_pos - pos;
+
 	size_t x1, y1, x2, y2;
 	xlt_ofs_coord(sess, ofs, &x1, &y1);
 	xlt_ofs_coord(sess, ofs + ctx->over_count, &x2, &y2);
 
-	while (x1 != x2 || y1 != y2){
-		over->vidp[y1 * over->pitch + x1] = RGBA(0x00, 0xff, 0x00, 0xff);
+	shmif_pixel col = ctx->over_state == 1 ? RGBA(0x00, 0xff, 0x00, 0xff) :
+		RGBA(0xff, 0x00, 0x00, 0xff);
+
+/* if within zoom_range, draw_box with d_w, d_h */
+	while ((x1 != x2 || y1 != y2) && y1 <= zoom_ofs[3] && y1 <= y2){
+		if (x1 >= zoom_ofs[0] && y1 >= zoom_ofs[1] &&
+			x1 <= zoom_ofs[2] && y1 <= zoom_ofs[3])
+				draw_box(over, (x1 - zoom_ofs[0]) * b_w,
+					(y1 - zoom_ofs[1]) * b_h, d_w, d_h, col);
 
 		x1++;
-		if (x1 >= over->w){
-			x1 = 0; y1++;
+		if (x1 >= zoom_ofs[2]){
+			x1 = zoom_ofs[0]; y1++;
 		}
 	}
 
@@ -336,10 +344,11 @@ alloc_nv:
 					.buf_sz = buf_sz - ctx->items[i].ofs
 				};
 				uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
+				ctx->over_pos = pos + ctx->items[i].ofs;
+				ctx->over_count = inf.fpos;
+
 				if (res){
-					ctx->over_inv = true;
-					ctx->over_pos = pos + ctx->items[i].ofs;
-					ctx->over_count = inf.fpos;
+					ctx->over_state = 1;
 					char scratch[64];
 					snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
 						pos + ctx->items[i].ofs, magic[ctx->items[i].magic].ident, w, h);
@@ -359,6 +368,7 @@ alloc_nv:
 					break;
 				}
 				else{
+					ctx->over_state = -1;
 					draw_text(out, "Decoding failed",
 						(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
 					const char* msg = stbi_failure_reason();
