@@ -6,15 +6,8 @@
  * decoding / preview (assuming that there is enough data in the currently
  * sampled / packed buffer for that to be possible, this depends on the
  * base dimensions and the active packing mode).
- * Status: Incomplete, does not work.
- *
- *  - replace load_from_memory with load_from_callbacks so we can track
- *  the number of used bytes. If overlay is present, fill the area consumed
- *  by the last decode.
  *
  *  - missing manual navigation in list mode
- *
- *  - output ofs in header as well
  */
 
 #include <inttypes.h>
@@ -23,15 +16,17 @@
 #include "font_8x8.h"
 
 enum view_mode {
-	VIEW_LIST    = 0,
-	VIEW_AUTO    = 1,
-	VIEW_MANUAL  = 2,
-	VIEW_DECODE  = 3,
-	VIEW_DECODED = 4
+	VIEW_LIST = 0,
+	VIEW_AUTO,
+	VIEW_MANUAL,
+	VIEW_DECODE,
+	VIEW_DECODED
 };
 
 /*
- * high false-positive rate and low relevance, just ignore them for now
+ * high false-positive rate and low relevance, just ignore them for now, good
+ * place for prelude to hook in other image parsers (add magic value detection
+ * to table used by scan and intercept process decode
  */
 #define STBI_NO_TGA
 #define STBI_NO_PIC
@@ -45,23 +40,39 @@ enum view_mode {
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize.h"
 
+static char* raw_prefix;
+static char* decode_prefix;
+
 struct scanres {
 	uint8_t magic;
 	size_t ofs;
 };
 
 struct xlti_ctx {
-	size_t count, found;
-	struct scanres* items;
+/* state management */
 	enum view_mode current, last;
 	bool invalidated;
 
+/* scan results */
+	size_t count, found;
+	struct scanres* items;
+
+/* previous results for dumping / saving */
+	struct {
+		uint8_t* raw, (* orig);
+		size_t raw_sz, orig_sz, ctr;
+		uint64_t last_pos;
+		int ind;
+	} decoded;
+
+/* metadata- needed to hint what was decoded */
 	int over_state;
 	size_t over_pos, over_count;
 };
 
 struct {
 	char ident[16];
+	char ext[4];
 	uint8_t buf[10];
 	size_t used;
 /* only useful for LIST mode to hint something was found but that
@@ -70,30 +81,35 @@ struct {
 } magic[] = {
 	{
 		.ident = "GIF87",
+		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x37, 0x61},
 		.used = 6,
 		.decodable = true
 	},
 	{
 		.ident = "GIF89",
+		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61},
 		.used = 6,
 		.decodable = true
 	},
 	{
 		.ident = "PNG",
+		.ext = "png",
 		.buf = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a},
 		.used = 8,
 		.decodable = true
 	},
 	{
 		.ident = "JPEG",
+		.ext = "jpg",
 		.buf = {0xff, 0xd8},
 		.used = 2,
 		.decodable = true
 	},
 	{
 		.ident = "BMP",
+		.ext = "bmp",
 		.buf = {0x42, 0x4d},
 		.used = 2,
 		.decodable = true
@@ -112,6 +128,24 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 	}
 	else if (strcmp(ev->io.label, "l") == 0){
 		ctx->current = VIEW_LIST;
+	}
+	else if (strcmp(ev->io.label, "r") == 0){
+		if ((ctx->current == VIEW_AUTO || ctx->current == VIEW_DECODED) &&
+			ctx->decoded.raw){
+			char fn[64];
+			snprintf(fn, 64, "%s_%d.%s", raw_prefix, (int)ctx->decoded.ctr++,
+				magic[ctx->decoded.ind].ext);
+			if (fn){
+				FILE* fpek = fopen(fn, "w+");
+				free(fn);
+				if (!fpek)
+					return false;
+				fwrite(ctx->decoded.raw, ctx->decoded.raw_sz, 1, fpek);
+				fclose(fpek);
+			}
+		}
+	}
+	else if (strcmp(ev->io.label, "d") == 0){
 	}
 	else if (strcmp(ev->io.label, "ENTER") == 0 && ctx->current != VIEW_AUTO){
 		ctx->last = ctx->current;
@@ -270,6 +304,55 @@ static stbi_io_callbacks stbi_cb = {
 	.eof = stbi_cb_eof
 };
 
+static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
+	size_t y, uint8_t* buf, size_t buf_sz, uint64_t pos, struct scanres* item)
+{
+	int w, h, f;
+	struct stbi_inf inf = {
+		.buf = buf + item->ofs,
+		.buf_sz = buf_sz - item->ofs
+	};
+
+/* don't decode unless necessary */
+	if (pos + item->ofs == ctx->decoded.last_pos && ctx->decoded.raw)
+		return true;
+
+	uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
+	ctx->over_pos = pos + item->ofs;
+	ctx->over_count = inf.fpos;
+
+	if (res){
+		ctx->over_state = 1;
+		ctx->decoded.last_pos = pos + item->ofs;
+		char scratch[64];
+		snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
+			pos + item->ofs, magic[item->magic].ident, w, h);
+
+		ctx->decoded.raw_sz = w * h * 4;
+		ctx->decoded.raw = malloc(ctx->decoded.raw_sz);
+
+		/* inf fpos hints at the number of bytes consumed */
+		draw_text(out, scratch, (fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
+		y+=fonth+2;
+
+		stbir_resize_uint8(res, w, h, 0,
+			(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0, 4);
+
+		free(res);
+		return true;
+	}
+	else{
+		ctx->over_state = -1;
+		draw_text(out, "Decoding failed",
+			(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+		const char* msg = stbi_failure_reason();
+		if (msg)
+			draw_text(out, msg, (fontw+1)*2, y+fonth+2,
+				RGBA(0xff, 0x00, 0x00, 0xff));
+		return false;
+	}
+}
+
 /* for the overlay, simply draw the regions that were found during each
  * decode, and if we have a specialized handler (that can show header data),
  * invoke that */
@@ -337,45 +420,9 @@ alloc_nv:
 		size_t y = draw_header(out, ctx);
 
 		if (ctx->found){
-			int w, h, f;
 			for (size_t i = 0; i < 1 && ctx->found; i++){
-				struct stbi_inf inf = {
-					.buf = buf + ctx->items[i].ofs,
-					.buf_sz = buf_sz - ctx->items[i].ofs
-				};
-				uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
-				ctx->over_pos = pos + ctx->items[i].ofs;
-				ctx->over_count = inf.fpos;
-
-				if (res){
-					ctx->over_state = 1;
-					char scratch[64];
-					snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
-						pos + ctx->items[i].ofs, magic[ctx->items[i].magic].ident, w, h);
-
-/* inf fpos hints at the number of bytes consumed */
-					draw_text(out, scratch,
-						(fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
-
-					y+=fonth+2;
-
-					stbir_resize_uint8(
-						res, w, h, 0,
-						(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0,
-					4);
-
-					free(res);
+				if (process_decode(ctx, out, y, buf, buf_sz, pos, &ctx->items[i]))
 					break;
-				}
-				else{
-					ctx->over_state = -1;
-					draw_text(out, "Decoding failed",
-						(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
-					const char* msg = stbi_failure_reason();
-					if (msg)
-						draw_text(out, msg, (fontw+1)*2, y+fonth+2,
-							RGBA(0xff, 0x00, 0x00, 0xff));
-				}
 			}
 		}
 		else{
@@ -403,9 +450,14 @@ int main(int argc, char** argv)
 	if (!ctx)
 		return EXIT_FAILURE;
 
+	raw_prefix = strdup("imgraw_");
+	decode_prefix = strdup("imgdec_");
+
 	xlt_config(ctx, populate, input, over_pop, NULL);
 	xlt_wait(ctx);
 	xlt_free(&ctx);
+	free(raw_prefix);
+	free(decode_prefix);
 
 	return EXIT_SUCCESS;
 }
