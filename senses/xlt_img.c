@@ -116,6 +116,30 @@ struct {
 	}
 };
 
+static void dump(
+	const char* magic, uint8_t* buf, size_t buf_sz, size_t* ctr, bool raw)
+{
+	char fn[64];
+	snprintf(fn, 64, "%s_%zu.%s", raw ? raw_prefix : decode_prefix,
+		*ctr++, magic);
+
+	FILE* fpek = fopen(fn, "w+");
+	if (fpek){
+		fwrite(buf, buf_sz, 1, fpek);
+		fclose(fpek);
+	}
+}
+
+static void message(struct arcan_shmif_cont* out, const char* msg)
+{
+	arcan_event ev = {
+		.ext.kind = EVENT_EXTERNAL_MESSAGE
+	};
+	snprintf((char*)ev.ext.message, sizeof(ev.ext.message)
+		/ sizeof(ev.ext.message[0]), "%s", msg);
+	arcan_shmif_enqueue(out, &ev);
+}
+
 static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 {
 	struct xlti_ctx* ctx = out->user;
@@ -131,21 +155,19 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 	}
 	else if (strcmp(ev->io.label, "r") == 0){
 		if ((ctx->current == VIEW_AUTO || ctx->current == VIEW_DECODED) &&
-			ctx->decoded.raw){
-			char fn[64];
-			snprintf(fn, 64, "%s_%d.%s", raw_prefix, (int)ctx->decoded.ctr++,
-				magic[ctx->decoded.ind].ext);
-			if (fn){
-				FILE* fpek = fopen(fn, "w+");
-				free(fn);
-				if (!fpek)
-					return false;
-				fwrite(ctx->decoded.raw, ctx->decoded.raw_sz, 1, fpek);
-				fclose(fpek);
-			}
-		}
+			ctx->decoded.raw)
+			dump("rgba",
+				ctx->decoded.raw, ctx->decoded.raw_sz, &ctx->decoded.ctr, true);
+			message(out, "dumped decoded raw");
+		return false;
 	}
 	else if (strcmp(ev->io.label, "d") == 0){
+		if ((ctx->current == VIEW_AUTO || ctx->current == VIEW_DECODED) &&
+			ctx->decoded.orig)
+			dump(magic[ctx->decoded.ind].ext,
+			ctx->decoded.orig, ctx->decoded.orig_sz, &ctx->decoded.ctr, false);
+			message(out, "dumped encoded original");
+		return false;
 	}
 	else if (strcmp(ev->io.label, "ENTER") == 0 && ctx->current != VIEW_AUTO){
 		ctx->last = ctx->current;
@@ -325,20 +347,34 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 		ctx->over_state = 1;
 		ctx->decoded.last_pos = pos + item->ofs;
 		char scratch[64];
-		snprintf(scratch, 64, "@%"PRIu64": decoded %s [%d * %d]",
-			pos + item->ofs, magic[item->magic].ident, w, h);
 
-		ctx->decoded.raw_sz = w * h * 4;
-		ctx->decoded.raw = malloc(ctx->decoded.raw_sz);
-
-		/* inf fpos hints at the number of bytes consumed */
+/* sanity check size to prevent bomb etc. */
+		bool suspect = w * h > 8192 * 8192;
+		snprintf(scratch, 64, "@%"PRIu64": %s %s [%d * %d]",
+			pos + item->ofs, suspect ? "decoded" : "suspicious",
+			magic[item->magic].ident, w, h
+		);
 		draw_text(out, scratch, (fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
 		y+=fonth+2;
+
+		if (suspect)
+			return true;
+
+		if (ctx->decoded.raw){
+			free(ctx->decoded.raw);
+			free(ctx->decoded.orig);
+		}
+
+/* maintain a copy if the user wants to save */
+		ctx->decoded.raw_sz = w * h * 4;
+		ctx->decoded.raw = res;
+		ctx->decoded.orig = malloc(ctx->over_count);
+		ctx->decoded.orig_sz = ctx->over_count;
+		memcpy(ctx->decoded.orig, buf + item->ofs, ctx->over_count);
 
 		stbir_resize_uint8(res, w, h, 0,
 			(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0, 4);
 
-		free(res);
 		return true;
 	}
 	else{
@@ -356,7 +392,6 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 /* for the overlay, simply draw the regions that were found during each
  * decode, and if we have a specialized handler (that can show header data),
  * invoke that */
-
 static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	struct arcan_shmif_cont* out, uint64_t pos, size_t buf_sz, uint8_t* buf)
 {
@@ -366,6 +401,8 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	if (!buf){
 		if (ctx){
 			free(ctx->items);
+			free(ctx->decoded.raw);
+			free(ctx->decoded.orig);
 			ctx->items = NULL;
 		}
 		free(out->user);
