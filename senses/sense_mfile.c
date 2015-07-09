@@ -254,9 +254,11 @@ static void draw_dtile(struct arcan_shmif_cont* dst,
 		for (size_t col = x; col < x+base; col++, pos += step){
 			shmif_pixel pxbuf[n_ents];
 			for (size_t i = 0; i < n_ents; i++)
-				if (ents[i].cmp_op == CMP_NORMAL)
+				if (ents[i].cmp_op == CMP_NORMAL){
+				off_t ofs = (ssize_t)pos + ents[i].ofs < 0 ? 0 : pos + ents[i].ofs;
 				pxbuf[i] = pos+step+ents[i].ofs >= ents[i].map_sz ? color.pad :
-					pack_pixel(mode, ents[i].map + pos + ents[i].ofs);
+					pack_pixel(mode, ents[i].map + ofs);
+			}
 
 			float n_delta = 0;
 			for (size_t i = 1; i < n_ents; i++)
