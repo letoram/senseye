@@ -11,16 +11,14 @@
  */
 
 #include <inttypes.h>
+#include <unistd.h>
 
 #include "xlt_supp.h"
 #include "font_8x8.h"
 
 enum view_mode {
 	VIEW_LIST = 0,
-	VIEW_AUTO,
-	VIEW_MANUAL,
-	VIEW_DECODE,
-	VIEW_DECODED
+	VIEW_AUTO
 };
 
 /*
@@ -62,6 +60,7 @@ struct xlti_ctx {
 		uint8_t* raw, (* orig);
 		size_t raw_sz, orig_sz, ctr;
 		uint64_t last_pos;
+		size_t scalew, scaleh, w, h;
 		int ind;
 	} decoded;
 
@@ -120,8 +119,8 @@ static void dump(
 	const char* magic, uint8_t* buf, size_t buf_sz, size_t* ctr, bool raw)
 {
 	char fn[64];
-	snprintf(fn, 64, "%s_%zu.%s", raw ? raw_prefix : decode_prefix,
-		*ctr++, magic);
+	snprintf(fn, 64, "%s_%d_%zu.%s", raw ? raw_prefix : decode_prefix,
+		getpid(), *ctr++, magic);
 
 	FILE* fpek = fopen(fn, "w+");
 	if (fpek){
@@ -133,6 +132,7 @@ static void dump(
 static void message(struct arcan_shmif_cont* out, const char* msg)
 {
 	arcan_event ev = {
+		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_MESSAGE
 	};
 	snprintf((char*)ev.ext.message, sizeof(ev.ext.message)
@@ -144,34 +144,25 @@ static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
 {
 	struct xlti_ctx* ctx = out->user;
 
-	if (strcmp(ev->io.label, "a") == 0){
+	if (strcmp(ev->io.label, "a") == 0 && ctx->current != VIEW_AUTO){
 		ctx->current = VIEW_AUTO;
 	}
-	else if (strcmp(ev->io.label, "m") == 0){
-		ctx->current = VIEW_MANUAL;
-	}
-	else if (strcmp(ev->io.label, "l") == 0){
+	else if (strcmp(ev->io.label, "l") == 0 && ctx->current != VIEW_LIST){
 		ctx->current = VIEW_LIST;
 	}
 	else if (strcmp(ev->io.label, "r") == 0){
-		if ((ctx->current == VIEW_AUTO || ctx->current == VIEW_DECODED) &&
-			ctx->decoded.raw)
+		if (ctx->current == VIEW_AUTO && ctx->decoded.raw)
 			dump("rgba",
 				ctx->decoded.raw, ctx->decoded.raw_sz, &ctx->decoded.ctr, true);
 			message(out, "dumped decoded raw");
 		return false;
 	}
 	else if (strcmp(ev->io.label, "d") == 0){
-		if ((ctx->current == VIEW_AUTO || ctx->current == VIEW_DECODED) &&
-			ctx->decoded.orig)
+		if (ctx->current == VIEW_AUTO && ctx->decoded.orig)
 			dump(magic[ctx->decoded.ind].ext,
 			ctx->decoded.orig, ctx->decoded.orig_sz, &ctx->decoded.ctr, false);
 			message(out, "dumped encoded original");
 		return false;
-	}
-	else if (strcmp(ev->io.label, "ENTER") == 0 && ctx->current != VIEW_AUTO){
-		ctx->last = ctx->current;
-		ctx->current = VIEW_DECODE;
 	}
 	else
 		return false;
@@ -211,6 +202,18 @@ static size_t scan(uint8_t* buf, size_t buf_sz,
 	return rc;
 }
 
+/*
+ * for list view, we want to highlight metadata from a current
+ * header search
+ */
+static bool over_list(bool newdata, struct arcan_shmif_cont* in,
+	int zoom_ofs[4], struct arcan_shmif_cont* over,
+	struct arcan_shmif_cont* out, uint64_t pos,
+	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
+{
+	return false;
+}
+
 /* big optimization here would be tracking if the state of the page
  * is "already empty" and avoid the memset and possibly transfer */
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
@@ -222,6 +225,10 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* don't have any state hidden in over- tag */
 	if (!buf)
 		return false;
+
+	if (ctx->current == VIEW_LIST)
+		return over_list(newdata, in, zoom_ofs,
+			over, out, pos, buf_sz, buf, sess);
 
 	memset(over->vidp, '\0', sizeof(shmif_pixel) * over->h * over->pitch);
 
@@ -267,20 +274,11 @@ static size_t draw_header(struct arcan_shmif_cont* c, struct xlti_ctx* ctx)
 	draw_box(c, 0, 0, c->w, fonth + 4, RGBA(0x44, 0x44, 0x44, 0xff));
 	switch (ctx->current){
 	case VIEW_LIST:
-		draw_text(c, "View Mode (List), a: auto-decode, m: manual",
+		draw_text(c, "View Mode (List), a: auto-decode",
 			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
 	break;
 	case VIEW_AUTO:
-		draw_text(c, "View Mode (Auto), l: list m: manual",
-			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
-	break;
-	case VIEW_DECODE:
-		draw_text(c, "View Mode (List), decoding",
-			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
-	break;
-
-	case VIEW_MANUAL:
-		draw_text(c, "View Mode (Manual), a: auto-decode, l: list, enter: decode",
+		draw_text(c, "View Mode (Auto), l: list",
 			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
 	break;
 	default:
@@ -336,12 +334,19 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 	};
 
 /* don't decode unless necessary */
-	if (pos + item->ofs == ctx->decoded.last_pos && ctx->decoded.raw)
-		return true;
+	bool reuse = (pos + item->ofs == ctx->decoded.last_pos && ctx->decoded.raw);
 
-	uint8_t* res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
-	ctx->over_pos = pos + item->ofs;
-	ctx->over_count = inf.fpos;
+	uint8_t* res;
+	if (!reuse){
+		res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
+		ctx->over_pos = pos + item->ofs;
+		ctx->over_count = inf.fpos;
+	}
+	else{
+		res = ctx->decoded.raw;
+		w = ctx->decoded.w;
+		h = ctx->decoded.h;
+	}
 
 	if (res){
 		ctx->over_state = 1;
@@ -349,9 +354,9 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 		char scratch[64];
 
 /* sanity check size to prevent bomb etc. */
-		bool suspect = w * h > 8192 * 8192;
+		bool suspect = (w * h) > (8192 * 8192);
 		snprintf(scratch, 64, "@%"PRIu64": %s %s [%d * %d]",
-			pos + item->ofs, suspect ? "decoded" : "suspicious",
+			pos + item->ofs, suspect ? "suspicious" : "decoded",
 			magic[item->magic].ident, w, h
 		);
 		draw_text(out, scratch, (fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
@@ -360,18 +365,27 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 		if (suspect)
 			return true;
 
-		if (ctx->decoded.raw){
+		draw_text(out, "(d) save original (r) save raw (rgba)",
+			(fontw+1)*2, y, RGBA(0xff, 0xff, 0x00, 0xff));
+		y+=fonth+2;
+
+		if (ctx->decoded.raw && !reuse){
 			free(ctx->decoded.raw);
 			free(ctx->decoded.orig);
 		}
 
 /* maintain a copy if the user wants to save */
-		ctx->decoded.raw_sz = w * h * 4;
-		ctx->decoded.raw = res;
-		ctx->decoded.orig = malloc(ctx->over_count);
-		ctx->decoded.orig_sz = ctx->over_count;
-		memcpy(ctx->decoded.orig, buf + item->ofs, ctx->over_count);
-
+		if (!reuse){
+			ctx->decoded.raw_sz = w * h * 4;
+			ctx->decoded.raw = res;
+			ctx->decoded.w = w;
+			ctx->decoded.h = h;
+			ctx->decoded.orig = malloc(ctx->over_count);
+			ctx->decoded.orig_sz = ctx->over_count;
+			memcpy(ctx->decoded.orig, buf + item->ofs, ctx->over_count);
+		}
+		ctx->decoded.scalew = out->w;
+		ctx->decoded.scaleh = out->h;
 		stbir_resize_uint8(res, w, h, 0,
 			(uint8_t*) &out->vidp[y * out->pitch], out->w, out->h-y, 0, 4);
 
@@ -418,8 +432,11 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 		goto alloc_nv;
 	}
 
-	if (!newdata && !ctx->invalidated && nr == 0)
-		return false;
+	if (!newdata && !ctx->invalidated && nr == 0){
+		if (!(ctx->decoded.scalew != out->w &&
+			ctx->decoded.scaleh != out->h && ctx->decoded.raw))
+			return false;
+	}
 	ctx->invalidated = false;
 
 /* handle dynamic size, list will show the amount that can fit in one window */
@@ -455,7 +472,6 @@ alloc_nv:
 		draw_box(out, 0, 0, out->w, out->h, RGBA(0x00, 0x00, 0x00, 0xff));
 		ctx->found = scan(buf, buf_sz, ctx->items, ctx->count);
 		size_t y = draw_header(out, ctx);
-
 		if (ctx->found){
 			for (size_t i = 0; i < 1 && ctx->found; i++){
 				if (process_decode(ctx, out, y, buf, buf_sz, pos, &ctx->items[i]))
