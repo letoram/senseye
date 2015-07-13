@@ -32,6 +32,9 @@ end
 -- performance consideration / tradeoff, overlays does not have to have
 -- a size that matches input or output data windows.
 --
+-- note: overlay is not reset on translator reconnect after crash,
+-- and there seem to be an issue with uniform zooming?
+--
 local function toggle_overlay(wnd, state)
 	local pp = image_storage_properties(wnd.parent.canvas);
 	if (not valid_vid(wnd.xlt_overlay)) then
@@ -45,9 +48,6 @@ local function toggle_overlay(wnd, state)
 
 		blend_image(wnd.parent.overlay, wnd.overlay_opa and wnd.overlay_opa or 0.5);
 
--- missing, add handler for overlay_resize and a zoom-trigger that
--- communicates the effective range / offset as that is needed to
--- figure out the detailed information etc.
 	else
 		wnd.overlay_pause = (state ~= nil) and state or (not wnd.overlay_pause);
 		if (wnd.overlay_pause) then
@@ -85,7 +85,8 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 	image_tracetag(interim, string.format("translator:%d - interim", value));
 
 	local neww = nil;
-	local tgt = define_feedtarget(value, wnd.ctrl_id, function() end);
+	local tgt = define_feedtarget(value, wnd.ctrl_id, function(s, st)
+	end);
 
 	if (tgt == BADID) then
 		warning("couldn't map feedtarget to translator");
@@ -98,12 +99,16 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 		if (status.kind == "resized" and neww.dragmode == nil) then
 			neww:resize(status.width, status.height, true)
 			neww:drag(source, 0, 0);
+
 		elseif (status.kind == "ident") then
 			neww.overlay_support = source;
 			neww.activate_overlay = toggle_overlay;
 
--- will transmit the current zoom-range and cause a refresh of the overlay
+		elseif (status.kind == "message") then
+			neww:set_message(
+				string.gsub(status.message, "\\", "\\\\"), DEFAULT_TIMEOUT);
 		end
+-- will transmit the current zoom-range and cause a refresh of the overlay
 	end, wnd.size_cur
 	);
 
