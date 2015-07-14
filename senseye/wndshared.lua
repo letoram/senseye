@@ -317,7 +317,7 @@ end
 
 function focus_window(wnd)
 	if (wnd.flag_popup == nil) then
-		wnd:set_border(2, 192, 192, 192);
+		wnd:set_border(2, unpack(wnd.focus_color));
 	end
 end
 
@@ -355,10 +355,10 @@ end
 function defocus_window(wnd, nw)
 	if (nw) then
 		if (not nw.flag_popup) then
-			wnd:set_border(1, 128, 128, 128);
+			wnd:set_border(1, unpack(wnd.normal_color));
 		end
 	else
-		wnd:set_border(1, 128, 128, 128);
+		wnd:set_border(1, unpack(wnd.normal_color));
 	end
 end
 

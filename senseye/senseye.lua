@@ -434,16 +434,29 @@ function translate_wh(source, status)
 				if (v.translator_name == status.message and not valid_vid(
 					v.ctrl_id, TYPE_FRAMESERVER)) then
 					activate_translator(v.parent, {source, lbl}, 0, v);
+					v.normal_color = {128, 128, 128};
+					v.focus_color = {192, 192, 192};
 				end
 			end
 		end
 	elseif (status.kind == "terminated") then
+		local xlt_res = nil;
 		for k,v in ipairs(translator_popup) do
 			if (v.value[1] == source) then
+				xlt_res = v;
 				table.remove(translator_popup, k);
 				statusbar:set_message("Lost translator: " ..
 					tostring(v.label), DEFAULT_TIMEOUT);
 				break;
+			end
+		end
+
+		for k,v in ipairs(wm.windows) do
+			if (xlt_res and v.translator_name == xlt_res.label) then
+				v.normal_color = {128, 0, 0};
+				v.focus_color = {255, 0, 0};
+				v:set_border(v.borderw, unpack(wm.selected == v
+					and v.focus_color or v.normal_color));
 			end
 		end
 		table.remove_vmatch(translators, source);

@@ -1,13 +1,11 @@
 /*
- * Copyright 2014-2015, Björn Ståhl
+ * Copyright 2015, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
  * Description: This translator hooks up the STB image parser and provides
  * decoding / preview (assuming that there is enough data in the currently
  * sampled / packed buffer for that to be possible, this depends on the
  * base dimensions and the active packing mode).
- *
- *  - missing manual navigation in list mode
  */
 
 #include <inttypes.h>
@@ -74,6 +72,7 @@ struct {
 	char ident[16];
 	char ext[4];
 	uint8_t buf[10];
+	shmif_pixel col;
 	size_t used;
 /* only useful for LIST mode to hint something was found but that
  * there's not currently any decoder available */
@@ -84,6 +83,7 @@ struct {
 		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x37, 0x61},
 		.used = 6,
+		.col = RGBA(0xff, 0xff, 0x00, 0xff),
 		.decodable = true
 	},
 	{
@@ -91,6 +91,7 @@ struct {
 		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61},
 		.used = 6,
+		.col = RGBA(0xaa, 0xaa, 0x00, 0xff),
 		.decodable = true
 	},
 	{
@@ -98,6 +99,7 @@ struct {
 		.ext = "png",
 		.buf = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a},
 		.used = 8,
+		.col = RGBA(0x00, 0xff, 0xff, 0xff),
 		.decodable = true
 	},
 	{
@@ -105,6 +107,7 @@ struct {
 		.ext = "jpg",
 		.buf = {0xff, 0xd8},
 		.used = 2,
+		.col = RGBA(0xff, 0x00, 0xff, 0xff),
 		.decodable = true
 	},
 	{
@@ -112,6 +115,7 @@ struct {
 		.ext = "bmp",
 		.buf = {0x42, 0x4d},
 		.used = 2,
+		.col = RGBA(0xff, 0xaa, 0x66, 0xff),
 		.decodable = true
 	}
 };
@@ -204,19 +208,45 @@ static size_t scan(uint8_t* buf, size_t buf_sz,
 }
 
 /*
- * for list view, we want to highlight metadata from a current
- * header search
+ * For list view, we want to highlight metadata from a current header search.
+ * Currently this just means the byte defined in our magic search, later
+ * versions will expand and add more specific fields.
  */
-static bool over_list(bool newdata, struct arcan_shmif_cont* in,
-	int zoom_ofs[4], struct arcan_shmif_cont* over,
-	struct arcan_shmif_cont* out, uint64_t pos,
-	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
+static bool over_list(struct arcan_shmif_cont* over,
+	struct xlt_session* sess, struct xlti_ctx* ctx, uint8_t* buf, size_t buf_sz,
+	int zoom_ofs[4], int b_w, int b_h, int d_w, int d_h)
 {
-	return false;
+	ctx->found = scan(buf, buf_sz, ctx->items, ctx->count);
+	if (!ctx->found)
+		return true;
+
+	for (size_t i = 0; i < ctx->found; i++){
+		size_t x1, y1, x2, y2;
+		xlt_ofs_coord(sess, ctx->items[i].ofs, &x1, &y1);
+		xlt_ofs_coord(sess, ctx->items[i].ofs +
+			magic[ctx->items[i].magic].used, &x2, &y2);
+
+		shmif_pixel col = magic[ctx->items[i].magic].col;
+
+/* if within zoom_range, draw_box with d_w, d_h */
+		while ((x1 != x2 || y1 != y2) && y1 <= zoom_ofs[3] && y1 <= y2){
+			if (x1 >= zoom_ofs[0] && y1 >= zoom_ofs[1] &&
+				x1 <= zoom_ofs[2] && y1 <= zoom_ofs[3])
+					draw_box(over, (x1 - zoom_ofs[0]) * b_w,
+						(y1 - zoom_ofs[1]) * b_h, d_w, d_h, col);
+
+			x1++;
+			if (x1 >= zoom_ofs[2]){
+				x1 = zoom_ofs[0]; y1++;
+			}
+		}
+	}
+
+	return true;
 }
 
-/* big optimization here would be tracking if the state of the page
- * is "already empty" and avoid the memset and possibly transfer */
+/* big optimization here would be tracking if the state of the page is "already
+ * empty" and avoid the memset and possibly transfer */
 static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	int zoom_ofs[4], struct arcan_shmif_cont* over,
 	struct arcan_shmif_cont* out, uint64_t pos,
@@ -226,10 +256,6 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* don't have any state hidden in over- tag */
 	if (!buf)
 		return false;
-
-	if (ctx->current == VIEW_LIST)
-		return over_list(newdata, in, zoom_ofs,
-			over, out, pos, buf_sz, buf, sess);
 
 	memset(over->vidp, '\0', sizeof(shmif_pixel) * over->h * over->pitch);
 
@@ -244,6 +270,10 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	float b_h = (float)over->h / h;
 	float d_w = ceil(b_w);
 	float d_h = ceil(b_h);
+
+	if (ctx->current == VIEW_LIST)
+		return over_list(over, sess, ctx, buf, buf_sz, zoom_ofs,
+			b_w, b_h, d_w, d_h);
 
 	size_t ofs = ctx->over_pos - pos;
 
@@ -350,9 +380,9 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 
 /* sanity check size to prevent bomb etc. */
 		bool suspect = (w * h) > (8192 * 8192);
-		snprintf(scratch, 64, "@%"PRIu64": %s %s [%d * %d]",
+		snprintf(scratch, 64, "@%"PRIu64": %s %s [%d * %d] @ factor: %.2f%%",
 			pos + item->ofs, suspect ? "suspicious" : "decoded",
-			magic[item->magic].ident, w, h
+			magic[item->magic].ident, w, h, (float)(w*h*4)/(float)ctx->over_count
 		);
 		draw_text(out, scratch, (fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
 		y+=fonth+2;

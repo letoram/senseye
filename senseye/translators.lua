@@ -17,6 +17,7 @@ local function overlay_cb(source, status)
 	if (status.kind == "terminated") then
 		delete_image(source);
 
+		warning("dropping overlay");
 		for i=1, #wm.windows do
 			if (wm.windows[i].xlt_overlay == source) then
 				wm.windows[i].xlt_overlay = nil;
@@ -123,7 +124,6 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 -- gets tracked and deleted properly as well
 	if (srcwnd) then
 		neww = srcwnd;
-		print(debug.traceback());
 		delete_image(neww.canvas);
 		neww.canvas = vid;
 		show_image(neww.canvas);

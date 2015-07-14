@@ -449,11 +449,9 @@ local function compsurf_wnd_border(wnd, width, r, g, b)
 		r = r[1];
 	end
 
-	if (col == nil) then
-		col = wnd.last_border_color;
-	end
+	if (r ~= nil) then
 
-	wnd.last_border_color = col;
+	end
 
 -- need to do this trick as other things might have been attached to
 -- the border, thus deleting them would cascade in unfortunate ways
@@ -569,6 +567,8 @@ local function compsurf_add_window(ctx, surf, opts)
 		canvas = surf,
 		children = {},
 		autodelete = {},
+		focus_color = {192, 192, 192},
+		normal_color = {128, 128, 128},
 		overlay = null_surface(w, h),
 		deselect = compsurf_wnd_deselect,
 		select = compsurf_wnd_select,
