@@ -59,7 +59,8 @@ struct xlti_ctx {
 	struct {
 		uint8_t* raw, (* orig);
 		size_t raw_sz, orig_sz, ctr;
-		uint64_t last_pos;
+		uint64_t last_ipos, last_pos;
+		int last_state;
 		size_t scalew, scaleh, w, h;
 		int ind;
 	} decoded;
@@ -250,8 +251,8 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	xlt_ofs_coord(sess, ofs, &x1, &y1);
 	xlt_ofs_coord(sess, ofs + ctx->over_count, &x2, &y2);
 
-	shmif_pixel col = ctx->over_state == 1 ? RGBA(0x00, 0xff, 0x00, 0xff) :
-		RGBA(0xff, 0x00, 0x00, 0xff);
+	shmif_pixel col = ctx->over_state == 1 ?
+		RGBA(0x00, 0xff, 0x00, 0xff) : RGBA(0xff, 0x00, 0x00, 0xff);
 
 /* if within zoom_range, draw_box with d_w, d_h */
 	while ((x1 != x2 || y1 != y2) && y1 <= zoom_ofs[3] && y1 <= y2){
@@ -325,7 +326,8 @@ static stbi_io_callbacks stbi_cb = {
 };
 
 static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
-	size_t y, uint8_t* buf, size_t buf_sz, uint64_t pos, struct scanres* item)
+	bool newdata, size_t y, uint8_t* buf, size_t buf_sz, uint64_t pos,
+	struct scanres* item)
 {
 	int w, h, f;
 	struct stbi_inf inf = {
@@ -334,23 +336,16 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 	};
 
 /* don't decode unless necessary */
-	bool reuse = (pos + item->ofs == ctx->decoded.last_pos && ctx->decoded.raw);
 
 	uint8_t* res;
-	if (!reuse){
-		res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
-		ctx->over_pos = pos + item->ofs;
-		ctx->over_count = inf.fpos;
-	}
-	else{
-		res = ctx->decoded.raw;
-		w = ctx->decoded.w;
-		h = ctx->decoded.h;
-	}
+	res = stbi_load_from_callbacks(&stbi_cb, &inf, &w, &h, &f, 4);
+	ctx->over_pos = pos + item->ofs;
+	ctx->over_count = inf.fpos;
 
 	if (res){
 		ctx->over_state = 1;
-		ctx->decoded.last_pos = pos + item->ofs;
+		ctx->decoded.last_ipos = pos + item->ofs;
+		ctx->decoded.last_pos = pos;
 		char scratch[64];
 
 /* sanity check size to prevent bomb etc. */
@@ -369,21 +364,20 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 			(fontw+1)*2, y, RGBA(0xff, 0xff, 0x00, 0xff));
 		y+=fonth+2;
 
-		if (ctx->decoded.raw && !reuse){
+		if (ctx->decoded.raw){
 			free(ctx->decoded.raw);
 			free(ctx->decoded.orig);
 		}
 
 /* maintain a copy if the user wants to save */
-		if (!reuse){
-			ctx->decoded.raw_sz = w * h * 4;
-			ctx->decoded.raw = res;
-			ctx->decoded.w = w;
-			ctx->decoded.h = h;
-			ctx->decoded.orig = malloc(ctx->over_count);
-			ctx->decoded.orig_sz = ctx->over_count;
-			memcpy(ctx->decoded.orig, buf + item->ofs, ctx->over_count);
-		}
+		ctx->decoded.raw_sz = w * h * 4;
+		ctx->decoded.raw = res;
+		ctx->decoded.w = w;
+		ctx->decoded.h = h;
+		ctx->decoded.orig = malloc(ctx->over_count);
+		ctx->decoded.orig_sz = ctx->over_count;
+		memcpy(ctx->decoded.orig, buf + item->ofs, ctx->over_count);
+
 		ctx->decoded.scalew = out->w;
 		ctx->decoded.scaleh = out->h;
 		stbir_resize_uint8(res, w, h, 0,
@@ -391,6 +385,7 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 
 		return true;
 	}
+
 	else{
 		ctx->over_state = -1;
 		draw_text(out, "Decoding failed",
@@ -403,9 +398,6 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 	}
 }
 
-/* for the overlay, simply draw the regions that were found during each
- * decode, and if we have a specialized handler (that can show header data),
- * invoke that */
 static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	struct arcan_shmif_cont* out, uint64_t pos, size_t buf_sz, uint8_t* buf)
 {
@@ -474,14 +466,16 @@ alloc_nv:
 		size_t y = draw_header(out, ctx);
 		if (ctx->found){
 			for (size_t i = 0; i < 1 && ctx->found; i++){
-				if (process_decode(ctx, out, y, buf, buf_sz, pos, &ctx->items[i]))
+				if (process_decode(ctx,
+					out, newdata, y, buf, buf_sz, pos, &ctx->items[i]))
 					break;
 			}
 		}
 		else{
 			draw_text(out, "No supported formats found",
 				(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
-			draw_text(out, stbi_failure_reason(),
+			const char* reason = stbi_failure_reason();
+			draw_text(out, reason ? reason : "Unknown Failure Reason",
 				(fontw+1)*2, y+fonth+2, RGBA(0xff, 0x00, 0x00, 0xff));
 		}
 		return true;
