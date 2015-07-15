@@ -436,6 +436,8 @@ function translate_wh(source, status)
 					activate_translator(v.parent, {source, lbl}, 0, v);
 					v.normal_color = {128, 128, 128};
 					v.focus_color = {192, 192, 192};
+					v:set_border(v.borderw, unpack(wm.selected == v
+						and v.focus_color or v.normal_color));
 				end
 			end
 		end

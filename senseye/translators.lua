@@ -124,13 +124,14 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 -- gets tracked and deleted properly as well
 	if (srcwnd) then
 		neww = srcwnd;
+		local props = image_storage_properties(neww.canvas);
 		delete_image(neww.canvas);
 		neww.canvas = vid;
 		show_image(neww.canvas);
 		image_inherit_order(neww.canvas, true);
 		link_image(neww.canvas, neww.anchor);
 		resize_image(neww.canvas, srcwnd.width, srcwnd.height);
-		--target_displayhint(tgt, srcwnd.width, srcwnd.height);
+		target_displayhint(tgt, props.width, props.height);
 	else
 		neww = wnd.wm:add_window(vid, {});
 		window_shared(neww);
