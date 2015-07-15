@@ -68,7 +68,7 @@ struct xlti_ctx {
 	size_t over_pos, over_count;
 };
 
-struct {
+struct magic {
 	char ident[16];
 	char ext[4];
 	uint8_t buf[10];
@@ -77,7 +77,9 @@ struct {
 /* only useful for LIST mode to hint something was found but that
  * there's not currently any decoder available */
 	bool decodable;
-} magic[] = {
+};
+
+struct magic magic[] = {
 	{
 		.ident = "GIF87",
 		.ext = "gif",
@@ -481,10 +483,12 @@ alloc_nv:
 		if (ctx->found)
 			for (size_t i = 0; i < ctx->found; i++){
 				char scratch[32];
-				snprintf(scratch, 32, "%s @ %zu", magic[ctx->items[i].magic].ident,
-					ctx->items[i].ofs);
+				struct magic* m = &magic[ctx->items[i].magic];
+				size_t chw = strlen(m->ident);
+				draw_text(out, m->ident, (fontw+1)*2, y+i*(fonth), m->col);
+				snprintf(scratch, 32, "@ %zu", ctx->items[i].ofs);
 				draw_text(out, scratch,
-					(fontw+1)*2, y + i * (fonth + 1), RGBA(0x00,0xff,0x00,0xff));
+					(chw+3)*(fontw+1), y + i * (fonth + 1), RGBA(0x00,0xff,0x00,0xff));
 			}
 		return true;
 	}
