@@ -2,14 +2,16 @@
  * Copyright 2015, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
- * Description: Translator that wraps the capstone disassembly framework.
- * The color grouping is rather primitive, possibly research a more well
- * thought out palette that can also handle individual operands and OS
- * specific options.
+ * Description: Translator that wraps the capstone disassembly framework.  The
+ * color grouping is rather primitive, possibly research a more well thought
+ * out palette that can also handle individual operands and OS specific
+ * options. The overlay attempts to show coverage of the current disassembly
+ * range, colored by instruction group.
  */
 #include "xlt_supp.h"
 #include <inttypes.h>
 #include <getopt.h>
+#include <math.h>
 #include <capstone/capstone.h>
 #include "font_8x8.h"
 
@@ -61,6 +63,17 @@ struct cs_ctx {
 	enum interp_mode mode;
 	uint64_t pos;
 	bool active;
+
+	cs_insn* last;
+	size_t last_count;
+
+	struct {
+		bool dirty;
+		int zoom_ofs[4];
+		float b_w, b_h, d_w, d_h;
+		struct xlt_session* sess;
+		struct arcan_shmif_cont* overlay;
+	} ol;
 };
 
 static inline shmif_pixel opcode_color(cs_insn* m)
@@ -119,6 +132,48 @@ static inline shmif_pixel position_color()
 	default:
 	return RGBA(0xaa, 0xff, 0xaa, 0xff);
 	}
+}
+
+static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
+	int zoom_ofs[4], struct arcan_shmif_cont* over,
+	struct arcan_shmif_cont* out, uint64_t pos,
+	size_t buf_sz, uint8_t* buf, struct xlt_session* sess)
+{
+	struct cs_ctx* ctx = out->user;
+
+/* standard calculation for finding active region and scale factors */
+	float w = zoom_ofs[2] - zoom_ofs[0];
+	float h = zoom_ofs[3] - zoom_ofs[1];
+
+	float b_w = (float)over->w / w;
+	float b_h = (float)over->h / h;
+	float d_w = ceil(b_w);
+	float d_h = ceil(b_h);
+
+	memset(over->vidp, '\0', sizeof(shmif_pixel) * over->h * over->pitch);
+
+	for (size_t i = 0; i < ctx->last_count; i++){
+		size_t x1, y1, x2, y2;
+		cs_insn* cur = &ctx->last[i];
+		uint64_t addr = cur->address - pos;
+		shmif_pixel col = opcode_color(cur);
+		xlt_ofs_coord(sess, addr, &x1, &y1);
+		xlt_ofs_coord(sess, addr + cur->size, &x2, &y2);
+
+		while ((x1 != x2 || y1 != y2) && y1 <= zoom_ofs[3] && y1 <= y2){
+			if (x1 >= zoom_ofs[0] && y1 >= zoom_ofs[1] &&
+				x1 <= zoom_ofs[2] && y1 <= zoom_ofs[3])
+					draw_box(over, (x1 - zoom_ofs[0]) * b_w,
+					(y1 - zoom_ofs[1]) * b_h, d_w, d_h, col);
+
+			x1++;
+			if (x1 >= zoom_ofs[2]){
+				x1 = zoom_ofs[0]; y1++;
+			}
+		}
+	}
+
+	return true;
 }
 
 static bool input(struct arcan_shmif_cont* out, arcan_event* ev)
@@ -319,11 +374,13 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	}
 
 	draw_box(out, 0, 0, out->addr->w, out->addr->h, col_bg);
+	if (inh->last)
+		cs_free(inh->last, inh->last_count);
 
-	cs_insn* insn;
-	size_t count = cs_disasm(inh->handle, buf, buf_sz, pos, 0, &insn);
+	inh->last_count = cs_disasm(inh->handle,
+		buf, buf_sz, pos + inh->disass_ofs, 0, &inh->last);
 
-	if (!count){
+	if (!inh->last_count){
 		char txtbuf[64];
 		snprintf(txtbuf, 64, "Failed disassembly @%"PRIx64, pos);
 		draw_text(out, txtbuf, 2, fonth + 4, col_err);
@@ -335,14 +392,13 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	if (inh->mode == INTERP_NORMAL){
 		size_t row = 4 + fonth, xp = 0;
 		inh->pos = pos;
-		for (size_t i = 0; i < count && row < out->addr->h - fonth; i++)
-			draw_mnemonic(out, inh, &insn[i], &xp, &row);
+		for (size_t i = 0; i < inh->last_count && row < out->addr->h - fonth; i++)
+			draw_mnemonic(out, inh, &inh->last[i], &xp, &row);
 	}
 	else
-		group_disass(out, insn, count);
+		group_disass(out, inh->last, inh->last_count);
 
 done:
-	cs_free(insn, count);
 	draw_header(out, inh, pos);
 	return true;
 }
@@ -537,6 +593,13 @@ int main(int argc, char** argv)
 	arch = archs[aind].arch;
 	mode = archs[aind].mode;
 
-	return xlt_setup(archs[aind].name, populate, input, XLT_DYNSIZE, confl) ==
-		true ?  EXIT_SUCCESS : EXIT_FAILURE;
+	struct xlt_context* ctx = xlt_open(archs[aind].name, XLT_DYNSIZE, confl);
+	if (!ctx)
+		return EXIT_FAILURE;
+
+	xlt_config(ctx, populate, input, over_pop, NULL);
+	xlt_wait(ctx);
+	xlt_free(&ctx);
+
+	return EXIT_SUCCESS;
 }
