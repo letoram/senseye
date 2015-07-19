@@ -2,11 +2,11 @@
  * Copyright 2014-2015, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
- * Description: This sensor periodically monitors the memory pages of a process
- * providing data similar to fsense. It is rather slow, naive and crude -
- * relying on being able to ptrace having access to /proc/pid/mem interface,
- * which any ol' DRM will disable on first breath.
+ * Description: This sensor is used for live exploration of process memory.
+ * compared to the others (file, mfile, ...) it is rather unsophisticated and
+ * crude still, providing only page mapping oriented navigation.
  */
+#define _LARGEFILE64_SOURCE
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,11 +28,11 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-#include <sys/ptrace.h>
 
 #include "sense_supp.h"
 #include "font_8x8.h"
 #include "rwstat.h"
+#include "memif.h"
 
 struct page_ch {
 	struct senseye_ch* channel;
@@ -43,9 +43,7 @@ struct page_ch {
 
 struct {
 /* tracing and synchronization */
-	bool ptrace;
 	pid_t pid;
-	pthread_mutex_t plock;
 
 /* page table scanning / cache */
 	struct page* pcache;
@@ -65,35 +63,21 @@ struct {
 };
 
 static void update_preview(shmif_pixel ccol);
-static struct page* get_map_descr(pid_t pid, bool filter, size_t* count);
 void* data_loop(void*);
 
 /*
- * try to acquire a handle into the memory of the process
- * at a specific base and width, if successful, spawn a new
- * data connection to senseye.
+ * try to acquire a handle into the memory of the process at a specific base
+ * and width, if successful, spawn a new data connection to senseye.
  */
-static void launch_addr(uintptr_t base, size_t size)
+static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 {
-	char wbuf[sizeof("/proc//mem") + 8];
-	snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) msense.pid);
-	int fd = open(wbuf, O_RDONLY);
-	if (-1 == fd){
-		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx open (%s) failed, %s\n",
-			base, size, wbuf, strerror(errno));
+	struct map_ctx* mctx = memif_openmapping(pid, ent);
+	if (!mctx)
 		return;
-	}
 
-	if (-1 == lseek64(fd, base, SEEK_SET)){
-		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx  couldn't seek, %s\n",
-			base, size, strerror(errno));
-		close(fd);
-		return;
-	}
-
-/* or calculate base by sqrt -> prev POT */
+	char wbuf[64];
 	snprintf(wbuf, sizeof(wbuf), "%d@%" PRIxPTR, (int)msense.pid, base);
-	struct senseye_ch* ch = senseye_open(msense.cont, wbuf, 512);
+	struct senseye_ch* ch = senseye_open(msense.cont, wbuf, base);
 
 	if (NULL == ch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
@@ -164,7 +148,7 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		}
 		else if (strcmp(ev->io.label, "r") == 0 || strcmp(ev->io.label, "f") == 0){
 			free(msense.pcache);
-			msense.pcache = get_map_descr(msense.pid,
+			msense.pcache = memif_mapdescr(msense.pid,
 				strcmp(ev->io.label, "f") == 0, &msense.pcache_sz);
 			refresh = true;
 		}
@@ -180,31 +164,6 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 
 	if (refresh)
 		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
-}
-
-static size_t synch_copy(struct rwstat_ch* ch, int fd, uint8_t* buf, size_t nb)
-{
-	ch->switch_clock(ch, RW_CLK_BLOCK);
-	pthread_mutex_lock(&msense.plock);
-
-	ssize_t nr = read(fd, buf, nb);
-	if (-1 == nr){
-		fprintf(stderr, "error reading from memory (%s)\n", strerror(errno));
-		nr = 0;
-	}
-
-	if (nr != nb)
-		memset(buf + nr, '\0', nb - nr);
-
-#ifdef PTRACE_PRCTL
-	ptrace(PTRACE_CONT, msense.pid, NULL, NULL);
-#endif
-
-	pthread_mutex_unlock(&msense.plock);
-
-	int ign;
-	ch->data(ch, buf, nb, &ign);
-	return nr;
 }
 
 void* data_loop(void* th_data)
@@ -226,7 +185,7 @@ void* data_loop(void* th_data)
 
 	ch->event(ch, &ev);
 
-	off64_t cofs = lseek64(pch->fd, 0, SEEK_CUR);
+	uint64_t cofs = 0;
 	goto seek0;
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
@@ -257,17 +216,26 @@ void* data_loop(void* th_data)
 			ssize_t nc;
 			if (ev.tgt.ioevs[0].iv == 0){
 seek0:
-				nc = synch_copy(ch, pch->fd, buf, buf_sz);
-
+				ch->switch_clock(ch, RW_CLK_BLOCK);
+				nc = memif_copy(memmap, buf, buf_sz);
+/* there really isn't a "best" pad- value here, statistically speaking,
+ * some >7bit value != 255 would probably be a better marker but still
+ * not good */
 				if (0 == nc)
 					fprintf(stderr, "Couldn't read from ofset (%llu: %s)\n",
 						(unsigned long long) cofs, strerror(errno));
+				else{
+					if (nr != buf_sz)
+						memset(buf + nr, '\0', buf_sz - nr);
 
-				if (-1 == lseek64(pch->fd, -nc, SEEK_CUR)){
+					int ign;
+					ch->data(ch, buf, nb, &ign);
+				}
+				if ((uint64_t)-1 == memif_seek(memmap, -nc, SEEK_CUR)){
 					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
 					goto error;
 				}
-				cofs = lseek64(pch->fd, 0, SEEK_CUR);
+				cofs = memif_seek(memmap, 0, SEEK_CUR);
 			}
 			else if (ev.tgt.ioevs[0].iv == 1){
 				ssize_t left = pch->base + pch->size - cofs;
@@ -275,12 +243,12 @@ seek0:
 					goto seek0;
 
 				if (left > buf_sz)
-					cofs = lseek64(pch->fd, buf_sz, SEEK_CUR);
+					cofs = memif_seek(memmap, buf_sz, SEEK_CUR);
 
 				goto seek0;
 			}
 			else if (ev.tgt.ioevs[0].iv == -1){
-				cofs = lseek64(pch->fd, cofs - buf_sz >= pch->base ?
+				cofs = memif_seek(memmap, cofs - buf_sz >= pch->base ?
 					cofs - buf_sz : pch->base, SEEK_SET);
 				goto seek0;
 			}
@@ -294,73 +262,6 @@ error:
 	pch->channel->close(pch->channel);
 	free(th_data);
 	return NULL;
-}
-
-struct page {
-	long long addr, endaddr, offset, inode;
-	char perm[6];
- 	char device[16];
-};
-
-static struct page* get_map_descr(pid_t pid, bool filter, size_t* count)
-{
-	static int mdescr = -1;
-	char wbuf[sizeof("/proc//maps") + 20];
-	snprintf(wbuf, sizeof(wbuf), "/proc/%d/maps", (int) msense.pid);
-	FILE* fpek = fopen(wbuf, "r");
-
-	if (-1 == mdescr && filter){
-		snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) msense.pid);
-		mdescr = open(wbuf, O_RDONLY);
-	}
-
-/* populate list of entries, first get limit */
-	for (*count = 0; !feof(fpek); (*count)++)
-		while(fgetc(fpek) != '\n' && !feof(fpek))
-			;
-	fseek(fpek, 0, SEEK_SET);
-
-/* note there is a time-of-check-time-of-use-risk here */
-	size_t pcache_sz = *count * sizeof(struct page);
-	struct page* pcache = malloc(pcache_sz);
-	memset(pcache, '\0', pcache_sz);
-
-	size_t ofs = 0;
-	while(!feof(fpek) && ofs < *count){
-		int ret = fscanf(fpek, "%llx-%llx %5s %llx %5s %llx",
-			&pcache[ofs].addr, &pcache[ofs].endaddr, pcache[ofs].perm,
-			&pcache[ofs].offset, pcache[ofs].device, &pcache[ofs].inode);
-
-		if (0 == ret){
-				while (fgetc(fpek) != '\n' && !feof(fpek))
-					;
-			continue;
-		}
-
-/* usually the file- mapped pages aren't that interesting in this context */
-		if (!msense.skip_inode || (msense.skip_inode && pcache[ofs].inode == 0)){
-			if (filter){
-				char junk[4096];
-				if (-1 == lseek64(mdescr, pcache[ofs].addr, SEEK_SET))
-					continue;
-				if (-1 == read(mdescr, junk, 4096))
-					continue;
-			}
-			ofs++;
-		}
-	}
-
-	if (-1 != mdescr)
-		close(mdescr);
-
-	if (ofs <= 1){
-		free(pcache);
-		*count = 0;
-		return NULL;
-	}
-
-	*count = ofs-1;
-	return pcache;
 }
 
 /*
@@ -453,7 +354,7 @@ int main(int argc, char* argv[])
 	}
 
 	msense.pid = strtol(argv[1], NULL, 10);
-	msense.pcache = get_map_descr(msense.pid, false, &msense.pcache_sz);
+	msense.pcache = memif_mapdescr(msense.pid, false, &msense.pcache_sz);
 	if (!msense.pcache){
 		fprintf(stderr, "Couldn't open/parse /proc/%d/maps\n", (int) msense.pid);
 		return EXIT_FAILURE;
@@ -468,22 +369,7 @@ int main(int argc, char* argv[])
 	if (!arcan_shmif_resize(cont.context(&cont), desw, 512))
 		return EXIT_FAILURE;
 
-#ifdef PTRACE_PRCTL
-	if (-1 == ptrace(PTRACE_ATTACH, msense.pid, NULL, NULL)){
-		fprintf(stderr, "ptrace(%d) failed, page "
-			"inspection disabled\n", (int)msense.pid);
-		msense.ptrace = false;
-	}
-	else{
-		msense.ptrace = true;
-		waitpid(msense.pid, NULL, 0);
-	}
-#else
-	msense.ptrace = true;
-#endif
-
 	msense.cont = &cont;
-	pthread_mutex_init(&msense.plock, NULL);
 
 	msense.pcache = get_map_descr(msense.pid, false, &msense.pcache_sz);
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));

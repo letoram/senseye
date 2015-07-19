@@ -49,11 +49,11 @@ else()
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	set(SENSE_MEM sense_osxmem.c)
+	set(SENSE_MEM sense_mem.c memif_osx.c)
 endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-	set(SENSE_MEM sense_linmem.c)
+	set(SENSE_MEM sense_mem.c memif_linux.c)
 endif()
 
 if (ENABLE_CAPSTONE)
