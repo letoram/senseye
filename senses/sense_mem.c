@@ -36,7 +36,7 @@
 
 struct page_ch {
 	struct senseye_ch* channel;
-	int fd;
+	struct map_ctx* mctx;
 	uintptr_t base;
 	size_t size;
 };
@@ -44,10 +44,8 @@ struct page_ch {
 struct {
 /* tracing and synchronization */
 	pid_t pid;
-
-/* page table scanning / cache */
-	struct page* pcache;
-	size_t pcache_sz;
+	size_t mcache_sz;
+	struct map_descr* mcache;
 
 /* cursor tracking */
 	ssize_t sel;
@@ -58,8 +56,10 @@ struct {
 
 /* external connections */
 	struct senseye_cont* cont;
+	size_t last_chbase;
 } msense = {
- .skip_inode = true
+ .skip_inode = true,
+ .last_chbase = 256
 };
 
 static void update_preview(shmif_pixel ccol);
@@ -75,14 +75,15 @@ static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 	if (!mctx)
 		return;
 
+	size_t size = ent->endaddr - ent->addr;
 	char wbuf[64];
 	snprintf(wbuf, sizeof(wbuf), "%d@%" PRIxPTR, (int)msense.pid, base);
 	struct senseye_ch* ch = senseye_open(msense.cont, wbuf, base);
 
 	if (NULL == ch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
-			"couldn't open data channel\n", base, size);
-		close(fd);
+			"couldn't open data channel\n", (uintptr_t) ent->addr, size);
+		memif_closemapping(mctx);
 		return;
 	}
 
@@ -91,12 +92,12 @@ static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 	if (NULL == pch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
 			"couldn't setup processing storage\n", base, size);
-		close(fd);
+		memif_closemapping(mctx);
 		return;
 	}
 
 	pch->channel = ch;
-	pch->fd = fd;
+	pch->mctx = mctx;
 	pch->base = base;
 	pch->size = size;
 
@@ -105,7 +106,7 @@ static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 			"couldn't spawn processing thread\n", base, size);
 		ch->close(ch);
 		free(pch);
-		close(fd);
+		memif_closemapping(mctx);
 		return;
 	}
 }
@@ -141,15 +142,12 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 			refresh = true;
 		}
 		else if (strcmp(ev->io.label, "SELECT") == 0){
-			if (!msense.ptrace)
-				fprintf(stderr, "cannot inspect segment, ptrace support disabled.\n");
-			else
-				launch_addr(msense.sel_base, msense.sel_size);
+			launch_addr(msense.pid, &msense.mcache[msense.sel], msense.last_chbase);
 		}
 		else if (strcmp(ev->io.label, "r") == 0 || strcmp(ev->io.label, "f") == 0){
-			free(msense.pcache);
-			msense.pcache = memif_mapdescr(msense.pid,
-				strcmp(ev->io.label, "f") == 0, &msense.pcache_sz);
+			free(msense.mcache);
+			msense.mcache = memif_mapdescr(msense.pid,
+				strcmp(ev->io.label, "f") == 0, &msense.mcache_sz);
 			refresh = true;
 		}
 	}
@@ -168,11 +166,12 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 
 void* data_loop(void* th_data)
 {
-/* we ignore the senseye- abstraction here and works
- * directly with the rwstat and shmif context */
+/* map convenience aliases and work directly with the stats channel
+ * rather than going through the sense_ abstraction */
 	struct page_ch* pch = (struct page_ch*)th_data;
 	struct rwstat_ch* ch = pch->channel->in;
 	struct arcan_shmif_cont* cont = ch->context(ch);
+	struct map_ctx* memmap = pch->mctx;
 
 	size_t buf_sz = ch->left(ch);
 	uint8_t* buf = malloc(buf_sz);
@@ -225,11 +224,11 @@ seek0:
 					fprintf(stderr, "Couldn't read from ofset (%llu: %s)\n",
 						(unsigned long long) cofs, strerror(errno));
 				else{
-					if (nr != buf_sz)
-						memset(buf + nr, '\0', buf_sz - nr);
+					if (nc != buf_sz)
+						memset(buf + nc, '\0', buf_sz - nc);
 
 					int ign;
-					ch->data(ch, buf, nb, &ign);
+					ch->data(ch, buf, buf_sz, &ign);
 				}
 				if ((uint64_t)-1 == memif_seek(memmap, -nc, SEEK_CUR)){
 					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
@@ -291,14 +290,14 @@ static void update_preview(shmif_pixel ccol)
 	draw_text(c, "(r)efresh, (f)ilter", 2, y, white);
 	y += rowsz;
 
-	size_t count = msense.pcache_sz;
+	size_t count = msense.mcache_sz;
 	if (count == 0){
 		draw_text(c, "couldn't read mappings", 2, y, white);
 		arcan_shmif_signal(c, SHMIF_SIGVID);
 		return;
 	}
 
-	struct page* pcache = msense.pcache;
+	struct map_descr* mcache = msense.mcache;
 
 /* clamp */
 	if (msense.sel >= count)
@@ -314,13 +313,13 @@ static void update_preview(shmif_pixel ccol)
 	size_t start = y;
 
 	while (y < c->addr->h && ofs < count){
-		uint8_t r = pcache[ofs].perm[0] == 'r' ? 0xff : 0x55;
-		uint8_t g = pcache[ofs].perm[1] == 'w' ? 0xff : 0x55;
-		uint8_t b = pcache[ofs].perm[2] == 'x' ? 0xff : 0x55;
+		uint8_t r = mcache[ofs].perm[0] == 'r' ? 0xff : 0x55;
+		uint8_t g = mcache[ofs].perm[1] == 'w' ? 0xff : 0x55;
+		uint8_t b = mcache[ofs].perm[2] == 'x' ? 0xff : 0x55;
 
 		if (cc == 0){
-			msense.sel_base = pcache[ofs].addr + pcache[ofs].offset;
-			msense.sel_size = pcache[ofs].endaddr - pcache[ofs].addr;
+			msense.sel_base = mcache[ofs].addr + mcache[ofs].offset;
+			msense.sel_size = mcache[ofs].endaddr - mcache[ofs].addr;
 			cc--;
 		}
 		else if (cc > 0)
@@ -329,8 +328,8 @@ static void update_preview(shmif_pixel ccol)
 /* draw addr + text in fitting color */
 		char wbuf[256];
 		shmif_pixel col = RGBA(r, g, b, 0xff);
-		snprintf(wbuf, 256, "%llx(%dk)", pcache[ofs].addr,
-			(int)((pcache[ofs].endaddr - pcache[ofs].addr) / 1024));
+		snprintf(wbuf, 256, "%llx(%dk)", mcache[ofs].addr,
+			(int)((mcache[ofs].endaddr - mcache[ofs].addr) / 1024));
 
 		draw_text(c, wbuf, fontw + 1, y, col);
 		y += rowsz;
@@ -354,8 +353,8 @@ int main(int argc, char* argv[])
 	}
 
 	msense.pid = strtol(argv[1], NULL, 10);
-	msense.pcache = memif_mapdescr(msense.pid, false, &msense.pcache_sz);
-	if (!msense.pcache){
+	msense.mcache = memif_mapdescr(msense.pid, false, &msense.mcache_sz);
+	if (!msense.mcache){
 		fprintf(stderr, "Couldn't open/parse /proc/%d/maps\n", (int) msense.pid);
 		return EXIT_FAILURE;
 	}
@@ -371,7 +370,7 @@ int main(int argc, char* argv[])
 
 	msense.cont = &cont;
 
-	msense.pcache = get_map_descr(msense.pid, false, &msense.pcache_sz);
+	msense.mcache = memif_mapdescr(msense.pid, false, &msense.mcache_sz);
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;

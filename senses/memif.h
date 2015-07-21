@@ -39,11 +39,11 @@ void memif_closemapping(struct map_ctx*);
  * copy up to buf_sz bytes from the current position in map_ctx into the buffer
  * pointed to by buf. return the actual number of bytes read.
  */
-static size_t memif_copy(struct map_ctx*, uint8_t* buf, size_t buf_sz);
+size_t memif_copy(struct map_ctx*, uint8_t* buf, size_t buf_sz);
 
 /*
  * seek to a specific offset relative to the current ofset, return true or false
  * depending on if the seek operation was successful (within the bounds of the
  * underlying mapping) or not.
  */
-static uint64_t memif_seek(struct map_ctx*, int64_t ofs, int mode);
+uint64_t memif_seek(struct map_ctx*, int64_t ofs, int mode);
