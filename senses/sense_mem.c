@@ -164,6 +164,31 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 }
 
+static void push_data(struct rwstat_ch* ch,
+	struct map_ctx* map, uint8_t* buf, bool repos)
+{
+	size_t left = ch->left(ch);
+	ch->switch_clock(ch, RW_CLK_BLOCK);
+	ch->wind_ofs(ch, memif_addr(map));
+	uint64_t nc = memif_copy(map, buf, left);
+	if (0 == nc){
+		memif_reset(map);
+		nc = memif_copy(map, buf, left);
+		if (0 == nc)
+			return;
+	}
+	else{
+		if (repos)
+			memif_seek(map, -nc, SEEK_CUR);
+
+		if (nc != left)
+			memset(buf + nc, '\0', left - nc);
+	}
+
+	int ign;
+	ch->data(ch, buf, left, &ign);
+}
+
 void* data_loop(void* th_data)
 {
 /* map convenience aliases and work directly with the stats channel
@@ -183,15 +208,16 @@ void* data_loop(void* th_data)
 	};
 
 	ch->event(ch, &ev);
+	push_data(ch, memmap, buf, true);
 
 	uint64_t cofs = 0;
-	goto seek0;
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
 		if (rwstat_consume_event(ch, &ev)){
 			continue;
 		}
 
+/* might have been resized during consume */
 		if (ch->left(ch) > buf_sz){
 			free(buf);
 			buf_sz = ch->left(ch);
@@ -212,52 +238,16 @@ void* data_loop(void* th_data)
 		}
 
 		case TARGET_COMMAND_STEPFRAME:{
-			ssize_t nc;
-			if (ev.tgt.ioevs[0].iv == 0){
-seek0:
-				ch->switch_clock(ch, RW_CLK_BLOCK);
-				nc = memif_copy(memmap, buf, buf_sz);
-/* there really isn't a "best" pad- value here, statistically speaking,
- * some >7bit value != 255 would probably be a better marker but still
- * not good */
-				if (0 == nc)
-					fprintf(stderr, "Couldn't read from ofset (%llu: %s)\n",
-						(unsigned long long) cofs, strerror(errno));
-				else{
-					if (nc != buf_sz)
-						memset(buf + nc, '\0', buf_sz - nc);
-
-					int ign;
-					ch->data(ch, buf, buf_sz, &ign);
-				}
-				if ((uint64_t)-1 == memif_seek(memmap, -nc, SEEK_CUR)){
-					fprintf(stderr, "Couldn't reset FP after copy, code: %d\n", errno);
-					goto error;
-				}
-				cofs = memif_seek(memmap, 0, SEEK_CUR);
+			if (ev.tgt.ioevs[0].iv == -1){
+				memif_seek(memmap, -2 * ch->left(ch), SEEK_CUR);
 			}
-			else if (ev.tgt.ioevs[0].iv == 1){
-				ssize_t left = pch->base + pch->size - cofs;
-				if (left == 0)
-					goto seek0;
-
-				if (left > buf_sz)
-					cofs = memif_seek(memmap, buf_sz, SEEK_CUR);
-
-				goto seek0;
-			}
-			else if (ev.tgt.ioevs[0].iv == -1){
-				cofs = memif_seek(memmap, cofs - buf_sz >= pch->base ?
-					cofs - buf_sz : pch->base, SEEK_SET);
-				goto seek0;
-			}
+			push_data(ch, memmap, buf, ev.tgt.ioevs[0].iv == 0);
 		}
 		default:
 		break;
 		}
 	}
 
-error:
 	pch->channel->close(pch->channel);
 	free(th_data);
 	return NULL;
@@ -318,7 +308,7 @@ static void update_preview(shmif_pixel ccol)
 		uint8_t b = mcache[ofs].perm[2] == 'x' ? 0xff : 0x55;
 
 		if (cc == 0){
-			msense.sel_base = mcache[ofs].addr + mcache[ofs].offset;
+			msense.sel_base = mcache[ofs].addr;
 			msense.sel_size = mcache[ofs].endaddr - mcache[ofs].addr;
 			cc--;
 		}
@@ -328,7 +318,7 @@ static void update_preview(shmif_pixel ccol)
 /* draw addr + text in fitting color */
 		char wbuf[256];
 		shmif_pixel col = RGBA(r, g, b, 0xff);
-		snprintf(wbuf, 256, "%llx(%dk)", mcache[ofs].addr,
+		snprintf(wbuf, 256, "%"PRIx64"(%dk)", mcache[ofs].addr,
 			(int)((mcache[ofs].endaddr - mcache[ofs].addr) / 1024));
 
 		draw_text(c, wbuf, fontw + 1, y, col);
