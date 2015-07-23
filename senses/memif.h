@@ -16,12 +16,21 @@ struct map_descr {
  	char device[16];
 };
 
+enum memif_filter {
+	FILTER_NONE,
+
+/* try and a page at the beginning of each address */
+	FILTER_READ
+};
+
 /*
- * refresh the page mapping for a specific process, if >filter< is set, perform
- * additional (possibly costly) tests for reachability and similar properties.
- * Returns NULL on missing pid or access violation.
+ * refresh the page mapping for a specific process for all pages that are
+ * larger than min_sz. If >filter< is set, perform additional (possibly costly)
+ * tests for reachability and similar properties. Returns NULL on missing pid
+ * or access violation.
  */
-struct map_descr* memif_mapdescr(PROCESS_ID pid, bool filter, size_t* count);
+struct map_descr* memif_mapdescr(PROCESS_ID pid,
+	size_t min_sz, enum memif_filter filt, size_t* count);
 
 /*
  * allocate a control context for a specific mapping (ent), return NULL on

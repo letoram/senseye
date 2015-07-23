@@ -146,8 +146,10 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 		}
 		else if (strcmp(ev->io.label, "r") == 0 || strcmp(ev->io.label, "f") == 0){
 			free(msense.mcache);
-			msense.mcache = memif_mapdescr(msense.pid,
-				strcmp(ev->io.label, "f") == 0, &msense.mcache_sz);
+			msense.mcache = memif_mapdescr(msense.pid, 0,
+				strcmp(ev->io.label, "f") == 0 ?
+				FILTER_READ : FILTER_NONE, &msense.mcache_sz
+			);
 			refresh = true;
 		}
 	}
@@ -343,7 +345,7 @@ int main(int argc, char* argv[])
 	}
 
 	msense.pid = strtol(argv[1], NULL, 10);
-	msense.mcache = memif_mapdescr(msense.pid, false, &msense.mcache_sz);
+	msense.mcache = memif_mapdescr(msense.pid, 0, FILTER_NONE, &msense.mcache_sz);
 	if (!msense.mcache){
 		fprintf(stderr, "Couldn't open/parse /proc/%d/maps\n", (int) msense.pid);
 		return EXIT_FAILURE;
@@ -359,8 +361,6 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 
 	msense.cont = &cont;
-
-	msense.mcache = memif_mapdescr(msense.pid, false, &msense.mcache_sz);
 	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;

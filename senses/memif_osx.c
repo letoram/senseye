@@ -28,69 +28,15 @@
 struct map_ctx {
 	vm_address_t address;
 	task_t task;
+	size_t sz;
 	uint64_t ofs;
 };
 
-struct map_descr* memif_mapdescr(PROCESS_ID pid, bool filter, size_t* count)
-{
+static size_t get_vmmap_entries(task_t task) {
 	size_t n = 0;
 	vm_size_t size = 0;
-	size_t ofs = 0;
 	vm_address_t address = 0;
-	uint32_t nesting_depth = 0;
-	mach_msg_type_number_t region_count = 0;
-	struct vm_region_submap_info_64 info;
-
-/* figure out number of mappings */
-/*
- * pcache[ofs].addr = address;
-	 pcache[ofs].endaddr = address + size;
-	 pcache[ofs].inode = 0;
-	 pcache[ofs].offset = 0;
-	 if(info.protection & VM_PROT_READ) pcache[ofs].perm[0] = 'r';
-	 if(info.protection & VM_PROT_WRITE) pcache[ofs].perm[1] = 'w';
-	 if(info.protection & VM_PROT_EXECUTE) pcache[ofs].perm[2] = 'x';
-	 pcache[ofs].device[0] = '\0';
-		memset(&info, '\0', sizeof(struct vm_region_submap_info_64));
-
-		while (1) {
-			region_count = VM_REGION_SUBMAP_INFO_COUNT_64;
-			kr = vm_region_recurse_64(msense.task, &address, &size, &nesting_depth,
-					(vm_region_info_64_t)&info, &region_count);
-
-			if(KERN_SUCCESS != kr)
-				break;
-
-			if (info.is_submap) {
-				nesting_depth++;
-				continue;
-			}
-			else
-				break;
-		}
-
-		if(KERN_SUCCESS != kr) {
-			if(KERN_INVALID_ADDRESS == kr) {
-				fprintf(stderr, "Couldn't get infomation for address 0x%lx\n", address);
-			}
-			break;
-		}
-
-		if(size == 0)
-			break;
-
-		address += size;
-		ofs++;
-	}
- */
-
-	task_t task;
-	kern_return_t kr = task_for_pid(mach_task_self(), pid, &task);
-	if(kr != KERN_SUCCESS){
-		fprintf(stderr, "Couldn't open task port for pid %d, reason: %s\n",
-			(int) pid, mach_error_string(kr));
-		return NULL;
-	}
+	kern_return_t kr = KERN_SUCCESS;
 
 	while (1) {
 		uint32_t nesting_depth;
@@ -114,7 +60,95 @@ struct map_descr* memif_mapdescr(PROCESS_ID pid, bool filter, size_t* count)
 		}
 	}
 
-	return NULL;
+	return n;
+}
+
+struct map_descr* memif_mapdescr(PROCESS_ID pid,
+	size_t min_sz, enum memif_filter filter, size_t* outc)
+{
+	task_t task;
+	kern_return_t kr = task_for_pid(mach_task_self(), pid, &task);
+	if(kr != KERN_SUCCESS){
+		fprintf(stderr, "Couldn't open task port for pid %d, reason: %s\n",
+			(int) pid, mach_error_string(kr));
+		return NULL;
+	}
+
+	size_t count = get_vmmap_entries(task);
+	if (0 == count)
+		return NULL;
+
+	struct map_descr* pcache = malloc(sizeof(struct map_descr) * count);
+	memset(pcache, '\0', sizeof(struct map_descr) * count);
+
+	size_t ofs = 0;
+	vm_size_t size = 0;
+	vm_address_t address = 0;
+	uint32_t nesting_depth = 0;
+	mach_msg_type_number_t region_count = 0;
+	struct vm_region_submap_info_64 info;
+
+	while(ofs < count){
+		region_count = 0;
+		nesting_depth = 0;
+		memset(&info, '\0', sizeof(struct vm_region_submap_info_64));
+
+		while(1){
+			region_count = VM_REGION_SUBMAP_INFO_COUNT_64;
+			kr = vm_region_recurse_64(task, &address, &size, &nesting_depth,
+					(vm_region_info_64_t)&info, &region_count);
+
+			if(KERN_SUCCESS != kr)
+				break;
+
+			if (info.is_submap){
+				nesting_depth++;
+				continue;
+			}
+			else
+				break;
+		}
+
+		if(KERN_SUCCESS != kr){
+			if(KERN_INVALID_ADDRESS == kr){
+				fprintf(stderr, "Couldn't get infomation for address 0x%lx\n", address);
+			}
+			break;
+		}
+
+		if (size == 0)
+			break;
+
+		if (size < min_sz)
+			goto step;
+
+		if (filter != FILTER_NONE){
+			uint8_t buf[2048];
+			vm_size_t nr;
+			kern_return_t kr = vm_read_overwrite(task,
+				address, 2048, (vm_address_t) buf, &nr);
+
+			if (kr != KERN_SUCCESS)
+				goto step;
+		}
+
+		pcache[ofs].addr = address;
+		pcache[ofs].endaddr = address + size;
+		pcache[ofs].perm[0] = info.protection & VM_PROT_READ ? 'r' : ' ';
+		pcache[ofs].perm[1] = info.protection & VM_PROT_WRITE ? 'w' : ' ';
+		pcache[ofs].perm[2] = info.protection & VM_PROT_EXECUTE ? 'x' : ' ';
+		pcache[ofs].device[0] = '\0';
+
+		address += size;
+		ofs++;
+		continue;
+step:
+		address += size;
+		count--;
+	}
+
+	*outc = ofs;
+	return pcache;
 }
 
 struct map_ctx* memif_openmapping(PROCESS_ID pid, struct map_descr* ent)
@@ -123,6 +157,7 @@ struct map_ctx* memif_openmapping(PROCESS_ID pid, struct map_descr* ent)
 	res->ofs = 0;
 	res->address = ent->addr;
 	kern_return_t kr = task_for_pid(mach_task_self(), pid, &res->task);
+	res->sz = ent->endaddr - ent->addr;
 /* test res, if fail, return NULL and clean */
 	return res;
 }
@@ -183,15 +218,33 @@ size_t memif_copy(struct map_ctx* ctx, uint8_t* buffer, size_t size)
 	return have_read;
 }
 
-uint64_t memif_seek(struct map_ctx* ctx, int64_t ofs, int mode)
+bool memif_reset(struct map_ctx* ent)
 {
-	if (mode == SEEK_SET){
-		ctx->ofs = ofs;
+	if (ent->ofs){
+		ent->ofs = 0;
+		return true;
 	}
-	else if (mode == SEEK_CUR){
-		ctx->ofs += ofs < 0 ?
-			(ofs < -(ctx->ofs) ? -(ctx->ofs) : ofs) : ofs;
+	return false;
+}
+
+uint64_t memif_addr(struct map_ctx* ent)
+{
+	return ent->address + ent->ofs;
+}
+
+/* lseek64 and friends don't really work here because of off64_t size
+ * limitations, we need to dive into llseek */
+uint64_t memif_seek(struct map_ctx* ent, int64_t ofs, int mode)
+{
+	int64_t newofs = ofs;
+
+	if (mode == SEEK_CUR){
+		newofs += ent->ofs;
+		if (newofs < 0)
+			newofs = 0;
 	}
 
-	return ctx->ofs;
+	ent->ofs = newofs >= ent->sz ? 0 : newofs;
+
+	return ent->address + ent->ofs;
 }

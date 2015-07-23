@@ -25,8 +25,6 @@
 
 #include "memif.h"
 
-#define MASK_HI64 0x00000000ffffffff
-
 /* lseek interface really is awful */
 static bool seek64(int fd, uint64_t addr)
 {
