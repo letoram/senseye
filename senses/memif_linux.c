@@ -25,24 +25,32 @@
 
 #include "memif.h"
 
-/* lseek interface really is awful */
+/* lseek interface really is awful, there must be better ways to do this */
 static bool seek64(int fd, uint64_t addr)
 {
-	if (addr > INT64_MAX)
-		return (lseek64(fd, INT64_MAX, SEEK_SET) &&
-			lseek64(fd, addr - INT64_MAX, SEEK_CUR));
+	if (addr > INT64_MAX){
+		lseek(fd, 0, SEEK_SET);
+		do{
+			lseek64(fd, INT64_MAX, SEEK_CUR);
+			addr -= INT64_MAX;
+		} while (addr > INT64_MAX);
+		if (addr)
+			lseek64(fd, addr, SEEK_CUR);
+		return true;
+	}
 	else
 		return -1 != lseek64(fd, addr, SEEK_SET);
 }
 
-struct map_descr* memif_mapdescr(pid_t pid, bool filter, size_t* count)
+struct map_descr* memif_mapdescr(PROCESS_ID pid,
+	size_t min_sz, enum memif_filter filter, size_t* count)
 {
 	int mdescr = -1;
 	char wbuf[sizeof("/proc//maps") + 20];
 	snprintf(wbuf, sizeof(wbuf), "/proc/%d/maps", (int) pid);
 	FILE* fpek = fopen(wbuf, "r");
 
-	if (filter){
+	if (filter != FILTER_NONE){
 		snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) pid);
 		mdescr = open(wbuf, O_RDONLY);
 	}
@@ -86,7 +94,8 @@ struct map_descr* memif_mapdescr(pid_t pid, bool filter, size_t* count)
 			pcache[ofs].addr = dadr[0];
 			pcache[ofs].endaddr = dadr[1];
 			pcache[ofs].sz = dadr[1] - dadr[0];
-			ofs++;
+			if (pcache[ofs].sz > min_sz)
+				ofs++;
 		}
 	}
 
@@ -186,10 +195,10 @@ uint64_t memif_seek(struct map_ctx* ent, int64_t ofs, int mode)
 			newofs = 0;
 	}
 
-	newofs %= ent->sz;
+	newofs = newofs >= ent->sz ? 0 : newofs;
 
 	if (seek64(ent->fd, ent->address + newofs))
 		ent->ofs = newofs;
 
-	return ent->address +ent->ofs;
+	return ent->address + ent->ofs;
 }
