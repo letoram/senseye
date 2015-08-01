@@ -109,8 +109,9 @@ end
 
 local space_lut = {};
 space_lut[0] = "Wrap";
-space_lut[1] = "Tuple";
-space_lut[2] = "Hilbert";
+space_lut[1] = "Tuple Pack";
+space_lut[2] = "Tuple Acc";
+space_lut[3] = "Hilbert";
 
 local space_sub = {
 	{
@@ -119,14 +120,19 @@ local space_sub = {
 		value = 0
 	},
 	{
-		label = "Tuple",
+		label = "Tuple (Pack)",
 		name  = "map_default",
 		value = 1
 	},
 	{
+		label = "Tuple (Acc)",
+		name = "map_default",
+		value = 2,
+	},
+	{
 		label = "Hilbert",
 		name  = "map_default",
-		value = 2
+		value = 3
 	}
 };
 

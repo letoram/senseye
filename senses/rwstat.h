@@ -31,8 +31,9 @@ enum rwstat_alpha {
  */
 enum rwstat_mapping {
 	MAP_WRAP    = 0, /* increment y, reset x after filled row          */
-	MAP_TUPLE   = 1, /* first, second bytes (X, Y) and pack third byte */
-	MAP_HILBERT = 2, /* use a hilbert space filling curve              */
+	MAP_TUPLE   = 1, /* first, second bytes (X, Y) + n bytes color     */
+	MAP_TUPLE_ACC = 2, /* first ,second bytes (X, Y) + accumulate      */
+	MAP_HILBERT = 3, /* use a hilbert space filling curve              */
 };
 
 /*

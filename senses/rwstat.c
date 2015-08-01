@@ -147,6 +147,7 @@ static inline void pack_bytes(
 {
 	int x = 0, y = 0;
 	shmif_pixel val = 0;
+	uint8_t alpha = 0xff;
 
 	switch (chp->map){
 	case MAP_WRAP:
@@ -159,6 +160,18 @@ static inline void pack_bytes(
 		y = (float)buf[1] * chp->sf_y;
 		buf += 2;
 	break;
+	case MAP_TUPLE_ACC:
+	{
+		x = (float)buf[0] * chp->sf_x;
+		y = (float)buf[1] * chp->sf_y;
+		buf += 2;
+		shmif_pixel ov = chp->cont->vidp[ y * chp->cont->pitch + x];
+		uint8_t	v = (ov & 0x000000ff);
+		v = v < 254 ? v + 1 : v;
+		val = RGBA(v, v, v, 0xff);
+		goto postpack;
+	}
+	break;
 
 	case MAP_HILBERT:
 		x = chp->cmap[ofs * 2 + 0];
@@ -166,7 +179,6 @@ static inline void pack_bytes(
 	break;
 	}
 
-	uint8_t alpha = 0xff;
 	switch (chp->pack){
 	case PACK_TIGHT:
 		val = RGBA(buf[0], buf[1], buf[2], 0x00);
@@ -182,6 +194,7 @@ static inline void pack_bytes(
 	break;
 	}
 
+postpack:
 	if (chp->amode == RW_ALPHA_DELTA){
 		shmif_pixel vp = chp->cont->vidp[y * chp->cont->pitch + x];
 		alpha = 0xff * ((vp & 0x00ffffff) != val);
@@ -315,7 +328,7 @@ static void ch_step(struct rwstat_ch* ch)
 	chp->cnt_local = chp->cnt_total;
 
 /* non-sparse mappings require an output flush */
-	if (chp->map == MAP_TUPLE){
+	if (chp->map == MAP_TUPLE || chp->map == MAP_TUPLE_ACC){
 		shmif_pixel val = RGBA(0x00, 0x00, 0x00, 0xff);
 		for (size_t i = 0; i < ntw; i++)
 			chp->cont->vidp[i] = val;
@@ -422,6 +435,9 @@ static void ch_pack(struct rwstat_ch* ch, enum rwstat_pack pack)
 /* then number of bytes we need in order to map coordinates */
 	switch(ch->priv->map){
 	case MAP_WRAP: break; /* can use the buf_ofs value for this */
+	case MAP_TUPLE_ACC:
+		chp->pack = PACK_INTENS;
+		chp->pack_sz = 1;
 	case MAP_TUPLE: chp->pack_sz += 2; break;
 	case MAP_HILBERT: break; /* can use the buf_ofs value for this */
 	}
@@ -446,7 +462,7 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 	size_t hsz = ch->priv->base * ch->priv->base;
 
 /* some mapping modes need a LUT for the ofs = F(X,Y) */
-	if (map == MAP_WRAP || map == MAP_TUPLE)
+	if (map == MAP_WRAP || map == MAP_TUPLE || map == MAP_TUPLE_ACC)
 		;
 	else if (map == MAP_HILBERT){
 		uint16_t* cmap = malloc( 2 * 2 * hsz );
@@ -459,10 +475,10 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
 		chp->cmap = cmap;
 	}
 
-/* changing mapping mode may require different packing dimensions */
-/* reset the buffer to reflect change in mapping mode, this doesn't
- * matter in CLK_BYTES but for other modes */
-	if (map == MAP_TUPLE){
+/* changing mapping mode may require different packing dimensions reset the
+ * buffer to reflect change in mapping mode, this doesn't matter in CLK_BYTES
+ * but for other modes */
+	if (map == MAP_TUPLE || map == MAP_TUPLE_ACC){
 		shmif_pixel val = RGBA(0x00, 0x00, 0x00, 0xff);
 		size_t ntw = chp->base * chp->base;
 		for (size_t i = 0; i < ntw; i++)
@@ -602,7 +618,7 @@ static void ch_damage(struct rwstat_ch* ch, uint8_t val, bool rand,
 	struct arcan_shmif_cont* cont = chp->cont;
 
 /* useless in this setting */
-	if (chp->map == MAP_TUPLE)
+	if (chp->map == MAP_TUPLE || chp->map == MAP_TUPLE_ACC)
 		return;
 
 	if (y2 > cont->h || x2 > cont->w)
@@ -630,40 +646,45 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)
 		return false;
 
-	bool done = false;
+	bool done = true;
 	switch (ev->tgt.ioevs[0].iv){
 	case 0:
-		done = (ch->switch_clock(ch, RW_CLK_BLOCK), true);
+		ch->switch_clock(ch, RW_CLK_BLOCK);
 	break;
 	case 1:
-		done = (ch->switch_clock(ch, RW_CLK_SLIDE), true);
+		ch->switch_clock(ch, RW_CLK_SLIDE);
 	break;
 	case 10:
-		done = (ch->switch_mapping(ch, MAP_WRAP), true);
+		ch->switch_mapping(ch, MAP_WRAP);
 	break;
 	case 11:
-		done = (ch->switch_mapping(ch, MAP_TUPLE), true);
+		ch->switch_mapping(ch, MAP_TUPLE);
 	break;
 	case 12:
-		done = (ch->switch_mapping(ch, MAP_HILBERT), true);
+		ch->switch_mapping(ch, MAP_TUPLE_ACC);
+	break;
+	case 13:
+		ch->switch_mapping(ch, MAP_HILBERT);
 	break;
 	case 20:
-		done = (ch->switch_packing(ch, PACK_INTENS), true);
+		ch->switch_packing(ch, PACK_INTENS);
 	break;
 	case 21:
-		done = (ch->switch_packing(ch, PACK_TIGHT), true);
+		ch->switch_packing(ch, PACK_TIGHT);
 	break;
 	case 22:
-		done = (ch->switch_packing(ch, PACK_TNOALPHA), true);
+		ch->switch_packing(ch, PACK_TNOALPHA);
 	break;
 	case 30:
-		done = (ch->switch_alpha(ch, RW_ALPHA_FULL), true);
+		ch->switch_alpha(ch, RW_ALPHA_FULL);
 	break;
 	case 31:
-		done = (ch->switch_alpha(ch, RW_ALPHA_PTN), true);
+		ch->switch_alpha(ch, RW_ALPHA_PTN);
 	case 32:
-		done = (ch->switch_alpha(ch, RW_ALPHA_DELTA), true);
+		ch->switch_alpha(ch, RW_ALPHA_DELTA);
 	break;
+	default:
+		done = false;
 	}
 
 	if (ev->tgt.ioevs[0].iv >= 33){

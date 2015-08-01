@@ -107,21 +107,6 @@ set(CMAKE_EXTERNAL_DEFS
 	-DLIBTYPE=STATIC
 )
 
-if (ENABLE_PEPE)
-	ExternalProject_Add(peparse
-		SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/peparse
-		GIT_REPOSITORY "https://github.com/letoram/pe-parse.git"
-		UPDATE_COMMAND ""
-		PATCH_COMMAND ""
-		${CMAKE_EXTERNAL_DEFS}
-		-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/peparse
-	)
-
-	target_link_libraries(xlt_pepe
-		${BINARY_DIR}/parser-library/libpe-parser-library.a)
-	target_include_directories(xlt_pepe PRIVATE ${SOURCE_DIR}/parser-library)
-endif()
-
 if (ENABLE_CAPSTONE)
 	find_library(CAPSTONE_LIBRARY NAMES capstone)
 	if (NOT CAPSTONE_LIBRARY)
