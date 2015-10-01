@@ -15,6 +15,44 @@
 #include <capstone/capstone.h>
 #include "font_8x8.h"
 
+/* support for a mnemonic lookup database for a hint window,
+ * still incomplete
+ * platform TEXT, mnem TEXT, description TEXT
+ */
+#ifdef DBHINT_SUPPORT
+ #include <sqlite3.h>
+static bool got_dbhint;
+static sqlite3* dbh;
+void open_dbhint(const char* fname)
+{
+	if (sqlite3_open_v2(fname, &dbh, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
+		return;
+
+	got_dbhint = true;
+}
+
+bool lookup_mnemonic(const char* arch, const char* mnen, const char** outdescr)
+{
+	bool found = false;
+	static const char dql[] = "SELECT description FROM instructions "
+		"WHERE ARCH = ? AND mnen LIKE ?;";
+	sqlite3_stmt* stmt;
+	sqlite3_prepare_v2(dbh, dql, sizeof(dql)-1, &stmt, NULL);
+	sqlite3_bind_text(stmt, 1, arch, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 2, mnen, -1, SQLITE_TRANSIENT);
+	if (sqlite3_step(stmt) == SQLITE_ROW){
+		const unsigned char* arg = sqlite3_column_text(stmt, 0);
+		if (arg)
+			*outdescr = strdup((const char*)arg);
+		else
+			*outdescr = NULL;
+		found = true;
+	}
+	sqlite3_finalize(stmt);
+	return found;
+}
+#endif
+
 static const shmif_pixel col_err = RGBA(0xff, 0x00, 0x00, 0xff);
 static const shmif_pixel col_bg  = RGBA(0x00, 0x00, 0x00, 0xff);
 static char* fmtstr = "%p:%c%t%r%n";

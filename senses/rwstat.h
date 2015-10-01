@@ -76,6 +76,26 @@ struct rwstat_ch {
 /* enqeue an event to propagate upwards */
 	void (*event)(struct rwstat_ch*, arcan_event*);
 
+/* all rw-stat sources can handle damage, but we can also forward to the
+ * underlying sensor - if it is set to support such operations by overwriting
+ * this member.
+ *
+ * mode = implementation defined, rand = user requested randomization,
+ * ofs  = last known base offset (where applicable),
+ * rows = number of injection sequences
+ * skip = bytes between each injection sequence.
+ *
+ * the rows / skip fields are needed to map from user 2D to 1D data source,
+ * seek(ofs), for rows: write n bytes, seek forward skip;
+ *
+ * when done, signal the need for repopulating the input buffer.
+ */
+	void (*damage)(struct rwstat_ch*,
+		uint8_t mode, bool rand, uint64_t ofs,
+		size_t bytes, size_t rows, size_t skip
+	);
+
+	void* damage_tag;
 /*
  * Add a byte sequence to look for. Alpha indicates the value to write
  * to the corresponding alpha channel in the output buffer, if  _TYPE

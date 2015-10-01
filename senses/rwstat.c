@@ -636,11 +636,22 @@ static void ch_damage(struct rwstat_ch* ch, uint8_t val, bool rand,
 
 bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 {
+/* ugly hack treating the input region in the UI as a 4 point region given
+ * current projections etc. if the channel has a damage handler, we can
+ * resolve and just implement a resample though */
 	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_ANALOG){
-		ch_damage(ch, ev->io.input.analog.subid, ev->io.input.analog.devid != 0,
-			ev->io.input.analog.axisval[0], ev->io.input.analog.axisval[1],
-			ev->io.input.analog.axisval[2], ev->io.input.analog.axisval[3]
-		);
+		size_t x1 = ev->io.input.analog.axisval[0];
+		size_t y1 = ev->io.input.analog.axisval[1];
+		size_t x2 = ev->io.input.analog.axisval[2];
+		size_t y2 = ev->io.input.analog.axisval[3];
+		uint8_t val = ev->io.input.analog.subid;
+		uint8_t rand = ev->io.input.analog.devid != 0;
+
+		if (ch->damage == NULL)
+			ch_damage(ch, val, rand, x1, y1, x2, y2);
+		else{
+/* use mapping mode etc. to do lookup */
+		}
 	}
 
 	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)

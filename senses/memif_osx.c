@@ -151,6 +151,16 @@ step:
 	return pcache;
 }
 
+bool memif_canwrite(struct map_ctx* ctx)
+{
+	return false;
+}
+
+size_t memif_write(struct map_ctx* ctx, uint64_t ofs, uint8_t* buf, size_t buf_sz)
+{
+	return 0;
+}
+
 struct map_ctx* memif_openmapping(PROCESS_ID pid, struct map_descr* ent)
 {
 	struct map_ctx* res = malloc(sizeof(struct map_ctx));

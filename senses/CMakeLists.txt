@@ -1,7 +1,7 @@
 PROJECT( senses )
 cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 include(ExternalProject)
-
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/modules)
 #
 # cmake3.1+ provides this as part of normal flags, but it
 # will take quite a while before we can use that as the
@@ -71,6 +71,7 @@ set(TRANSLATORS
 	xlt_dpipe
 	xlt_ascii
 	xlt_img
+	xlt_pefile
 	${XLT_CAPSTONE}
 	${DEBUG_XLT}
 )
@@ -124,10 +125,16 @@ if (ENABLE_CAPSTONE)
 		add_dependencies(xlt_capstone Capstone)
 		set(CAPSTONE_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/capstone/lib/libcapstone.a)
 		set(CAPSTONE_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/capstone/include)
+		# dbhint disabled for now, incomplete feature
+		#		target_compile_definitions(xlt_capstone PRIVATE DBHINT_SUPPORT)
+		#		find_package(SQLITE3)
 	endif()
 
-	target_link_libraries(xlt_capstone ${CAPSTONE_LIBRARY})
-	target_include_directories(xlt_capstone PRIVATE ${CAPSTONE_INCLUDE_DIRS})
+	target_link_libraries(xlt_capstone ${CAPSTONE_LIBRARY} ${SQLITE3_LIBRARIES})
+	target_include_directories(xlt_capstone PRIVATE
+		${SQLITE3_INCLUDE_DIR}
+		${CAPSTONE_INCLUDE_DIRS}
+	)
 endif()
 
 # installation missing:

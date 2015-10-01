@@ -52,7 +52,7 @@ struct {
 	size_t sel_lim, sel_page;
 	uintptr_t sel_base;
 	size_t sel_size;
-	bool skip_inode;
+	bool skip_inode, write_enable;
 
 /* external connections */
 	struct senseye_cont* cont;
@@ -191,6 +191,55 @@ static void push_data(struct rwstat_ch* ch,
 	ch->data(ch, buf, left, &ign);
 }
 
+static void damage_mem(struct rwstat_ch* ch, uint8_t mode,
+	bool rand, uint64_t ofs, size_t bytes, size_t rows, size_t skip)
+{
+	struct arcan_shmif_cont* cont = ch->context(ch);
+	struct page_ch* pch = ch->damage_tag;
+	struct map_ctx* memmap = pch->mctx;
+
+/* currently, mode just represents the byte value we want repeated,
+ * this will be configurable later on to correspond to various kinds
+ * of suitable payloads (or even cut'n'paste clipboard contents) */
+
+	int state = 0;
+	uint8_t* dbuf = malloc(bytes);
+
+	if (!dbuf)
+		return;
+
+	if (!rand){
+		for (size_t i = 0; i < bytes; i++)
+			dbuf[i] = mode;
+	}
+
+	while(rows--){
+		if (rand)
+			for (size_t i = 0; i < bytes; i++)
+				dbuf[i] = random();
+
+		if (0 == memif_write(memmap, ofs, dbuf, bytes)){
+			fprintf(stderr, "damage_mem(%"PRIx64") failed to write\n", ofs);
+			state = 2;
+			break;
+		}
+		state = 1;
+		ofs += bytes + skip;
+	}
+
+/* send UI update */
+	arcan_event ev = {
+		.category = EVENT_EXTERNAL,
+		.ext.kind = EVENT_EXTERNAL_MESSAGE
+	};
+	const char* msg = "";
+	snprintf((char*)ev.ext.message, sizeof(ev.ext.message),
+		(state == 0 ? "area damage completed" :
+			(state == 1 ? "area damage partial" : "area damage failed")));
+
+	arcan_shmif_enqueue(cont, &ev);
+}
+
 void* data_loop(void* th_data)
 {
 /* map convenience aliases and work directly with the stats channel
@@ -213,6 +262,10 @@ void* data_loop(void* th_data)
 	push_data(ch, memmap, buf, true);
 
 	uint64_t cofs = 0;
+
+	if (memif_canwrite(memmap) && msense.write_enable){
+		ch->damage = damage_mem;
+	}
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
 		if (rwstat_consume_event(ch, &ev)){
@@ -339,15 +392,22 @@ int main(int argc, char* argv[])
 	struct arg_arr* aarr;
 	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 
-	if (2 != argc){
-		printf("usage: psense process_id\n");
+	if (2 != argc || 3 != argc){
+		printf("usage: psense [-w] process_id\n");
 		return EXIT_FAILURE;
 	}
 
-	msense.pid = strtol(argv[1], NULL, 10);
+	if (argc == 3){
+		if (strcmp(argv[1], "-w") == 0){
+			fprintf(stderr, "Write support enabled\n");
+			msense.write_enable = true;
+		}
+	}
+
+	msense.pid = strtol(argv[argc == 3 ? 2 : 1], NULL, 10);
 	msense.mcache = memif_mapdescr(msense.pid, 0, FILTER_NONE, &msense.mcache_sz);
 	if (!msense.mcache){
-		fprintf(stderr, "Couldn't open/parse /proc/%d/maps\n", (int) msense.pid);
+		fprintf(stderr, "Couldn't open/parse process (%d)\n", (int) msense.pid);
 		return EXIT_FAILURE;
 	}
 

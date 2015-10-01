@@ -25,6 +25,12 @@
 
 #include "memif.h"
 
+#ifdef DISABLE_WRITE
+#define O_MASK O_RONLY
+#else
+#define O_MASK O_RDWR
+#endif
+
 /* lseek interface really is awful, there must be better ways to do this */
 static bool seek64(int fd, uint64_t addr)
 {
@@ -52,7 +58,7 @@ struct map_descr* memif_mapdescr(PROCESS_ID pid,
 
 	if (filter != FILTER_NONE){
 		snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) pid);
-		mdescr = open(wbuf, O_RDONLY);
+		mdescr = open(wbuf, O_MASK);
 	}
 
 /* populate list of entries, first get limit */
@@ -124,7 +130,7 @@ struct map_ctx* memif_openmapping(PROCESS_ID pid, struct map_descr* ent)
 {
 	char wbuf[sizeof("/proc//mem") + 8];
 	snprintf(wbuf, sizeof(wbuf), "/proc/%d/mem", (int) pid);
-	int fd = open(wbuf, O_RDONLY);
+	int fd = open(wbuf, O_MASK);
 	if (-1 == fd){
 		fprintf(stderr, "launch_addr(%" PRIx64 ")+%zx open (%s) failed, %s\n",
 			ent->addr, ent->sz, wbuf, strerror(errno));
@@ -176,6 +182,39 @@ size_t memif_copy(struct map_ctx* map, uint8_t* buf, size_t buf_sz)
 		return nr;
 	}
 	return 0;
+}
+
+bool memif_canwrite(struct map_ctx* ctx)
+{
+#ifdef DISABLE_WRITE
+	return false;
+#else
+	return true;
+#endif
+}
+
+size_t memif_write(
+	struct map_ctx* ctx, uint64_t ofs, uint8_t* buf, size_t buf_sz)
+{
+	if (!map || !buf)
+		return 0;
+
+	int64_t tot = 0;
+	while (buf_sz){
+		ssize_t nw = write(map->fd, buf, buf_sz);
+		if (-1 == nw){
+			if (errno == EAGAIN || errno == EINTR)
+				continue;
+			else
+				break;
+		}
+		tot += nw;
+		buf_sz -= nw;
+		buf += nw;
+	}
+
+	memif_seek(ctx, -1 * tot, SEEK_CUR);
+	return tot;
 }
 
 uint64_t memif_addr(struct map_ctx* ent)

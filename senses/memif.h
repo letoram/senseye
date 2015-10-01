@@ -51,6 +51,12 @@ void memif_closemapping(struct map_ctx*);
 size_t memif_copy(struct map_ctx*, uint8_t* buf, size_t buf_sz);
 
 /*
+ * return true if it is possible to write to the underlying mapping
+ */
+bool memif_canwrite(struct map_ctx*);
+size_t memif_write(struct map_ctx*, uint64_t ofs, uint8_t* buf, size_t buf_sz);
+
+/*
  * reset to initial _openmapping state, return true if this imposed any changes,
  * false if we already are at such a state.
  */
