@@ -143,6 +143,8 @@ function senseye()
 	if (gconfig_get("show_help") == 1) then
 		show_help();
 	end
+
+	kbd_repeat(50, 100);
 end
 
 function add_window(source)

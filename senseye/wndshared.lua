@@ -786,6 +786,8 @@ function window_shared(wnd)
 		local wm = wnd.wm;
 		if (wnd.dz) then
 			wnd.zoom_popup = not wnd.zoom_popup;
+			local x, y = mouse_xy();
+			wnd_drag(wnd, wm.selected.canvas, 0, 0);
 			return;
 		end
 
