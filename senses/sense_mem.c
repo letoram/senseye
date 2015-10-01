@@ -265,6 +265,7 @@ void* data_loop(void* th_data)
 
 	if (memif_canwrite(memmap) && msense.write_enable){
 		ch->damage = damage_mem;
+		ch->damage_tag = pch;
 	}
 
 	while (buf && arcan_shmif_wait(cont, &ev) != 0){
@@ -392,8 +393,8 @@ int main(int argc, char* argv[])
 	struct arg_arr* aarr;
 	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 
-	if (2 != argc || 3 != argc){
-		printf("usage: psense [-w] process_id\n");
+	if (2 != argc && 3 != argc){
+		printf("usage: sense_mem [-w] process_id\n");
 		return EXIT_FAILURE;
 	}
 

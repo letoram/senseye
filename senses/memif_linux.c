@@ -196,12 +196,20 @@ bool memif_canwrite(struct map_ctx* ctx)
 size_t memif_write(
 	struct map_ctx* ctx, uint64_t ofs, uint8_t* buf, size_t buf_sz)
 {
-	if (!map || !buf)
+	if (!ctx || !buf)
 		return 0;
+
+	uint64_t endaddr = ctx->address + ctx->sz;
+/* clamp to range */
+	if (ofs < ctx->address || ofs > endaddr)
+		return 0;
+
+	buf_sz = (ofs + buf_sz > endaddr) ? endaddr - ofs : buf_sz;
+	memif_seek(ctx, ofs, SEEK_SET);
 
 	int64_t tot = 0;
 	while (buf_sz){
-		ssize_t nw = write(map->fd, buf, buf_sz);
+		ssize_t nw = write(ctx->fd, buf, buf_sz);
 		if (-1 == nw){
 			if (errno == EAGAIN || errno == EINTR)
 				continue;

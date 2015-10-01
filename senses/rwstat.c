@@ -639,6 +639,7 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 /* ugly hack treating the input region in the UI as a 4 point region given
  * current projections etc. if the channel has a damage handler, we can
  * resolve and just implement a resample though */
+	struct rwstat_ch_priv* chp = ch->priv;
 	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_ANALOG){
 		size_t x1 = ev->io.input.analog.axisval[0];
 		size_t y1 = ev->io.input.analog.axisval[1];
@@ -647,11 +648,27 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 		uint8_t val = ev->io.input.analog.subid;
 		uint8_t rand = ev->io.input.analog.devid != 0;
 
+		x2 = x2 >= chp->base ? chp->base - 1 : x2;
+		x1 = x1 >= chp->base ? chp->base - 1 : x1;
+
 		if (ch->damage == NULL)
 			ch_damage(ch, val, rand, x1, y1, x2, y2);
 		else{
-/* use mapping mode etc. to do lookup */
+/* dosn't make much sense for the others, or well hilbert does but ignore
+ * that for now just to not have to deal with the math and verification :) */
+			if (chp->map == MAP_WRAP && x2 >= x1 && y2 >= y1){
+				size_t bpp = (
+					chp->pack == PACK_TIGHT ? 4 : chp->pack == PACK_TNOALPHA ? 3 : 1);
+
+				ch->damage(ch, val, rand,
+					ch->priv->cnt_total + (y1 * chp->base + x1) * bpp,
+					(x2 - x1 + 1) * bpp,
+					 y2 - y1 + 1,
+					(chp->base - x2 + x1) * bpp
+				);
+			}
 		}
+		return true;
 	}
 
 	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)

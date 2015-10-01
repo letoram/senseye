@@ -54,7 +54,11 @@ size_t memif_copy(struct map_ctx*, uint8_t* buf, size_t buf_sz);
  * return true if it is possible to write to the underlying mapping
  */
 bool memif_canwrite(struct map_ctx*);
-size_t memif_write(struct map_ctx*, uint64_t ofs, uint8_t* buf, size_t buf_sz);
+
+/* write buf_sz bytes from buf into the mapped context using the ABSOLUTE,
+ * linear address to the mapping specified by ctx */
+size_t memif_write(struct map_ctx* ctx,
+	uint64_t pos, uint8_t* buf, size_t buf_sz);
 
 /*
  * reset to initial _openmapping state, return true if this imposed any changes,
