@@ -100,8 +100,8 @@ function senseye()
 	end
 
 -- uncomment for non-native cursor (would be visible in video recording)
--- mouse_setup(load_image("cursor.png"), 1000, 1, true);
-	mouse_setup_native(load_image("cursor.png"), 1, 1);
+	mouse_setup(load_image("cursor.png"), 65535, 1, true);
+--	mouse_setup_native(load_image("cursor.png"), 1, 1);
 	mouse_add_cursor("move", load_image("cursor_move.png"), 13, 13);
 	mouse_add_cursor("scale", load_image("cursor_scale.png"), 13, 13);
 

@@ -34,6 +34,8 @@
 #include "rwstat.h"
 #include "memif.h"
 
+#define RGBA(r, g, b, a) SHMIF_RGBA(r, g, b, a)
+
 struct page_ch {
 	struct senseye_ch* channel;
 	struct map_ctx* mctx;
@@ -163,7 +165,7 @@ static void control_event(struct senseye_cont* cont, arcan_event* ev)
 	}
 
 	if (refresh)
-		update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
+		update_preview(SHMIF_RGBA(0x00, 0xff, 0x00, 0xff));
 }
 
 static void push_data(struct rwstat_ch* ch,
@@ -230,10 +232,10 @@ static void damage_mem(struct rwstat_ch* ch, uint8_t mode,
 /* send UI update */
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_MESSAGE
+		.ext.kind = ARCAN_EVENT(IDENT)
 	};
 	const char* msg = "";
-	snprintf((char*)ev.ext.message, sizeof(ev.ext.message),
+	snprintf((char*)ev.ext.message.data, sizeof(ev.ext.message.data),
 		(state == 0 ? "area damage completed" :
 			(state == 1 ? "area damage partial" : "area damage failed")));
 
@@ -254,8 +256,8 @@ void* data_loop(void* th_data)
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
-		.ext.message = "msense"
+		.ext.kind = ARCAN_EVENT(IDENT),
+		.ext.message.data = "msense"
 	};
 
 	ch->event(ch, &ev);
@@ -373,7 +375,7 @@ static void update_preview(shmif_pixel ccol)
 
 /* draw addr + text in fitting color */
 		char wbuf[256];
-		shmif_pixel col = RGBA(r, g, b, 0xff);
+		shmif_pixel col = SHMIF_RGBA(r, g, b, 0xff);
 		snprintf(wbuf, 256, "%"PRIx64"(%dk)", mcache[ofs].addr,
 			(int)((mcache[ofs].endaddr - mcache[ofs].addr) / 1024));
 
@@ -422,14 +424,14 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 
 	msense.cont = &cont;
-	update_preview(RGBA(0x00, 0xff, 0x00, 0xff));
+	update_preview(SHMIF_RGBA(0x00, 0xff, 0x00, 0xff));
 
 	cont.dispatch = control_event;
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
-		.ext.message = "msense_main"
+		.ext.kind = ARCAN_EVENT(IDENT),
+		.ext.message.data = "msense_main"
 	};
 	arcan_shmif_enqueue(msense.cont->context(msense.cont), &ev);
 

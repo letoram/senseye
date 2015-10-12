@@ -127,8 +127,8 @@ void* data_loop(void* th_data)
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
-		.ext.message = "fsense"
+		.ext.kind = ARCAN_EVENT(IDENT),
+		.ext.message.data = "fsense"
 	};
 
 	short pollev = POLLIN | POLLERR | POLLHUP | POLLNVAL;
@@ -401,7 +401,7 @@ int main(int argc, char* argv[])
 
 /* clear before generating preview */
 	for (size_t i = 0; i < c->w * c->h; i++)
-		c->vidp[i] = RGBA(0x00, 0x00, 0x00, 0xff);
+		c->vidp[i] = SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 
 	const int byte_threshold = 10 * 1024 * 1024;
 
@@ -415,7 +415,7 @@ int main(int argc, char* argv[])
 	while (pos + step_sz < buf.st_size && row < c->h){
 		size_t cpos = pos;
 		for (size_t i = 0; i < c->w && pos < buf.st_size; i++){
-			c->vidp[row * c->w + i] = RGBA(
+			c->vidp[row * c->w + i] = SHMIF_RGBA(
 				0x00, fsense.fmap[pos], 0x00, 0xff);
 
 			if (!(isnan(cutoff))){
@@ -435,7 +435,7 @@ int main(int argc, char* argv[])
 			memset(dr, '\0', sizeof(dr));
 			if (val < cutoff)
 				for(size_t i = 0; i < c->w; i++)
-					c->vidp[row * c->w + i] |= RGBA(0xff, 0x00, 0x00, 0x00);
+					c->vidp[row * c->w + i] |= SHMIF_RGBA(0xff, 0x00, 0x00, 0x00);
 		}
 
 /* update events to maintain interactivity, may exit */
@@ -445,7 +445,7 @@ int main(int argc, char* argv[])
 /* draw preview- processing "edge" */
 		if (cpos > byte_threshold){
 			for (size_t i = 0; i < c->w && row < c->h; i++)
-				c->vidp[(row+1) * c->w + i] = RGBA(0xff, 0x00, 0x00, 0xff);
+				c->vidp[(row+1) * c->w + i] = SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
 			arcan_shmif_signal(c, SHMIF_SIGVID);
 		}
 

@@ -282,10 +282,10 @@ static void* process(void* inarg)
 	arcan_event ev;
 
 	if (sess->overlay){
-		ev.category = EVENT_EXTERNAL;
-		ev.ext.kind = EVENT_EXTERNAL_IDENT;
+		ev.category = EVENT_EXTERNAL,
+		ev.ext.kind = ARCAN_EVENT(IDENT),
 /* only ident accepted on this subsegment */
-		sprintf((char*)ev.ext.message, "OVERLAY");
+		sprintf((char*)ev.ext.message.data, "OVERLAY");
 		arcan_shmif_enqueue(&sess->out, &ev);
 	}
 
@@ -348,11 +348,13 @@ struct xlt_context* xlt_open(const char* ident,
 /* assume we're connected or have FATALFAIL at this point */
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
+		.ext.kind = ARCAN_EVENT(IDENT)
 	};
 	res->main = mcon;
-	snprintf((char*)ev.ext.message,
-		sizeof(ev.ext.message) / sizeof(ev.ext.message[0]), "%s", ident);
+	snprintf((char*)ev.ext.message.data,
+		sizeof(ev.ext.message.data) /
+		sizeof(ev.ext.message.data[0]), "%s", ident
+	);
 	arcan_shmif_enqueue(&res->main, &ev);
 
 	return res;

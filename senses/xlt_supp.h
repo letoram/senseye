@@ -15,7 +15,7 @@
 #include <stdlib.h>
 
 #include <arcan_shmif.h>
-
+#define RGBA(r,g,b,a) SHMIF_RGBA(r,g,b,a)
 /*
  * called every time there is input to process, return true if the output
  * segment should be updated.  called with a NULL buf on cleanup.

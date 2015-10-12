@@ -168,7 +168,7 @@ static inline void pack_bytes(
 		shmif_pixel ov = chp->cont->vidp[ y * chp->cont->pitch + x];
 		uint8_t	v = (ov & 0x000000ff);
 		v = v < 254 ? v + 1 : v;
-		val = RGBA(v, v, v, 0xff);
+		val = SHMIF_RGBA(v, v, v, 0xff);
 		goto postpack;
 	}
 	break;
@@ -181,15 +181,15 @@ static inline void pack_bytes(
 
 	switch (chp->pack){
 	case PACK_TIGHT:
-		val = RGBA(buf[0], buf[1], buf[2], 0x00);
+		val = SHMIF_RGBA(buf[0], buf[1], buf[2], 0x00);
 		alpha = buf[3];
 	break;
 	case PACK_TNOALPHA:
-		val = RGBA(buf[0], buf[1], buf[2], 0x00);
+		val = SHMIF_RGBA(buf[0], buf[1], buf[2], 0x00);
 		alpha = chp->alpha[ofs];
 	break;
 	case PACK_INTENS:
-		val = RGBA(buf[0], buf[0], buf[0], 0x00);
+		val = SHMIF_RGBA(buf[0], buf[0], buf[0], 0x00);
 		alpha = chp->alpha[ofs];
 	break;
 	}
@@ -200,7 +200,7 @@ postpack:
 		alpha = 0xff * ((vp & 0x00ffffff) != val);
 	}
 
-	val |= RGBA(0, 0, 0, alpha);
+	val |= SHMIF_RGBA(0, 0, 0, alpha);
 
 	chp->cont->vidp[ y * chp->cont->pitch + x ] = val;
 }
@@ -329,7 +329,7 @@ static void ch_step(struct rwstat_ch* ch)
 
 /* non-sparse mappings require an output flush */
 	if (chp->map == MAP_TUPLE || chp->map == MAP_TUPLE_ACC){
-		shmif_pixel val = RGBA(0x00, 0x00, 0x00, 0xff);
+		shmif_pixel val = SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 		for (size_t i = 0; i < ntw; i++)
 			chp->cont->vidp[i] = val;
 	}
@@ -479,7 +479,7 @@ static void ch_map(struct rwstat_ch* ch, enum rwstat_mapping map)
  * buffer to reflect change in mapping mode, this doesn't matter in CLK_BYTES
  * but for other modes */
 	if (map == MAP_TUPLE || map == MAP_TUPLE_ACC){
-		shmif_pixel val = RGBA(0x00, 0x00, 0x00, 0xff);
+		shmif_pixel val = SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 		size_t ntw = chp->base * chp->base;
 		for (size_t i = 0; i < ntw; i++)
 			chp->cont->vidp[i] = val;
@@ -602,11 +602,11 @@ static void ch_wind(struct rwstat_ch* ch, off_t ofs)
 
 static shmif_pixel pack_byte(uint8_t val, bool rand, int pack)
 {
-	shmif_pixel r = rand ? RGBA(random(),
-		random(), random(), random()) : RGBA(val, val, val, val);
+	shmif_pixel r = rand ? SHMIF_RGBA(random(),
+		random(), random(), random()) : SHMIF_RGBA(val, val, val, val);
 
 	if (pack != PACK_TIGHT)
-		r |= RGBA(0x00, 0x00, 0x00, 0xff);
+		r |= SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 
 	return r;
 }
@@ -645,8 +645,8 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 		size_t y1 = ev->io.input.analog.axisval[1];
 		size_t x2 = ev->io.input.analog.axisval[2];
 		size_t y2 = ev->io.input.analog.axisval[3];
-		uint8_t val = ev->io.input.analog.subid;
-		uint8_t rand = ev->io.input.analog.devid != 0;
+		uint8_t val = ev->io.subid;
+		uint8_t rand = ev->io.devid != 0;
 
 		x2 = x2 >= chp->base ? chp->base - 1 : x2;
 		x1 = x1 >= chp->base ? chp->base - 1 : x1;

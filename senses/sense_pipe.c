@@ -41,8 +41,8 @@ void* data_loop(void* ptr)
 /* register type so UI gets mapped correctly */
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
-		.ext.message = "psense"
+		.ext.kind = ARCAN_EVENT(IDENT),
+		.ext.message.data = "psense"
 	};
 
 	ch->queue(ch, &ev);
@@ -90,7 +90,7 @@ void* data_loop(void* ptr)
 			& ( POLLERR | POLLHUP | POLLNVAL ) ) > 0){
 error:
 		for (size_t i = 0; i < shm->addr->w * shm->addr->h; i++)
-			shm->vidp[i] = RGBA(0xff, 0x00, 0x00, 0xff);
+			shm->vidp[i] = SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
 				arcan_shmif_signal(shm, SHMIF_SIGVID);
 
 			ch->close(ch);
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 
 	for (size_t i = 0; i < shm->addr->w * shm->addr->h; i++)
-		shm->vidp[i] = RGBA(0x00, 0xff, 0x00, 0xff);
+		shm->vidp[i] = SHMIF_RGBA(0x00, 0xff, 0x00, 0xff);
 	arcan_shmif_signal(shm, SHMIF_SIGVID);
 
 	size_t base = 256;

@@ -140,10 +140,12 @@ static void message(struct arcan_shmif_cont* out, const char* msg)
 {
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_MESSAGE
+		.ext.kind = ARCAN_EVENT(MESSAGE)
 	};
-	snprintf((char*)ev.ext.message, sizeof(ev.ext.message)
-		/ sizeof(ev.ext.message[0]), "%s", msg);
+	snprintf((char*)ev.ext.message.data,
+		sizeof(ev.ext.message.data) / sizeof(ev.ext.message.data[0]),
+		"%s", msg
+	);
 	arcan_shmif_enqueue(out, &ev);
 }
 

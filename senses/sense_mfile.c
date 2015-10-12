@@ -33,6 +33,7 @@
 #include <sys/resource.h>
 
 #include "font_8x8.h"
+#define RGBA(r,g,b,a) SHMIF_RGBA(r,g,b,a)
 
 enum cmp_op {
 	CMP_NORMAL = 0,
@@ -475,8 +476,8 @@ int main(int argc, char* argv[])
 
 	arcan_event ev = {
 		.category = EVENT_EXTERNAL,
-		.ext.kind = EVENT_EXTERNAL_IDENT,
-		.ext.message = "mfsense"
+		.ext.kind = ARCAN_EVENT(IDENT),
+		.ext.message.data = "mfsense"
 	};
 	arcan_shmif_enqueue(&cont, &ev);
 	send_streaminfo(&cont, n_ent, border, pack_mode);
@@ -527,10 +528,10 @@ int main(int argc, char* argv[])
 			case TARGET_COMMAND_NEWSEGMENT:
 				diffcont = arcan_shmif_acquire(&cont,
 					NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
-				ev.ext.kind = EVENT_EXTERNAL_IDENT;
+				ev.ext.kind = ARCAN_EVENT(IDENT);
 				ev.category = EVENT_EXTERNAL;
-				snprintf((char*)ev.ext.message, sizeof(ev.ext.message)/
-					sizeof(ev.ext.message[0]), "mfsense_diff");
+				snprintf((char*)ev.ext.message.data, sizeof(ev.ext.message.data)/
+					sizeof(ev.ext.message.data[0]), "mfsense_diff");
 				arcan_shmif_enqueue(&diffcont, &ev);
 
 				if (diffcont.vidp)
