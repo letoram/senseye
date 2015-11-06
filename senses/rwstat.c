@@ -304,9 +304,9 @@ static void ch_step(struct rwstat_ch* ch)
 		outev.ext.kind = EVENT_EXTERNAL_STREAMINFO;
 		outev.ext.streaminf.streamid = 0;
 		outev.ext.streaminf.datakind = 0;
-		outev.ext.streaminf.langid[0] = '0' + chp->pack;
-		outev.ext.streaminf.langid[1] = '0' + chp->map;
-		outev.ext.streaminf.langid[2] = '0' + chp->pack_sz;
+		outev.ext.streaminf.langid[0] = 'a' + chp->pack;
+		outev.ext.streaminf.langid[1] = 'a' + chp->map;
+		outev.ext.streaminf.langid[2] = 'a' + chp->pack_sz;
 		chp->status_dirty = false;
 		ch->event(ch, &outev);
 	}

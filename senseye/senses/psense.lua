@@ -219,7 +219,7 @@ local function coord_map(wnd, x, y)
 end
 
 function psense_decode_streaminfo(wnd, status)
-	local base = string.byte("0", 1);
+	local base = string.byte("a", 1);
 	local upd = "";
 
 	local pack_cur = string.byte(status.lang, 1) - base;
