@@ -292,7 +292,7 @@ float cmp_histo(int32_t* a, int32_t* b, float roww)
 int main(int argc, char* argv[])
 {
 	struct senseye_cont cont;
-	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 	struct arg_arr* aarr;
 	size_t base = 256;
 	size_t p_w = 128;

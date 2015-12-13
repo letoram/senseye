@@ -114,7 +114,7 @@ static void cont_dispatch(struct senseye_cont* cont, arcan_event* ev)
 }
 
 bool senseye_connect(const char* key, FILE* log,
-	struct senseye_cont* dcont, struct arg_arr** darg, enum SHMIF_FLAGS flags)
+	struct senseye_cont* dcont, struct arg_arr** darg, enum ARCAN_FLAGS flags)
 {
 	logout = log;
 	if (!key){
