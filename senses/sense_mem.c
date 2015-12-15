@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
 {
 	struct senseye_cont cont;
 	struct arg_arr* aarr;
-	enum SHMIF_FLAGS connectfl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 
 	if (2 != argc && 3 != argc){
 		printf("usage: sense_mem [-w] process_id\n");

@@ -326,7 +326,7 @@ static void setup_session(struct xlt_context* ctx, struct xlt_session* sess)
 }
 
 struct xlt_context* xlt_open(const char* ident,
-	enum xlt_flags flags, enum SHMIF_FLAGS confl)
+	enum xlt_flags flags, enum ARCAN_FLAGS confl)
 {
 	struct xlt_context* res = malloc(sizeof(struct xlt_context));
 	if (!res)
@@ -434,7 +434,7 @@ bool xlt_wait(struct xlt_context* ctx)
 }
 
 bool xlt_setup(const char* tag, xlt_populate pop,
-	xlt_input inp, enum xlt_flags flags, enum SHMIF_FLAGS confl)
+	xlt_input inp, enum xlt_flags flags, enum ARCAN_FLAGS confl)
 {
 	assert(pop);
 	assert(tag);

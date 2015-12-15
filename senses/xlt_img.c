@@ -528,7 +528,7 @@ alloc_nv:
 
 int main(int argc, char** argv)
 {
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 	struct xlt_context* ctx = xlt_open("IMG", XLT_DYNSIZE, confl);
 	if (!ctx)
 		return EXIT_FAILURE;

@@ -47,7 +47,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 int main(int argc, char** argv)
 {
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 	struct xlt_context* ctx = xlt_open("CRASH", XLT_DYNSIZE, confl);
 	if (!ctx)
 		return EXIT_FAILURE;

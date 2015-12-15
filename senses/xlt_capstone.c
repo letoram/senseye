@@ -583,7 +583,7 @@ int main(int argc, char** argv)
 {
 	setup_arch_lut();
 	int aind = -1, ch;
-	enum SHMIF_FLAGS confl = SHMIF_ACQUIRE_FATALFAIL;
+	enum ARCAN_FLAGS confl = SHMIF_ACQUIRE_FATALFAIL;
 
 	while ((ch = getopt_long(argc, argv, "a:s:c:f:t:", longopts, NULL)) >= 0){
 	switch (ch){

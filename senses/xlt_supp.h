@@ -64,7 +64,7 @@ enum xlt_flags {
  * different threads (or processes if forkable is set).
  */
 bool xlt_setup(const char* ident, xlt_populate, xlt_input,
-	enum xlt_flags, enum SHMIF_FLAGS confl);
+	enum xlt_flags, enum ARCAN_FLAGS confl);
 
 /*
  * Manual operation, use xlt_open to make the initial connection
@@ -73,7 +73,7 @@ bool xlt_setup(const char* ident, xlt_populate, xlt_input,
  */
 struct xlt_context;
 struct xlt_context* xlt_open(const char* ident,
-	enum xlt_flags, enum SHMIF_FLAGS confl);
+	enum xlt_flags, enum ARCAN_FLAGS confl);
 
 void xlt_config(struct xlt_context*,
 	xlt_populate, xlt_input,

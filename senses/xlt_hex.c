@@ -257,7 +257,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 int main(int argc, char* argv[])
 {
 /* nice namespace pollution GIMP-export */
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 	if (width != 256){
 		printf("error, xlt_hex was built with a broken color "
 			"table, fix xlt_hex_color.h\n");

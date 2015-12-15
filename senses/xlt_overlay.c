@@ -93,7 +93,7 @@ static bool over_inp(struct arcan_shmif_cont* cont, arcan_event* ev)
 
 int main(int argc, char** argv)
 {
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 	struct xlt_context* ctx = xlt_open("overlay", XLT_DYNSIZE, confl);
 	if (!ctx)
 		return EXIT_FAILURE;

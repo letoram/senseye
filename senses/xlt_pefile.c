@@ -452,7 +452,7 @@ static bool populate(bool data, struct arcan_shmif_cont* in,
 
 int main(int argc, char* argv[])
 {
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 	struct xlt_context* ctx = xlt_open("PE Executable", XLT_DYNSIZE, confl);
 	if (!ctx)
 		return EXIT_FAILURE;

@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
 {
 	char name[32];
 	snprintf(name, 32, "DPIPE(%d)", (int) getpid());
-	enum SHMIF_FLAGS confl = SHMIF_CONNECT_LOOP;
+	enum ARCAN_FLAGS confl = SHMIF_CONNECT_LOOP;
 
 	glob_argc = argc - 1;
 	glob_argv = &argv[1];
