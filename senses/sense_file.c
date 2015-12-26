@@ -64,7 +64,7 @@ void control_event(struct senseye_cont* cont, arcan_event* ev)
 		switch(ev->tgt.kind){
 		case TARGET_COMMAND_SEEKTIME:
 			pthread_mutex_lock(&fsense.flock);
-			fsense.ofs = fsense.bytes_perline * ev->tgt.ioevs[1].iv;
+			fsense.ofs = fsense.bytes_perline * ev->tgt.ioevs[1].fv;
 			pthread_mutex_unlock(&fsense.flock);
 			write(fsense.pipe_out, &nonsense, sizeof(nonsense));
 		break;
