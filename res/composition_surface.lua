@@ -669,7 +669,7 @@ end
 local seq = 1;
 
 local function compsurf_background(ctx, bg)
-	if (ctx.background_id) then
+	if (valid_vid(ctx.background_id)) then
 		delete_image(ctx.background_id);
 	end
 
@@ -678,6 +678,8 @@ local function compsurf_background(ctx, bg)
 	show_image(bg);
 	move_image(bg, 0, 0);
 	resize_image(bg, ctx.max_w, ctx.max_h);
+
+	ctx.background_id = bg;
 end
 
 local function compsurf_input(ctx, iotbl)
@@ -811,6 +813,23 @@ local function compsurf_input_lock(ctx, hand)
 	ctx.inp_lock = hand;
 end
 
+local function compsurf_resize(ctx, w, h)
+	local oldw = ctx.max_w;
+	local oldh = ctx.max_h;
+	ctx.max_w = w;
+	ctx.max_h = h;
+
+	if (ctx.background_id) then
+		resize_image(ctx.background_id, w, h);
+	end
+
+	if (w < oldw or h < oldh) then
+		for i, v in ipairs(ctx.windows) do
+			compsurf_wnd_repos(v);
+		end
+	end
+end
+
 function compsurf_create(width, height, opts)
 	local restbl = {
 -- 'private' properties
@@ -827,6 +846,7 @@ function compsurf_create(width, height, opts)
 		name = opts.name ~= nil and opts.name or ("compsurf_" .. tostring(seq)),
 		selorder = opts.selorder ~= nil and opts.selorder or 10,
 		deselorder = opts.selorder ~= nil and opts.deselorder or 1,
+		resize = compsurf_resize,
 
 -- user directed window functions
 		find = compsurf_find,

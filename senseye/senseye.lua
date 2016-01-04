@@ -308,6 +308,11 @@ local function def_sourceh(wnd, source, status)
 	end
 end
 
+function VRES_AUTORES(w, h)
+	resize_video_canvas(w, h);
+	wm:resize(w, h);
+end
+
 --
 -- switch a window to expose one set of UI functions in favor of another. Only
 -- really performed when a segment sends an identity update.
