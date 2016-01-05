@@ -57,7 +57,7 @@ you could do the following:
 
 First, fire up the UI:
 
-    arcan -p /path/to/senseye/res -w 800 -h 800 /path/to/senseye/senseye &
+    arcan -p . -w 800 -h 800 /path/to/senseye/senseye &
 
 Then attach a sensor or two:
 
@@ -76,6 +76,7 @@ path for the linker:
 
 export DYLD_FALLBACK_LIBRARY_PATH=/usr/local/lib/arcan
 
+And similarly for some other 'nixes (LD_LIBRARY_PATH=/usr/local/lib/arcan)
 
 Repository
 =====
@@ -100,7 +101,4 @@ _files that might be of interest)_
         (sense_file,_mfile,_mem,_pipe.c) with some minor statistics and
         translation done in rwstat.c and event-loop management in sense_supp.c
         xlt_* for translators, with xlt_supp doing event-loop management.
-    res\
-        (mostly cherry-picked from the arcan codebase)
-        shared resources, fonts, support scripts for UI features and window
-        management.
+

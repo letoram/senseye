@@ -100,10 +100,10 @@ function senseye()
 	end
 
 -- uncomment for non-native cursor (would be visible in video recording)
-	mouse_setup(load_image("cursor.png"), 65535, 1, true);
+	mouse_setup(load_image("images/cursor.png"), 65535, 1, true);
 --	mouse_setup_native(load_image("cursor.png"), 1, 1);
-	mouse_add_cursor("move", load_image("cursor_move.png"), 13, 13);
-	mouse_add_cursor("scale", load_image("cursor_scale.png"), 13, 13);
+	mouse_add_cursor("move", load_image("images/cursor_move.png"), 13, 13);
+	mouse_add_cursor("scale", load_image("images/cursor_scale.png"), 13, 13);
 
 --
 -- create a window manager for the composition surface
@@ -113,7 +113,7 @@ function senseye()
 	table.insert(wm.handlers.deselect, defocus_window);
 	table.insert(wm.handlers.destroy, check_listeners);
 
-	local bgimg = load_image("background.png");
+	local bgimg = load_image("images/background.png");
 	image_tracetag(bgimg, "background");
 	wm:set_background(bgimg);
 
