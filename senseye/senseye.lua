@@ -21,8 +21,7 @@ demo_mode = false;
 --
 -- global, used in all menus and messages
 --
-menu_fontsz = 16;
-menu_text_fontstr = string.format("\\fdefault.ttf,%d\\#cccccc ", menu_fontsz);
+menu_text_fontstr = string.format("\\f,0\\#cccccc ", menu_fontsz);
 
 --
 -- customized dispatch handlers based on registered sensor type populated by
@@ -70,6 +69,10 @@ function senseye()
 
 	DEFAULT_TIMEOUT = gconfig_get("msg_timeout");
 
+-- populate the default font slot unless we get one from "above"
+	local txt = render_text("\\fdefault.ttf,16\\#cccccc nop");
+	print("should be default", txt);
+	if (valid_vid(txt)) then delete_image(txt); end
 --
 -- load sense- specific user interfaces (name matches the identification string
 -- that the connected frameserver sensor segment provides, it does not define
@@ -134,11 +137,11 @@ function senseye()
 	local statusid = null_surface(2,2);
 	statusbar = wm:add_window(statusid, {
 		ontop = true, fixed = true, block_select = true,
-		width = VRESW, height = menu_fontsz + 4,
+		width = VRESW, height = 16 + 4,
 		name = "status"
 	});
 	statusbar.select = function() end
-	statusbar:move(0, VRESH - menu_fontsz - 4);
+	statusbar:move(0, VRESH - 16 - 4);
 
 	if (gconfig_get("show_help") == 1) then
 		show_help();
@@ -179,24 +182,24 @@ function show_help()
 		return;
 	end
 
-	local msg = string.format([[
-\fdefault.ttf,%d\#ffffffQuick Help\#ffff00\n\r
-Toggle Help\n\r
+	local msg = [[
+\b\f,+2\#ffffffQuick Help\#ffff00\n\r\!b
+\!b\f,0Toggle Help\n\r
 Meta 1 (move, resize)\n\r
 Meta 2 (zoom, synch)\n\r
 Screenshot\n\r
-\#ffffffAll Windows\n\r\#ffff00\n\r
-Cycle Focus\n\r
+\b\f,+2\#ffffffAll Windows\n\r\#ffff00\n\r
+\!b\f,0Cycle Focus\n\r
 Zoom-Area\n\r
 Show Popup\n\r
 Delete Window\n\r
 Grow/Shrink x2\n\r
-\#ffffffData Window\#ffff00\n\r
-Toggle Play/Pause\n\r
+\b\f,+2\#ffffffData Window\#ffff00\n\r
+\!b\f,0Toggle Play/Pause\n\r
 Cycle Mapping\n\r
 Mode Toggle\n\r
 Step Forward\n\r
-Step Backwards\n\r]], 16);
+Step Backwards\n\r]];
 
 	local lookup = function(sym)
 		if BINDINGS[sym] ~= nil then
@@ -227,7 +230,7 @@ lclick+drag\n\r
 %s\n\r
 %s\n\r
 %s\n\r
-]],
+\!b\#cccccc\f,0]],
 	lookup("HELP"), lookup("META"), lookup("META_DETAIL"),
 	lookup("SCREENSHOT"), lookup("POPUP"), lookup("POPUP"),
 	lookup("DESTROY"), lookup("RESIZE_X2"),

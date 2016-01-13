@@ -6,7 +6,6 @@
 --
 -- popup drawing (ctrlh_wnd.lua)
 --
-local menu_text_fontstr = "\\fdefault.ttf,16\\#cccccc ";
 local menu_border_color = {140, 140, 140};
 local menu_bg_color = {80, 80, 80};
 
@@ -77,7 +76,9 @@ function popup_activate(wnd)
 end
 
 function spawn_popupmenu(wm, menutbl, target, cursorpos)
-	local list = {};
+	local list = {
+		menu_text_fontstr
+	};
 
 	if (menutbl == nil) then
 		return;
@@ -89,13 +90,15 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 	for k, v in ipairs(menutbl) do
 		table.insert(list, v.label);
+		if (k < #menutbl) then
+			table.insert(list, [[\r\n]]);
+		end
 	end
 
 -- draw the labels, create a background surface and link the labels to that,
 -- make sure that mouse events are captured by the canvas and the drawing order
 -- is correct.
-	local text, lines = render_text(
-		menu_text_fontstr .. table.concat(list, [[\r\n]]));
+	local text, lines = render_text(list);
 	local props = image_surface_properties(text);
 	local canvas = fill_surface(props.width + 10, props.height + 10,
 			menu_bg_color[1], menu_bg_color[2], menu_bg_color[3]);

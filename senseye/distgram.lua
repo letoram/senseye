@@ -133,11 +133,14 @@ local function goto_slot(wnd, id)
 	local sz = wnd.width >= 256 and wnd.width / 256 or 1;
 	resize_image(wnd.cursor, sz, wnd.height);
 
-	local labelstr = string.format("%sbyte(%d) - %s", menu_text_fontstr,
-		wnd.slot, (wnd.distances == nil or wnd.distances[wnd.slot] == nil)
-		and "not found" or (tostring(wnd.distances[wnd.slot] .. " bytes")));
+	local label = {
+		menu_text_fontstr,
+		string.format("byte(%d) - %s", wnd.slot,
+			(wnd.distances == nil or wnd.distances[wnd.slot] == nil)
+			and "not found" or (tostring(wnd.distances[wnd.slot] .. " bytes")))
+	};
 
-	local msg = render_text(labelstr);
+	local msg = render_text(label);
 	wnd:set_message(msg, -1);
 end
 
