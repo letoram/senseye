@@ -117,7 +117,7 @@ static inline void update_overlay(struct xlt_session* sess, bool nd)
 	if (sess->overlay && sess->olay.addr && sess->overlay(nd, &sess->in,
 		sess->zoom_range, &sess->olay, &sess->out,
 		sess->vpts, sess->unpack_sz, sess->buf, sess))
-		arcan_shmif_signal(&sess->olay, SHMIF_SIGVID | SHMIF_SIGBLK_ONCE);
+		arcan_shmif_signal(&sess->olay, SHMIF_SIGVID);
 }
 
 void xlt_ofs_coord(struct xlt_session* sess,
