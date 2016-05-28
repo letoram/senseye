@@ -42,18 +42,19 @@ add_compile_options(
 	-std=iso9899:1999
 )
 
-if (ARCAN_SOURCE_DIR)
-	add_subdirectory(${ARCAN_SOURCE_DIR}/shmif ashmif)
-else()
-	find_package(arcan_shmif REQUIRED)
-endif()
-
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	set(SENSE_MEM sense_mem.c memif_osx.c)
 endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set(SENSE_MEM sense_mem.c memif_linux.c)
+	add_compile_options( -D__LINUX )
+endif()
+
+if (ARCAN_SOURCE_DIR)
+	add_subdirectory(${ARCAN_SOURCE_DIR}/shmif ashmif)
+else()
+	find_package(arcan_shmif REQUIRED)
 endif()
 
 if (ENABLE_CAPSTONE)
@@ -61,7 +62,7 @@ if (ENABLE_CAPSTONE)
 endif()
 
 include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
-link_libraries(pthread m ${ARCAN_SHMIF_LIBRARY})
+link_libraries(pthread ${ARCAN_SHMIF_LIBRARY} m)
 
 add_library(xlt_supp STATIC xlt_supp.c xlt_supp.h)
 add_library(sense_supp STATIC sense_supp.c rwstat.c rwstat.h sense_supp.h)
