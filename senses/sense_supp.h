@@ -6,6 +6,17 @@
  * either cooperatively or through hijacking connect streaming transfers
  */
 
+/*
+ * These need to synch with what the UI expects or the connection
+ * will be rejected.
+ */
+enum sense_id {
+	SENSE_FILE = 0xfad,
+	SENSE_MEM = 0xbaad,
+	SENSE_PIPE = 0x1da,
+	SENSE_MFILE = 0xa1e
+};
+
 struct senseye_ch {
 	void (*pump)(struct senseye_ch*);
 	ssize_t (*data)(struct senseye_ch*, const void* buf, size_t ntw);
@@ -58,4 +69,4 @@ bool senseye_pump(struct senseye_cont*, bool block);
  * data transfers to the UI (should be a square power of 2)
  */
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
-	const char* const ident, size_t base);
+	enum sense_id id, const char* const ident, size_t base);

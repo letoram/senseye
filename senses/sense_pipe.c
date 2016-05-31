@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	struct senseye_ch* ch = senseye_open(&cont, "STDIN", base);
+	struct senseye_ch* ch = senseye_open(&cont, SENSE_PIPE, "STDIN", base);
 	if (!ch){
 		fprintf(stderr, "couldn't map data channel, parent rejected.\n");
 		return EXIT_FAILURE;

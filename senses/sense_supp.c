@@ -267,7 +267,7 @@ bool senseye_pump(struct senseye_cont* cont, bool block)
 }
 
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
-	const char* const ident, size_t base)
+	enum sense_id id, const char* const ident, size_t base)
 {
 	if (!cont || !cont->priv)
 		return NULL;
@@ -283,13 +283,13 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 		.close = ch_close
 	}, *rv = NULL;
 
-	int tag = random();
 	arcan_event sr = {
 		.category = EVENT_EXTERNAL,
 		.ext.kind = EVENT_EXTERNAL_SEGREQ,
 		.ext.segreq.width = base,
 		.ext.segreq.height = base,
-		.ext.segreq.id = tag
+		.ext.segreq.kind = SEGID_SENSOR,
+		.ext.segreq.id = id
 	};
 	arcan_shmif_enqueue(&cpriv->cont, &sr);
 

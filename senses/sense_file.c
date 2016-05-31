@@ -368,7 +368,7 @@ int main(int argc, char* argv[])
 	if (!arcan_shmif_resize(cont.context(&cont), p_w, p_h))
 		return EXIT_FAILURE;
 
-	struct senseye_ch* chan = senseye_open(&cont, argv[1], base);
+	struct senseye_ch* chan = senseye_open(&cont, SENSE_FILE, argv[1], base);
 	if (!chan){
 		fprintf(stderr, "couldn't map data channel, parent rejected.\n");
 		return EXIT_FAILURE;

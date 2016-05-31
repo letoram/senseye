@@ -80,7 +80,7 @@ static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 	size_t size = ent->endaddr - ent->addr;
 	char wbuf[64];
 	snprintf(wbuf, sizeof(wbuf), "%d@%" PRIxPTR, (int)msense.pid, base);
-	struct senseye_ch* ch = senseye_open(msense.cont, wbuf, base);
+	struct senseye_ch* ch = senseye_open(msense.cont, SENSE_MEM, wbuf, base);
 
 	if (NULL == ch){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
