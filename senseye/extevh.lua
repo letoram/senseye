@@ -33,17 +33,25 @@ local function cursor_handler(wnd, source, status)
 -- and implement local warping..
 end
 
-local function default_handler(sourcewnd, athandler)
-	print("in default handler");
+local function default_handler(sourcewnd, athandler, status)
+	for k,v in pairs(status) do
+		print(k, v);
+	end
 end
 
 local function default_reqh(wnd, source, ev)
 	local at = archetypes[tostring(ev.reqid)];
+
+-- we use the sensor here to assume navigation window + 1..n data windows
 	if (ev.segkind == "sensor" and at) then
 		local subid = accept_target();
-		local ip = senseye_launch(wnd, subid);
+
+-- we'll get back the appropriate container for subid
+		local subwnd = senseye_launch(wnd, subid, at.subtitle);
+
+-- default handler merely forwards to one that fit the archetype
 		target_updatehandler(subid, function(source, status)
-			default_handler(subwnd, at.handler) end);
+			default_handler(subwnd, at.subhandler, status) end);
 	else
 		warning(string.format("ignore unknown sensor: %s, %s",
 			ev.segkind, tostring(ev.id)));
@@ -128,6 +136,7 @@ end
 defhtbl["registered"] =
 function(wnd, source, stat)
 	local atbl = archetypes[stat.segkind];
+	print("registered"); for k,v in pairs(stat) do print(k,v); end
 	if (atbl == nil or wnd.atype ~= nil) then
 		return;
 	end

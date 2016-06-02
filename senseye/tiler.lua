@@ -2216,6 +2216,7 @@ local function wnd_create(wm, source, opts)
 
 -- public events to manipulate the window
 		alert = wnd_alert,
+		hide = wnd_hide,
 		assign_ws = wnd_reassign,
 		destroy = wnd_destroy,
 		set_message = wnd_message,
@@ -2779,6 +2780,7 @@ function tiler_create(width, height, opts)
 -- management members
 		spaces = {},
 		windows = {},
+		hidden = {},
 		space_ind = 1,
 
 -- debug

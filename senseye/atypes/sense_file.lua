@@ -12,6 +12,7 @@ local res = {
 -- labels is mapping between known symbol and string to forward
 	labels = {},
 	atype = tostring(0xfad),
+	guid = "rQ8AAAAAAAAAAAAAAAAAAA==",
 	props = {
 		scalemode = "stretch",
 		autocrop = false,

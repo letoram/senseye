@@ -325,9 +325,7 @@ function senseye_launch(wnd, subvid, title)
 			neww.delete_protect = true;
 			neww:set_title(title and title or "");
 			neww.scalemode = "stretch";
--- insert a zoom window next to it if the type requires it as a
--- vertical child to the first window
---
+
 -- divide the ration [20% 60% 20% or 20% 80% 0%] depending on
 -- the number of windows, then we start stacking vertical.
 			rebalance_space(TILER.spaces[i]);

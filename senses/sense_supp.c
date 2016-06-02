@@ -320,9 +320,16 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 			cp->running = true;
 			cp->framecount = 0;
 			cp->cont = arcan_shmif_acquire(&cpriv->cont,
-				NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+				NULL, 0, SHMIF_DISABLE_GUARD);
 			if (!cp->cont.addr)
 				goto fail;
+
+			struct arcan_event regev = {
+				.ext.kind = ARCAN_EVENT(REGISTER),
+				.ext.registr.kind = SEGID_SENSOR,
+				.ext.registr.guid = {id, 0}
+			};
+			arcan_shmif_enqueue(&cp->cont, &regev);
 
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
 				opts.def_map, opts.def_pack, base, &cp->cont);
