@@ -53,7 +53,7 @@ struct senseye_cont {
  *
  * will return a fdsense context in which new data channels can be opened
  */
-bool senseye_connect(const char* key, FILE* logout,
+bool senseye_connect(enum sense_id id, const char* key, FILE* logout,
 	struct senseye_cont*, struct arg_arr**, enum ARCAN_FLAGS flags);
 
 /*
@@ -69,4 +69,4 @@ bool senseye_pump(struct senseye_cont*, bool block);
  * data transfers to the UI (should be a square power of 2)
  */
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
-	enum sense_id id, const char* const ident, size_t base);
+	const char* const ident, size_t base);

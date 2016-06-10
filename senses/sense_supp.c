@@ -47,6 +47,7 @@ opts = {
 struct senseye_priv {
 	struct arcan_shmif_cont cont;
 	bool paused, running, noforward;
+	enum sense_id id;
 	int framecount;
 };
 
@@ -113,7 +114,7 @@ static void cont_dispatch(struct senseye_cont* cont, arcan_event* ev)
 {
 }
 
-bool senseye_connect(const char* key, FILE* log,
+bool senseye_connect(enum sense_id id, const char* key, FILE* log,
 	struct senseye_cont* dcont, struct arg_arr** darg, enum ARCAN_FLAGS flags)
 {
 	logout = log;
@@ -133,12 +134,22 @@ bool senseye_connect(const char* key, FILE* log,
 	dcont->context = cont_getctx;
 
 	setenv("ARCAN_CONNPATH", key, 0);
-	dcont->priv->cont = arcan_shmif_open(SEGID_SENSOR, flags, darg);
+/* we want to set GUID later */
+	dcont->priv->cont = arcan_shmif_open(0, flags, darg);
 	unsetenv("ARCAN_CONNPATH");
+	dcont->priv->id = id;
 
 	opts.args = *darg;
-	if (dcont->priv->cont.addr != NULL)
+	if (dcont->priv->cont.addr != NULL){
+		struct arcan_event regev = {
+			.ext.kind = ARCAN_EVENT(REGISTER),
+			.ext.registr.kind = SEGID_SENSOR,
+			.ext.registr.guid = {id, 0}
+		};
+		arcan_shmif_enqueue(&dcont->priv->cont, &regev);
+
 		return true;
+	}
 
 	free(dcont->priv);
 	dcont->priv = NULL;
@@ -267,7 +278,7 @@ bool senseye_pump(struct senseye_cont* cont, bool block)
 }
 
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
-	enum sense_id id, const char* const ident, size_t base)
+	const char* const ident, size_t base)
 {
 	if (!cont || !cont->priv)
 		return NULL;
@@ -289,7 +300,7 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 		.ext.segreq.width = base,
 		.ext.segreq.height = base,
 		.ext.segreq.kind = SEGID_SENSOR,
-		.ext.segreq.id = id
+		.ext.segreq.id = cpriv->id
 	};
 	arcan_shmif_enqueue(&cpriv->cont, &sr);
 
@@ -323,13 +334,6 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				NULL, 0, SHMIF_DISABLE_GUARD);
 			if (!cp->cont.addr)
 				goto fail;
-
-			struct arcan_event regev = {
-				.ext.kind = ARCAN_EVENT(REGISTER),
-				.ext.registr.kind = SEGID_SENSOR,
-				.ext.registr.guid = {id, 0}
-			};
-			arcan_shmif_enqueue(&cp->cont, &regev);
 
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
 				opts.def_map, opts.def_pack, base, &cp->cont);

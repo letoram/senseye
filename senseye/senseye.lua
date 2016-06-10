@@ -302,7 +302,7 @@ end
 
 -- we have received both a sensor and it's parent window --
 -- assign a space and begin setting up.
-function senseye_launch(wnd, subvid, title)
+function senseye_launch(wnd, subvid)
 	for i=1,10 do
 		if (not TILER.spaces[i] or not TILER.spaces[i].sensor) then
 			TILER:switch_ws(i);

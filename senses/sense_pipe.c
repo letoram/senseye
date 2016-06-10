@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
 	struct arg_arr* aarr;
 	enum ARCAN_FLAGS connectfl = SHMIF_CONNECT_LOOP;
 
-	if (!senseye_connect(NULL, stderr, &cont, &aarr, connectfl))
+	if (!senseye_connect(SENSE_PIPE, NULL, stderr, &cont, &aarr, connectfl))
 		return EXIT_FAILURE;
 
 	shm = cont.context(&cont);
@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	struct senseye_ch* ch = senseye_open(&cont, SENSE_PIPE, "STDIN", base);
+	struct senseye_ch* ch = senseye_open(&cont, "STDIN", base);
 	if (!ch){
 		fprintf(stderr, "couldn't map data channel, parent rejected.\n");
 		return EXIT_FAILURE;

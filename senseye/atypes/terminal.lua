@@ -27,6 +27,7 @@ local res = {
 	actions = {},
 -- labels is mapping between known symbol and string to forward
 	labels = {},
+	subreq = {},
 	default_shader = {"simple", "crop"},
 	atype = "terminal",
 	props = {

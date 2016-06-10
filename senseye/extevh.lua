@@ -20,42 +20,40 @@ local function load_archetypes()
 		for k,v in ipairs(res) do
 			local tbl = system_load("atypes/" .. v, false);
 			tbl = tbl and tbl() or nil;
-			if (tbl and tbl.atype) then
+			if (tbl.guid) then
+				archetypes[tbl.guid] = tbl;
+			elseif (tbl.atype and archetypes[tbl.atype] == nil) then
 				archetypes[tbl.atype] = tbl;
+			else
+				print("broken archetype : ", v);
 			end
 		end
 	end
 end
 load_archetypes();
 
-local function cursor_handler(wnd, source, status)
--- for cursor layer, we reuse some events to indicate hotspot
--- and implement local warping..
-end
-
-local function default_handler(sourcewnd, athandler, status)
-	for k,v in pairs(status) do
-		print(k, v);
-	end
-end
-
 local function default_reqh(wnd, source, ev)
-	local at = archetypes[tostring(ev.reqid)];
+	local at = wnd.astate and wnd.astate.subreq[tostring(ev.reqid)];
 
 -- we use the sensor here to assume navigation window + 1..n data windows
-	if (ev.segkind == "sensor" and at) then
+	if (ev.segkind == "sensor" and at and at.reqh and not wnd.data) then
 		local subid = accept_target();
 
 -- we'll get back the appropriate container for subid
-		local subwnd = senseye_launch(wnd, subid, at.subtitle);
+		local subwnd = senseye_launch(wnd, subid);
+		wnd.data = subwnd;
 
 -- default handler merely forwards to one that fit the archetype
 		target_updatehandler(subid, function(source, status)
-			default_handler(subwnd, at.subhandler, status) end);
+			at.subreqh(subwnd, at.subhandler, status)
+		end);
 	else
 		warning(string.format("ignore unknown sensor: %s, %s",
 			ev.segkind, tostring(ev.id)));
 	end
+end
+
+function extevh_merge(wnd, evh)
 end
 
 function extevh_clipboard(wnd, source, status)
@@ -72,27 +70,6 @@ end
 
 local defhtbl = {};
 
-defhtbl["framestatus"] =
-function(wnd, source, stat)
--- don't do any state / performance tracking right now
-end
-
-defhtbl["alert"] =
-function(wnd, source, stat)
--- FIXME: need multipart concatenation of message
-end
-
-defhtbl["cursorhint"] =
-function(wnd, source, stat)
-	wnd.cursor = stat.cursor;
-end
-
-defhtbl["viewport"] =
-function(wnd, source, stat)
--- need different behavior for popup here (invisible, parent, ...),
--- FIXME:	wnd:custom_border(ev->viewport.border);
-end
-
 defhtbl["resized"] =
 function(wnd, source, stat)
 	wnd.space:resize();
@@ -105,18 +82,6 @@ function(wnd, source, stat)
 	end
 	wnd.origo_ll = stat.origo_ll;
 	image_set_txcos_default(wnd.canvas, stat.origo_ll == true);
-end
-
-defhtbl["message"] =
-function(wnd, source, stat)
--- FIXME: no multipart concatenation
-	wnd:set_message(stat.message, gconfig_get("msg_timeout"));
-end
-
-defhtbl["ident"] =
-function(wnd, source, stat)
---	print("ident", source, stat);
--- FIXME: update window title unless custom titlebar?
 end
 
 defhtbl["terminated"] =
@@ -135,9 +100,13 @@ end
 
 defhtbl["registered"] =
 function(wnd, source, stat)
-	local atbl = archetypes[stat.segkind];
-	print("registered"); for k,v in pairs(stat) do print(k,v); end
-	if (atbl == nil or wnd.atype ~= nil) then
+	local atbl = archetypes[stat.guid] and archetypes[stat.guid] or
+		archetypes[stat.segkind];
+
+	if (not atbl) then
+		warning(string.format("register from unknown %s:%s\n",
+			stat.segkind, stat.guid));
+		wnd:destroy();
 		return;
 	end
 
@@ -149,16 +118,12 @@ function(wnd, source, stat)
 		end
 	end
 
--- can either be table [tgt, cfg] or [guid]
-	if (not wnd.config_tgt) then
-		wnd.config_tgt = stat.guid;
-	end
-
 	wnd.bindings = atbl.bindings;
 	wnd.dispatch = merge_dispatch(shared_dispatch(), atbl.dispatch);
 	wnd.labels = atbl.labels and atbl.labels or {};
 	wnd.source_audio = stat.source_audio;
 	wnd.atype = atbl.atype;
+	wnd.astate = atbl;
 
 -- should always be true but ..
 	if (active_display().selected == wnd) then
@@ -179,26 +144,6 @@ function(wnd, source, stat)
 	if (atbl.init) then
 		atbl:init(wnd, source);
 	end
-
-	if (stat.title and string.len(stat.title) > 0) then
-		wnd:set_title(stat.title, true);
-	end
-end
-
-defhtbl["state_size"] =
-function(wnd, source, stat)
-end
-
-defhtbl["coreopt"] =
-function(wnd, source, stat)
-end
-
-defhtbl["clock"] =
-function(wnd, source, stat)
-end
-
-defhtbl["content_state"] =
-function(wnd, source, stat)
 end
 
 defhtbl["segment_request"] =
@@ -214,7 +159,7 @@ function(wnd, source, stat)
 				extevh_clipboard(wnd, source, status)
 			end
 		);
-	else
+	elseif (stat.segkind == "sensor") then
 		default_reqh(wnd, source, stat);
 	end
 end
@@ -249,24 +194,16 @@ function extevh_default(source, stat)
 		return;
 	end
 
-	if (DEBUGLEVEL > 0 and active_display().debug_console) then
-		active_display().debug_console:target_event(wnd, source, stat);
-	end
-
 -- window handler has priority
 	if (wnd.dispatch[stat.kind]) then
-		if (DEBUGLEVEL > 0 and active_display().debug_console) then
-			active_display().debug_console:event_dispatch(wnd, stat.kind, stat);
-		end
-
 -- and only forward if the window handler accepts
 		if (wnd.dispatch[stat.kind](wnd, source, stat)) then
 			return;
 		end
 	end
 
+	print("default:", stat.kind);
 	if (defhtbl[stat.kind]) then
 		defhtbl[stat.kind](wnd, source, stat);
-	else
 	end
 end
