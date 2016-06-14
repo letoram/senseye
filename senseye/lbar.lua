@@ -603,6 +603,7 @@ function tiler_lbar(wm, completion, comp_ctx, opts)
 		force_completion = opts.force_completion == false and false or true
 	};
 	wm.input_ctx = res;
+	comp_ctx.wm = wm;
 
 -- restore from previous population / selection
 	if (opts.restore and opts.restore.msg) then

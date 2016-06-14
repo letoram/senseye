@@ -34,22 +34,20 @@ load_archetypes();
 
 local function default_reqh(wnd, source, ev)
 	local at = wnd.astate and wnd.astate.subreq[tostring(ev.reqid)];
-
 -- we use the sensor here to assume navigation window + 1..n data windows
 	if (ev.segkind == "sensor" and at and at.reqh and not wnd.data) then
 		local subid = accept_target();
 
 -- we'll get back the appropriate container for subid
-		local subwnd = senseye_launch(wnd, subid);
-		wnd.data = subwnd;
+		local subwnd = senseye_launch(wnd, subid, "data", at);
 
 -- default handler merely forwards to one that fit the archetype
 		target_updatehandler(subid, function(source, status)
-			at.subreqh(subwnd, at.subhandler, status)
+			at.reqh(subwnd, source, status)
 		end);
 	else
 		warning(string.format("ignore unknown sensor: %s, %s",
-			ev.segkind, tostring(ev.id)));
+			ev.segkind, tostring(ev.reqid)));
 	end
 end
 
@@ -202,7 +200,6 @@ function extevh_default(source, stat)
 		end
 	end
 
-	print("default:", stat.kind);
 	if (defhtbl[stat.kind]) then
 		defhtbl[stat.kind](wnd, source, stat);
 	end

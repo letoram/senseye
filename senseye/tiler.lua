@@ -9,7 +9,7 @@
 
 -- number of Z values reserved for each window
 local WND_RESERVED = 10;
-
+EVENT_SYNCH = {};
 local ent_count = 1;
 
 local create_workspace = function() end
@@ -1765,7 +1765,7 @@ local function wnd_mousemotion(ctx, x, y)
 
 -- with rate limited mouse events (those 2khz gaming mice that likes
 -- to saturate things even when not needed), we accumulate relative samples
-	if (not wnd.rate_unlimited) then
+	if (not wnd.rate_unlimited and EVENT_SYNCH[wnd.canvas]) then
 		local ep = EVENT_SYNCH[wnd.canvas].pending;
 		if (ep) then
 			ep[1].samples[1] = mv[1];

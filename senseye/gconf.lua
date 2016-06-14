@@ -44,6 +44,12 @@ local defaults = {
 	float_defw = 0.3,
 	float_defh = 0.2,
 
+	data_pack = 0,
+	data_alpha = 0,
+	data_map = 0,
+	data_clock = 0,
+	data_step = 2,
+
 -- default encoder setting, used by suppl when building string. We don't
 -- have a way to query the span of these parameters yet (like available
 -- codecs).

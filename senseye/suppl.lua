@@ -965,7 +965,7 @@ function suppl_run_value(ctx, mask)
 	local hintstr = string.format("%s %s %s",
 		ctx.label and ctx.label or "",
 		ctx.initial and ("[ " .. (type(ctx.initial) == "function"
-			and tostring(ctx.initial()) or ctx.initial) .. " ] ") or "",
+			and tostring(ctx:initial()) or ctx.initial) .. " ] ") or "",
 		ctx.hint and ((type(ctx.hint) == "function"
 		and ctx.hint() or ctx.hint) .. ":") or ""
 	);
@@ -1030,6 +1030,7 @@ local function lbar_fun(ctx, instr, done, lastv, inp_st)
 			end
 		elseif (tgt.kind == "value") then
 			cpath:append(tgt.name, tgt.label);
+			tgt.wm = ctx.wm;
 			return suppl_run_value(tgt, tgt.password_mask);
 		end
 	end
@@ -1085,12 +1086,14 @@ end
 --  + any data the handler might need
 --
 function launch_menu(wm, ctx, fcomp, label, opts, last_bar)
+-- safety check ctx
 	if (ctx == nil or ctx.list == nil or
 		type(ctx.list) ~= "table" or #ctx.list == 0) then
 		cpath:reset();
 		return;
 	end
 
+-- check so that we have at least one valid entry
 	local found = false;
 	for i,v in ipairs(ctx.list) do
 		if (v.eval == nil or v.eval()) then
@@ -1099,17 +1102,21 @@ function launch_menu(wm, ctx, fcomp, label, opts, last_bar)
 		end
 	end
 
+-- if we're empty after that, give up
 	if (not found) then
 		cpath:reset();
 		return;
 	end
 
+-- force- completion is if the provided set should be absolute or just
+-- an input hint
 	fcomp = fcomp == nil and true or false;
-
 	opts = opts and opts or {};
 	opts.force_completion = fcomp;
 	opts.restore = last_bar;
 	opts.label = type(label) == "function" and label() or label;
+
+-- prefix symbol to allow different path lookup domains(#! used for now)
 	if (opts.domain) then
 		cpath.domain = opts.domain;
 	end
@@ -1212,6 +1219,7 @@ function launch_menu_path(wm, gfunc, pathdescr, norst, domain, selstate)
 	local old_launch = launch_menu;
 	launch_menu = function(wm, ctx, fcomp, label)
 		cl = ctx;
+		ctx.wm = wm;
 	end
 
 	gfunc();

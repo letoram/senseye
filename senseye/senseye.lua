@@ -46,6 +46,7 @@ function senseye(argv)
 	system_load("fglobal.lua")(); -- tiler- related global functions
 	system_load("menus/global/global.lua")(); -- desktop related global
 	system_load("menus/target/target.lua")(); -- shared window related global
+	system_load("menus/data/data.lua")(); -- basic operations for all data wnds
 
 -- load builtin features and 'extensions'
 	local res = glob_resource("builtin/*.lua", APPL_RESOURCE);
@@ -300,9 +301,7 @@ function rebalance_space(space)
 	space:activate();
 end
 
--- we have received both a sensor and it's parent window --
--- assign a space and begin setting up.
-function senseye_launch(wnd, subvid)
+local function assign_wnd_ws(wnd, subvid)
 	for i=1,10 do
 		if (not TILER.spaces[i] or not TILER.spaces[i].sensor) then
 			TILER:switch_ws(i);
@@ -329,17 +328,57 @@ function senseye_launch(wnd, subvid)
 -- divide the ration [20% 60% 20% or 20% 80% 0%] depending on
 -- the number of windows, then we start stacking vertical.
 			rebalance_space(TILER.spaces[i]);
-			return;
+			return neww;
 		end
 	end
-	wnd:destroy();
+	return;
+end
 
--- out of workspaces
-	if (valid_vid(subvid)) then
+-- we have received both a sensor and it's parent window --
+-- assign a space and begin setting up.
+-- [basetype] reserved right now, should be data
+-- [typedescr] additional table with overrides and additional
+-- handlers, defined in corresponding atypes/sense_file etc.
+function senseye_launch(wnd, subvid, basetype, typedescr)
+	local newwnd = assign_wnd_ws(wnd, subvid);
+	if (not newwnd or basetype ~= "data") then
+		wnd:destroy();
 		delete_image(subvid);
+		return;
+	end
+
+-- shared dispatch adds basic responses to _input_label
+	wnd.dispatch = shared_dispatch();
+	newwnd.dispatch = shared_dispatch();
+
+-- data resize needs to propagate to assigned tools and translators
+-- in order for underlying backing stores to be rebuilt
+	newwnd:add_handler("resize", data_resize);
+	newwnd.no_shared = true;
+
+-- replace the normal target_ menu with a specific data window one
+	newwnd.external = subvid;
+	newwnd.actions = merge_menu(DATA_ACTIONS, typedescr.actions);
+	datawnd_setup(newwnd);
+
+-- prepare for dependent data-sources
+	newwnd.translators = {};
+	newwnd.overlays = {};
+	newwnd.tools = {};
+
+-- add a clock for play/pause and forward to atype- specific handler
+	newwnd.tick = function(wnd)
+		if (wnd.autoplay) then
+			stepframe_target(subvid, 1);
+		end
+		if (typedescr.tick) then
+			typedescr.tick(wnd, typedescr);
+		end
 	end
 end
 
+-- keep it here for terminals and other windows that are not
+-- senseye related that we might wish to connect and add
 function durden_launch(vid, prefix, title, wnd)
 	if (not valid_vid(vid)) then
 		return;
@@ -577,4 +616,5 @@ function senseye_clock_pulse(n, nt)
 
 	flush_pending();
 	mouse_tick(1);
+	TILER:tick();
 end

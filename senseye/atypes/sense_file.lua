@@ -18,7 +18,6 @@
 --
 -- dispatch[kind](wnd, source, status)
 --
---
 local defprop_tbl = {
 	scalemode = "stretch",
 	autocrop = false,
@@ -26,10 +25,15 @@ local defprop_tbl = {
 	filtermode = FILTER_NONE
 };
 
+local function data_ev(wnd, source, ev)
+	print(ev.kind);
+end
+
 local file_datawnd = {
 	dispatch = {},
 	labels = {},
-	subreq = {},
+-- actions should map to normal data window
+	reqh = data_ev,
 	props = defprop_tbl
 };
 
