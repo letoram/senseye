@@ -1284,7 +1284,7 @@ function launch_menu_path(wm, gfunc, pathdescr, norst, domain, selstate)
 		else
 -- or revert and activate the handler, with arg if value- action
 			launch_menu = old_launch;
-			found.handler(cl.handler, arg);
+			found.handler(cl, arg);
 			return;
 		end
 	end

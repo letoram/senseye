@@ -3,6 +3,42 @@
 -- Reference: http://durden.arcan-fe.com
 -- Description: Shader compilation and setup.
 
+local default_lut = {
+	0xff, 0xff, 0xff,
+	0xff, 0x00, 0x00,
+--	0x00, 0xff, 0x00 used for highlight so exclude here
+	0xff, 0xff, 0x00,
+	0x00, 0x00, 0xff,
+	0xff, 0x00, 0xff,
+	0x00, 0xff, 0xff,
+	0x99, 0x99, 0x99,
+	0x99, 0x00, 0x00,
+	0x00, 0x99, 0x00,
+	0x99, 0x99, 0x00,
+	0x00, 0x00, 0x99,
+	0x99, 0x00, 0x99,
+	0x00, 0x99, 0x99,
+	0x40, 0x40, 0x40,
+	0x40, 0x00, 0x00,
+	0x40, 0x40, 0x00,
+};
+
+for i=49,768,3 do
+	default_lut[i+0] = 0;
+	default_lut[i+1] = i-1;
+	default_lut[i+2] = 0;
+end
+
+-- load or synthesize as fallback
+local global_lookup = load_image(gconfig_get("default_lut"));
+if (not valid_vid(global_lookup)) then
+	global_lookup = raw_surface(256, 1, 3, default_lut);
+end
+
+function shdrmgmt_default_lut(vid, slot)
+	set_image_as_frame(vid, global_lookup, slot);
+end
+
 if (SHADER_LANGUAGE == "GLSL120") then
 local old_build = build_shader;
 function build_shader(vertex, fragment, label)
@@ -26,14 +62,14 @@ end
 end
 
 local shdrtbl = {
-	effect = {},
 	ui = {},
-	display = {},
-	audio = {},
-	simple = {}
+	pcloud = {},
+	color = {},
+	simple = {},
+	histogram = {}
 };
 
-local groups = {"effect", "ui", "display", "audio", "simple"};
+local groups = {"pcloud", "ui", "color", "simple", "histogram"};
 
 function shdrmgmt_scan()
  	for a,b in ipairs(groups) do
@@ -265,12 +301,9 @@ end
 
 local fmtgroups = {
 	ui = {ssetup, smenu},
-	effect = {
-		function() warning("effect incomplete"); end,
-		function() return {}; end,
-	},
-	display = {dsetup, dmenu},
-	audio = {ssetup, smenu},
+	pcloud = {ssetup, smenu},
+	histogram = {ssetup, smenu},
+	color = {ssetup, smenu},
 	simple = {ssetup, smenu}
 };
 

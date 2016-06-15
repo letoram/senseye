@@ -2111,7 +2111,7 @@ local canvas_mh = {
 	end,
 
 	button = function(ctx, vid, ...)
-		if (valid_vid(ctx.tag.external, TYPE_FRAWMESERVER)) then
+		if (valid_vid(ctx.tag.external, TYPE_FRAMESERVER)) then
 			wnd_mousebutton(ctx, ...);
 		end
 	end,

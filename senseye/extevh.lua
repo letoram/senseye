@@ -40,11 +40,7 @@ local function default_reqh(wnd, source, ev)
 
 -- we'll get back the appropriate container for subid
 		local subwnd = senseye_launch(wnd, subid, "data", at);
-
--- default handler merely forwards to one that fit the archetype
-		target_updatehandler(subid, function(source, status)
-			at.reqh(subwnd, source, status)
-		end);
+		extevh_register_window(subid, subwnd);
 	else
 		warning(string.format("ignore unknown sensor: %s, %s",
 			ev.segkind, tostring(ev.reqid)));
@@ -195,8 +191,16 @@ function extevh_default(source, stat)
 -- window handler has priority
 	if (wnd.dispatch[stat.kind]) then
 -- and only forward if the window handler accepts
-		if (wnd.dispatch[stat.kind](wnd, source, stat)) then
-			return;
+		local ack = false;
+		if (type(wnd.dispatch[stat.kind]) == "table") then
+			for k,v in ipairs(wnd.dispatch[stat.kind]) do
+				ack = v(wnd, source, stat) and true or ack;
+			end
+		else
+			ack = wnd.dispatch[stat.kind](wnd, source, stat);
+		end
+		if (ack) then
+			return true;
 		end
 	end
 

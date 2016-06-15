@@ -54,11 +54,16 @@ function dispatch_reset(save)
 	tbl["m1_m2_RIGHT"] = "grow_h";
 	tbl["m1_m2_UP"] = "shrink_v";
 	tbl["m1_m2_DOWN"] = "grow_v";
+
+-- stepping keybindings
+	tbl["m1_,"] = "#step_act/reverse";
+	tbl["m1_."] = "#step_act/forward";
+	tbl["m2_,"] = "#step_act/rev_big";
+	tbl["m2_."] = "#step_act/fwd_big";
+	tbl["m1_p"] = "#platog";
+	tbl["m1_m"] = "#cyclemap";
+
 	tbl["m1_r"] = "fullscreen";
-	tbl["m2_LEFT"] = "move_nx";
-	tbl["m2_RIGHT"] = "move_px";
-	tbl["m2_UP"] = "move_ny";
-	tbl["m2_DOWN"] = "move_py";
 	tbl["m1_s"] = "swap_focus";
 	tbl["m1_m2_s"] = "swap_focus"; -- will become swap and select
 	tbl["m1_1"] = "switch_ws1";
@@ -71,17 +76,6 @@ function dispatch_reset(save)
 	tbl["m1_8"] = "switch_ws8";
 	tbl["m1_9"] = "switch_ws9";
 	tbl["m1_0"] = "switch_ws10";
-	tbl["m1_m2_r"] = "rename_space";
-	tbl["m1_m2_1"] = "assign_ws1";
-	tbl["m1_m2_2"] = "assign_ws2";
-	tbl["m1_m2_3"] = "assign_ws3";
-	tbl["m1_m2_4"] = "assign_ws4";
-	tbl["m1_m2_5"] = "assign_ws5";
-	tbl["m1_m2_6"] = "assign_ws6";
-	tbl["m1_m2_7"] = "assign_ws7";
-	tbl["m1_m2_8"] = "assign_ws8";
-	tbl["m1_m2_9"] = "assign_ws9";
-	tbl["m1_m2_0"] = "assign_ws10";
 
 -- clear all existing and define new ones
 	if (save) then

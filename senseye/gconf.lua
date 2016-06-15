@@ -49,6 +49,9 @@ local defaults = {
 	data_map = 0,
 	data_clock = 0,
 	data_step = 2,
+	default_lut = "color_lut/ascii.png",
+	default_color = "lut",
+	default_pcloud = "trigram",
 
 -- default encoder setting, used by suppl when building string. We don't
 -- have a way to query the span of these parameters yet (like available

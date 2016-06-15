@@ -306,7 +306,7 @@ local function assign_wnd_ws(wnd, subvid)
 		if (not TILER.spaces[i] or not TILER.spaces[i].sensor) then
 			TILER:switch_ws(i);
 			TILER.spaces[i].sensor = subvid;
-			stepframe_target(subvid, 1);
+			stepframe_target(subvid, 0);
 			wnd.hide_titlebar = true;
 			wnd.scalemode = "stretch";
 			wnd.autocrop = false;
@@ -347,19 +347,30 @@ function senseye_launch(wnd, subvid, basetype, typedescr)
 		return;
 	end
 
--- shared dispatch adds basic responses to _input_label
-	wnd.dispatch = shared_dispatch();
 	newwnd.dispatch = shared_dispatch();
+	newwnd.labels = typedescr.labels;
 
 -- data resize needs to propagate to assigned tools and translators
 -- in order for underlying backing stores to be rebuilt
 	newwnd:add_handler("resize", data_resize);
 	newwnd.no_shared = true;
+	wnd.data = newwnd;
+	newwnd.master = wnd;
 
 -- replace the normal target_ menu with a specific data window one
 	newwnd.external = subvid;
 	newwnd.actions = merge_menu(DATA_ACTIONS, typedescr.actions);
 	datawnd_setup(newwnd);
+
+-- merge the shared / default dispatch with any special ones from
+-- the subtype, note that this does not directly support masking.
+	for k,v in pairs(typedescr.dispatch) do
+		if (newwnd.dispatch[k]) then
+			newwnd.dispatch[k] = {newwnd.dispatch[k], v};
+		else
+			newwnd.dispatch[k] = v;
+		end
+	end
 
 -- prepare for dependent data-sources
 	newwnd.translators = {};
@@ -375,6 +386,7 @@ function senseye_launch(wnd, subvid, basetype, typedescr)
 			typedescr.tick(wnd, typedescr);
 		end
 	end
+	return newwnd;
 end
 
 -- keep it here for terminals and other windows that are not
@@ -518,23 +530,36 @@ function senseye_normal_input(iotbl, fromim)
 		return;
 	end
 
+-- rest applies only to selected window on active display
+	local sel = active_display().selected;
+	if (not sel) then
+		return;
+	end
+
+-- just check if the key maps to a known meta+symbol and if the selected
+-- window has a matching LABEL that activates as a function rather than
+-- as a translation
+	if (iotbl.digital and iotbl.keysym) then
+		local sym, lutsym = SYMTABLE:patch(iotbl);
+		if (lutsym and sel.labels[lutsym] and type(
+			sel.labels[lutsym]) == "function") then
+			if (iotbl.active) then
+				sel.labels[lutsym](sel, iotbl);
+			else
+				return;
+			end
+		end
+	end
+
 -- still a window alived but no input has consumed it? then we forward
 -- to the external- handler
-	local sel = active_display().selected;
 	if (not sel or not valid_vid(sel.external, TYPE_FRAMESERVER)) then
 		return;
 	end
 
--- there may be per-window label tabel for custom input labels,
--- those need to be applied still.
 	target_input(sel.external, iotbl);
 end
 
--- special case: (UP, DOWN, LEFT, RIGHT + mouse motion is mapped to
--- manipulate the mouse_select_begin() mouse_select_end() region,
--- ESCAPE cancels the mode, end runs whatever trigger we set (global).
--- see 'select_region_*' global functions + some button to align
--- with selected window (if any, like m1 and m2)
 function senseye_regionsel_input(iotbl)
 	if (iotbl.kind == "status") then
 		senseye_iostatus_handler(iotbl);
