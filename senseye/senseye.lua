@@ -268,8 +268,6 @@ local function desel_input(wnd)
 	mouse_switch_cursor("default");
 end
 
--- useful for terminal where we can possibly avoid a resize and
--- the added initial delay by setting the size in beforehand
 function durden_prelaunch()
 	local nsurf = null_surface(32, 32);
 	return active_display():add_window(nsurf);
@@ -435,7 +433,6 @@ function senseye_new_connection(source, status)
 			image_tracetag(INCOMING_ENDPOINT, "nonauth_connection");
 		end
 		if (status) then
-			for k,v in pairs(status) do print(k, v); end
 			durden_launch(source, "", "external");
 		end
 	end

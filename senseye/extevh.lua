@@ -94,8 +94,8 @@ end
 
 defhtbl["registered"] =
 function(wnd, source, stat)
-	local atbl = archetypes[stat.guid] and archetypes[stat.guid] or
-		archetypes[stat.segkind];
+	local atbl = archetypes[stat.guid]
+		and archetypes[stat.guid] or archetypes[stat.segkind];
 
 	if (not atbl) then
 		warning(string.format("register from unknown %s:%s\n",
