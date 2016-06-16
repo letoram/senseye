@@ -285,13 +285,20 @@ function suppl_recarg_eval()
 	return string.match(FRAMESERVER_MODES, "encode") ~= nil;
 end
 
-function suppl_region_select(r, g, b, handler)
-	local col = color_surface(1, 1, r, g, b);
-	blend_image(col, 0.2);
+function suppl_region_select(r, g, b, handler, vid)
+	local col = fill_surface(1, 1, r, g, b);
+	local ct;
+	if (valid_vid(vid)) then
+		local p = image_surface_resolve_properties(vid);
+		ct = {p.x, p.y, p.x+p.width, p.y+p.height};
+	end
+
+	blend_image(col, 0.5);
 	iostatem_save();
-	mouse_select_begin(col);
-	durden_input = durden_regionsel_input;
-	DURDEN_REGIONSEL_TRIGGER = handler;
+	mouse_select_begin(col, ct);
+	shader_setup(col, "ui", "regsel", "active");
+	senseye_input = senseye_regionsel_input;
+	SENSEYE_REGIONSEL_TRIGGER = handler;
 end
 
 local function build_rt_reg(drt, x1, y1, w, h, srate)
@@ -1014,7 +1021,7 @@ local function lbar_fun(ctx, instr, done, lastv, inp_st)
 					return;
 			elseif (tgt.submenu) then
 				ctx.list = type(tgt.handler) == "function"
-					and tgt.handler() or tgt.handler;
+					and tgt.handler(ctx.handler) or tgt.handler;
 				local nlb = launch_menu(ctx.wm, ctx, tgt.force, tgt.hint);
 				return nlb;
 			elseif (tgt.handler) then

@@ -207,7 +207,7 @@ void* data_loop(void* th_data)
 
 			case TARGET_COMMAND_SEEKTIME:{
 				pthread_mutex_lock(&fsense.flock);
-					fsense.ofs = fix_ofset(ch, ev.tgt.ioevs[1].iv);
+					fsense.ofs = fix_ofset(ch, ev.tgt.ioevs[1].fv);
 					size_t lofs = fsense.ofs;
 				pthread_mutex_unlock(&fsense.flock);
 				refresh_data(ch, lofs);

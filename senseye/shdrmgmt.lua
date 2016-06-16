@@ -178,9 +178,10 @@ end
 local bdelim = (tonumber("1,01") == nil) and "." or ",";
 local rdelim = (bdelim == ".") and "," or ".";
 
--- note: boolean and 4x4 matrices are currently ignored
+-- note: boolean is currently ignored
 local utype_lut = {
-i = 1, f = 1, ff = 1, fff = 1, ffff = 1
+i = 1, f = 1, ff = 1, fff = 1, ffff = 1,
+ffffffffffffffff = 1
 };
 
 local function unpack_typestr(typestr, val, lowv, highv)

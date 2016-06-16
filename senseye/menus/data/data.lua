@@ -1,3 +1,6 @@
+-- need this to calculate position when hilbert mapping is applied
+system_load("hilbert.lua")();
+
 local pack_sztbl = {
 	4,
 	3,
@@ -22,8 +25,59 @@ local function dec_stream(wnd, source, status)
 	};
 end
 
+local function translate_2d(wnd, vid, x, y)
+-- figure out surface relative coordinate
+	local oprops = image_storage_properties(wnd.canvas);
+	local rprops = image_surface_resolve_properties(wnd.canvas);
+	x = (x - rprops.x) / rprops.width;
+	y = (y - rprops.y) / rprops.height;
+
+	local txcos = image_get_txcos(wnd.canvas);
+	x = txcos[1] + x * (txcos[3] - txcos[1]);
+	y = txcos[2] + y * (txcos[6] - txcos[2]);
+
+-- translate into source input dimensions
+	x = math.floor(x * oprops.width);
+	y = math.floor(y * oprops.height);
+
+	return (x < 0 and 0 or x), (y < 0 and 0 or y);
+end
+
+local function recalc_zoom(wnd)
+	local s1 = wnd.zoom[1];
+	local t1 = wnd.zoom[2];
+	local s2 = wnd.zoom[3];
+	local t2 = wnd.zoom[4];
+
+	local props = image_storage_properties(wnd.canvas);
+
+	local step_s = 1.0 / props.width;
+	local step_t = 1.0 / props.height;
+
+-- align against grid to lessen precision effects in linked windows
+	s1 = s1 - math.fmod(s1, step_s);
+	t1 = t1 - math.fmod(t1, step_t);
+	s2 = s2 + math.fmod(s2, step_s);
+	t2 = t2 + math.fmod(t2, step_t);
+	t2 = t2 > 1.0 and 1.0 or t2;
+	s2 = s2 > 1.0 and 1.0 or s2;
+
+	wnd.zoom = {s1, t1, s2, t2};
+	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
+
+	image_set_txcos(wnd.canvas, txcos);
+end
+
 local function fs_upd(wnd, source, status)
 	wnd.offset = status.pts;
+
+-- overlays get their stepping as part of the normal feedchain
+	for k,v in ipairs(wnd.tools) do
+		if (v.pupdate) then
+			v:pupdate(wnd);
+		end
+	end
+
 	return true;
 end
 
@@ -62,6 +116,47 @@ function datawnd_setup(newwnd)
 		target_graphmode(ctx.external, 0 + sv);
 	end
 
+--  we don't want to operate in synchronous mode unless necessary
+	newwnd.inc_synch = function(ctx)
+		if (not ctx.synch_ctr) then
+			ctx.synch_ctr = 1;
+			target_flags(ctx.external, TARGET_VSTORE_SYNCH);
+			ctx:refresh();
+		else
+			ctx.synch_ctr = ctx.synch_ctr + 1;
+		end
+	end
+
+	newwnd.dec_synch = function(ctx)
+		ctx.synch_ctr = ctx.synch_ctr - 1;
+		if (ctx.synch_ctr == 0) then
+			ctx.synch_ctr = nil;
+			target_flags(ctx.external, 0);
+		end
+	end
+
+	newwnd.set_zoom = function(ctx, x1, y1, x2, y2)
+		if (not x1) then
+			ctx.zoom = {0.0, 0.0, 1.0, 1.0};
+			ctx.in_zoom = false;
+		else
+			local rp = image_surface_resolve_properties(ctx.canvas);
+			ctx.in_zoom = true;
+			ctx.zoom = {
+				(x1 - rp.x) / rp.width,
+				(y1 - rp.y) / rp.height,
+				(x2 - rp.x) / rp.width;
+				(y2 - rp.y) / rp.height
+			};
+		end
+		recalc_zoom(ctx);
+		for k,v in ipairs(ctx.tools) do
+			if (v.on_zoom) then
+				v:on_zoom(ctx.canvas, ctx.zoom);
+			end
+		end
+	end
+
 	newwnd.refresh = function(ctx)
 		if (ctx.autoplay) then
 -- do nothing, tick will refresh
@@ -87,11 +182,75 @@ function datawnd_setup(newwnd)
 	newwnd:set_alpha(gconfig_get("data_alpha"));
 	newwnd:set_mapping(gconfig_get("data_map"));
 	newwnd:set_step(gconfig_get("data_step"));
+	shader_setup(newwnd.wm.selected.canvas, "color", "normal");
+
 	newwnd.offset = 0;
+	newwnd.zoom = {0.0, 0.0, 1.0, 1.0};
 	newwnd:refresh();
 end
 
 local step_act = {
+{
+name = "platog",
+kind = "action",
+label = "Play/Pause",
+handler = function(ctx)
+	ctx.wm.selected.autoplay_step = 1;
+	ctx.wm.selected.autoplay = not ctx.wm.selected.autoplay;
+end
+},
+{
+name = "platog_fast",
+kind = "action",
+label = "Play/Pause",
+invisible = true,
+handler = function(ctx)
+	ctx.wm.selected.autoplay_step = 2;
+	ctx.wm.selected.autoplay = not ctx.wm.selected.autoplay;
+end
+},
+{
+name = "stepping",
+kind = "value",
+label = "Size",
+set = {"Byte", "Pixel", "Row", "Halfpage", "Page"},
+handler = function(ctx, val)
+	local ind = table.find_i(ctx.set, val);
+	target_input(ctx.wm.selected.external, {kind = "digital",
+		active = true, label = step_lut[val]});
+end
+},
+{
+name = "align",
+kind = "value",
+label = "Back Align",
+set = {"2", "16", "32", "64", "512", "1024", "2048", "4096"},
+eval = function(ctx)
+	return not ctx.wm.selected.seek_disable;
+end,
+handler = function(ctx, val)
+	target_input(ctx.wm.selected.external, {kind = "digital",
+		active = true, label = "STEP_ALIGN_" .. val});
+end,
+},
+{
+name = "seek",
+label = "Seek",
+kind = "value",
+initial = function(ctx)
+	local pv = ctx.wm.selected.offset and ctx.wm.selected.offset or 1;
+	return string.format("%d(0x%x)", pv, pv);
+end,
+validator = function(val)
+	return tonumber(val) ~= nil;
+end,
+eval = function(ctx)
+	return not ctx.wm.selected.seek_disable;
+end,
+handler = function(ctx, val)
+	target_seek(ctx.wm.selected.external, tonumber(val));
+end,
+},
 {
 name = "forward",
 kind = "action",
@@ -129,24 +288,15 @@ end
 }
 };
 
+local step_lut = {};
+step_lut["Byte"] = "STEP_BYTE";
+step_lut["Pixel"] = "STEP_PIXEL";
+step_lut["Row"] = "STEP_ROW";
+step_lut["Halfpage"] = "STEP_HALFPAGE";
+step_lut["Page"] = "STEP_PAGE";
+step_lut["Align-512"] = "STEP_ALIGN_512";
+
 DATA_ACTIONS = {
-{
-name = "platog",
-kind = "action",
-label = "Play/Pause",
-handler = function(ctx)
-	ctx.wm.selected.autoplay = not ctx.wm.selected.autoplay;
-end
-},
-{
-name = "zoom",
-kind = "action",
-label = "Zoom",
-handler = function(ctx)
--- lock mouse, do region select, calculate window 'zoom' coordinates
--- propagate coordinates to overlays and tools
-end
-},
 {
 name = "size",
 kind = "value",
@@ -165,7 +315,6 @@ kind = "value",
 initial = function(ctx)
 	return tostring(ctx.wm.selected.packing);
 end,
-hint = "number of bytes to map into color channels",
 set = {"1 byte", "4 bytes", "3 bytes+meta"},
 handler = function(ctx, val)
 	ctx.wm.selected:set_packing(table.find_i(ctx.set, val) - 1);
@@ -205,21 +354,11 @@ handler = function(ctx, val)
 end
 },
 {
-name = "step_act",
+name = "step",
 kind = "action",
-label = "Step",
+label = "Position",
 submenu = true,
 handler = step_act,
-},
-{
-name = "stepping",
-kind = "value",
-label = "Step Size",
-set = {"Byte", "Pixel", "Row", "Halfpage", "Page", "Align-512"},
-handler = function(ctx, val)
-	local ind = table.find_i(ctx.set, val);
-	ctx.wm.selected:set_stepping(table.find_i(ctx.set, val) - 1);
-end
 },
 {
 name = "color",
@@ -254,8 +393,10 @@ name = "tools",
 kind = "action",
 label = "Tools",
 submenu = true,
-eval = function() return false; end,
-handler = list_tools
+handler = function(ctx)
+	if (not ctx) then print(debug.traceback()); end
+	return list_tools(ctx.wm.selected);
+end
 },
 -- generate a list of available overlays, requires connected translators
 {
@@ -284,4 +425,21 @@ submenu = true,
 eval = function() return false; end,
 handler = active_overlays
 },
+{
+name = "zoom",
+label = "Zoom",
+kind = "action",
+handler = function(ctx)
+	if (ctx.wm.selected.in_zoom) then
+		ctx.wm.selected:set_zoom();
+	else
+		mouse_lockto(ctx.wm.selected.canvas);
+		suppl_region_select(255, 255, 255,
+			function(x1, y1, x2, y2)
+				ctx.wm.selected:set_zoom(x1, y1, x2, y2);
+			end, ctx.wm.selected.canvas, true
+		);
+	end
+end
+}
 };

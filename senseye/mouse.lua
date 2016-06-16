@@ -102,6 +102,8 @@ local mstate = {
 	dev = 0,
 	x = 0,
 	y = 0,
+	rel_x = 0,
+	rel_y = 0,
 	min_x = 0,
 	min_y = 0,
 	max_x = VRESW,
@@ -1116,10 +1118,12 @@ function mouse_select_begin(vid, constrain)
 		assert(constrain[3] <= mstate.max_x and constrain[4] <= mstate.max_y);
 		local newlock = null_surface(
 			constrain[3] - constrain[1],
-			constrain[4] - constrain[2]);
+			constrain[4] - constrain[2]
+		);
 		mstate.lockvid = newlock;
 		move_image(newlock, constrain[1], constrain[2]);
-		table.insert(mstate.in_select.autodelete, lockvid);
+	else
+		mstate.lockvid = null_surface(MAX_SURFACEW, MAX_SURFACEH);
 	end
 
 -- set order
@@ -1133,7 +1137,6 @@ function mouse_select_begin(vid, constrain)
 	table.insert(mstate.in_select.autodelete, vid);
 
 -- normal constrain- handler will deal with clamping etc.
-	mstate.lockvid = null_surface(MAX_SURFACEW, MAX_SURFACEH);
 	mstate.lockfun = function()
 		local x1, y1, x2, y2 = select_regupd();
 		local w = x2 - x1;

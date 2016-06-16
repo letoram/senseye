@@ -56,12 +56,14 @@ function dispatch_reset(save)
 	tbl["m1_m2_DOWN"] = "grow_v";
 
 -- stepping keybindings
-	tbl["m1_,"] = "#step_act/reverse";
-	tbl["m1_."] = "#step_act/forward";
-	tbl["m2_,"] = "#step_act/rev_big";
-	tbl["m2_."] = "#step_act/fwd_big";
-	tbl["m1_p"] = "#platog";
+	tbl["m1_,"] = "#step/reverse";
+	tbl["m1_."] = "#step/forward";
+	tbl["m2_,"] = "#step/rev_big";
+	tbl["m2_."] = "#step/fwd_big";
+	tbl["m1_p"] = "#step/platog";
+	tbl["m1_m2_p"] = "#step/platog_fast";
 	tbl["m1_m"] = "#cyclemap";
+	tbl["m1_l"] = "#zoom";
 
 	tbl["m1_r"] = "fullscreen";
 	tbl["m1_s"] = "swap_focus";

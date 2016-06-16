@@ -47,6 +47,7 @@ function senseye(argv)
 	system_load("menus/global/global.lua")(); -- desktop related global
 	system_load("menus/target/target.lua")(); -- shared window related global
 	system_load("menus/data/data.lua")(); -- basic operations for all data wnds
+	system_load("tools.lua")();
 
 -- load builtin features and 'extensions'
 	local res = glob_resource("builtin/*.lua", APPL_RESOURCE);
@@ -380,7 +381,7 @@ function senseye_launch(wnd, subvid, basetype, typedescr)
 -- add a clock for play/pause and forward to atype- specific handler
 	newwnd.tick = function(wnd)
 		if (wnd.autoplay) then
-			stepframe_target(subvid, 1);
+			stepframe_target(subvid, wnd.autoplay_step);
 		end
 		if (typedescr.tick) then
 			typedescr.tick(wnd, typedescr);
@@ -574,24 +575,18 @@ function senseye_regionsel_input(iotbl)
 			iostatem_restore();
 			senseye_input = senseye_normal_input;
 		elseif (SYSTEM_KEYS["accept"] == sym) then
-			mouse_select_end(senseye_REGIONSEL_TRIGGER);
+			mouse_select_end(SENSEYE_REGIONSEL_TRIGGER);
 			iostatem_restore();
 			senseye_input = senseye_normal_input;
 		elseif (SYSTEM_KEYS["meta_1"] == sym) then
 			mouse_select_set();
-		elseif (SYSTEM_KEYS["meta_2"] == sym) then
-			local rt = active_display(true);
-			local mx, my = mouse_xy();
-			local items = pick_items(mx, my, 1, true, rt);
-			if (#items > 0) then
-				mouse_select_set(items[1]);
-			end
 		end
 
 	elseif (iotbl.mouse) then
 		if (iotbl.digital) then
-			mouse_select_end(senseye_REGIONSEL_TRIGGER);
+			mouse_select_end(SENSEYE_REGIONSEL_TRIGGER);
 			iostatem_restore();
+			mouse_lockto();
 			senseye_input = senseye_normal_input;
 		else
 			mousemotion(iotbl);
