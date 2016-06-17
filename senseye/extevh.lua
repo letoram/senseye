@@ -135,6 +135,7 @@ function(wnd, source, stat)
 		shader_setup(wnd.canvas, unpack(atbl.default_shader));
 	end
 
+-- it is init that is responsible for promoting to visible type
 	if (atbl.init) then
 		atbl:init(wnd, source);
 	end
@@ -183,7 +184,7 @@ end
 function extevh_default(source, stat)
 	local wnd = swm[source];
 
-	if (not wnd) then
+	if (not wnd or (not wnd.space and stat.kind ~= "registered")) then
 		warning("event on missing window");
 		return;
 	end

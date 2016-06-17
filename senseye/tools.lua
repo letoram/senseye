@@ -25,7 +25,6 @@ function list_tools(dwnd)
 			label = v.label,
 			kind = "action",
 			handler =
-
 -- spawn window and forward to tool
 function(ctx)
 	local nsrf = null_surface(1, 1);
@@ -44,9 +43,11 @@ function(ctx)
 		end
 	end);
 
+	wnd:ws_attach();
+	rebalance_space(TILER.spaces[TILER.space_ind]);
 	table.insert(ctx.tools, wnd);
-end
-		});
+end});
+
 	end
 	return res;
 end

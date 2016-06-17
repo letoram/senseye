@@ -85,6 +85,38 @@ local function fs_stat(wnd, source, status)
 	return true;
 end
 
+local function list_overlays(ctx)
+	local wnd = ctx.wm.selected;
+	local res = {};
+	for k,v in ipairs(wnd.translators) do
+		if (v.overlay_id) then
+			table.insert(res,
+{
+name = "ol_" .. tostring(k),
+label = v.overlay_id,
+kind = "action",
+handler = function()
+	v:add_overlay();
+end
+}
+			);
+		end
+	end
+	return res;
+end
+
+-- propagate resized dimensions to connected overlays, but only if
+-- they are actually active to prevent storms
+local function datawnd_resize(wnd)
+	for k,v in ipairs(wnd.translators) do
+		local p = image_surface_properties(v);
+		resize_image(v, wnd.width, wnd.height);
+		if (v.opacity > 0 and valid_vid(v, TYPE_FRAMESERVER)) then
+			target_displayhint(v, wnd.width, wnd.height);
+		end
+	end
+end
+
 local function dec_resize(wnd, source, status)
 	wnd.base = status.width;
 	if (status.width ~= status.height) then
@@ -182,6 +214,7 @@ function datawnd_setup(newwnd)
 	newwnd:set_alpha(gconfig_get("data_alpha"));
 	newwnd:set_mapping(gconfig_get("data_map"));
 	newwnd:set_step(gconfig_get("data_step"));
+	newwnd:add_handler("resized", datawnd_resize);
 	shader_setup(newwnd.wm.selected.canvas, "color", "normal");
 
 	newwnd.offset = 0;
@@ -404,7 +437,7 @@ name = "overlay",
 kind = "action",
 label = "Overlays",
 submenu = true,
-eval = function() return false; end,
+eval = function(ctx) return #list_overlays(ctx) > 0; end,
 handler = list_overlays
 },
 -- generate a list of available translators
@@ -413,7 +446,7 @@ name = "translator",
 kind = "action",
 label = "Translators",
 submenu = true,
-eval = function() return false; end,
+eval = function() return #list_translators() > 0; end,
 handler = list_translators
 },
 -- generate a list of active overlays
@@ -422,7 +455,7 @@ name = "overlays",
 kind = "action",
 label = "Active Overlays",
 submenu = true,
-eval = function() return false; end,
+eval = function(ctx) return #ctx.wm.selected.overlays > 0; end,
 handler = active_overlays
 },
 {

@@ -39,6 +39,9 @@ local defaults = {
 	borderw = 1,
 	bordert = 1,
 
+-- default opacity for new overlays
+	olay_opa = 0.3,
+
 -- default window dimensions (relative tiler size) for windows
 -- created in float mode with unknown starting size
 	float_defw = 0.3,

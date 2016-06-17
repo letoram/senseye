@@ -191,7 +191,7 @@ end
 -- need these event handlers here since it ties together modules that should
 -- be separated code-wise, as we want tiler- and other modules to be reusable
 -- in less complex projects
-local function tile_changed(wnd, neww, newh, efw, efh)
+function senseye_tile_changed(wnd, neww, newh, efw, efh)
 	if (not neww or not newh) then
 		return;
 	end
@@ -278,6 +278,8 @@ function rebalance_space(space)
 		return;
 	end
 
+-- improvements: fair vertical weight, guarantee % basesize for right column
+-- to reduce aliasing artifacts for histograms etc.
 	if (#space.children == 2) then
 		space.children[1].weight = 0.5;
 		space.children[2].weight = 2.0;
@@ -395,7 +397,7 @@ function durden_launch(vid, prefix, title, wnd)
 		return;
 	end
 	if (not wnd) then
-		wnd = active_display():add_window(vid);
+		wnd = active_display():add_hidden_window(vid);
 	end
 
 -- local keybinding->utf8 overrides, we map this to SYMTABLE
@@ -404,10 +406,9 @@ function durden_launch(vid, prefix, title, wnd)
 -- window aesthetics
 	wnd:set_prefix(prefix);
 	wnd:set_title(title and title or "?");
-	wnd:add_handler("resize", tile_changed);
+	wnd:add_handler("resize", senseye_tile_changed);
 	wnd:add_handler("select", sel_input);
 	wnd:add_handler("deselect", desel_input);
-	show_image(wnd.canvas);
 
 -- may use this function to launch / create some internal window
 -- that don't need all the external dispatch stuff, so make sure

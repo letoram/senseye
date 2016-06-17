@@ -57,9 +57,35 @@ local function run_event(wnd, event, ...)
 	end
 end
 
+local function quick_delete(wnd)
+-- now we can run destroy hooks
+	run_event(wnd, "destroy");
+	for i,v in ipairs(wnd.relatives) do
+		run_event(v, "lost_relative", wnd);
+	end
+
+	mouse_droplistener(wnd.handlers.mouse.border);
+	mouse_droplistener(wnd.handlers.mouse.canvas);
+
+	wnd.titlebar:destroy();
+
+	if (valid_vid(wnd.external)) then
+		delete_image(wnd.external);
+	end
+
+	for k,v in pairs(wnd) do
+		wnd[k] = nil;
+	end
+end
+
 local function wnd_destroy(wnd)
 	local wm = wnd.wm;
 	if (wnd.delete_protect) then
+		return;
+	end
+
+	if (not wnd.space) then
+		quick_delete(wnd);
 		return;
 	end
 
@@ -1616,7 +1642,7 @@ local function wnd_title(wnd, message, skipresize)
 
 -- override if the mode requires it
 	local hide_titlebar = wnd.hide_titlebar;
-	if (not tbar_mode(wnd.space.mode)) then
+	if (wnd.space and tbar_mode(wnd.space.mode)) then
 		hide_titlebar = false;
 	end
 
@@ -1632,7 +1658,7 @@ local function wnd_title(wnd, message, skipresize)
 	end
 
 	wnd.titlebar:show();
-	if (not skipresize) then
+	if (not skipresize and wnd.space) then
 		wnd.space:resize();
 	end
 end
@@ -2114,6 +2140,52 @@ local canvas_mh = {
 	end
 };
 
+local function wnd_overlay(wnd, vid)
+	if (not valid_vid(vid)) then
+		warning("trying to add an invalid overlay");
+		return;
+	end
+
+	if (valid_vid(vid, TYPE_FRAMESERVER)) then
+		target_displayhint(vid, wnd.width, wnd.height);
+	end
+
+	link_image(vid, wnd.canvas);
+	image_inherit_order(vid, true);
+	order_image(vid, 1);
+	image_mask_set(vid, MASK_UNPICKABLE);
+
+	table.insert(wnd.overlays, vid);
+	if (#wnd.overlays == 1) then
+		wnd:toggle_overlay(1);
+	end
+end
+
+local function wnd_overlay_toggle(wnd, ind)
+	local vid = wnd.overlays[ind];
+	if (valid_vid(vid)) then
+		local p = image_surface_properties(vid);
+		if (p.opacity == 0) then
+			blend_image(vid, gconfig_get("olay_opa"));
+			if (valid_vid(vid, TYPE_FRAMESERVER)) then
+				resume_target(vid);
+			end
+		else
+			hide_image(vid);
+			if (valid_vid(vid, TYPE_FRAMESERVER)) then
+				suspend_target(vid);
+			end
+		end
+	end
+end
+
+local function wnd_overlay_delete(wnd, ind)
+	if (wnd.overlays[ind]) then
+		delete_image(wnd.overlays[ind]);
+		table.remove(wnd.overlays,ind);
+	end
+end
+
 local function wnd_swap(w1, w2, deep)
 	if (w1 == w2 or w1.space ~= w2.space) then
 		return;
@@ -2278,6 +2350,9 @@ wnd_setup = function(wm, source, opts)
 		add_handler = wnd_addhandler,
 		set_dispmask = wnd_dispmask,
 		set_suspend = wnd_setsuspend,
+		add_overlay = wnd_overlay,
+		toggle_overlay = wnd_overlay_toggle,
+		delete_overlay = wnd_overlay_delete,
 		rebuild_border = wnd_rebuild,
 		toggle_maximize = wnd_toggle_maximize,
 		to_front = wnd_tofront,

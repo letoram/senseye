@@ -96,6 +96,8 @@ local function navwnd_init(tbl, wnd, src)
 
 	wnd:add_handler("resize", function(wnd, neww, newh)
 	end);
+
+	wnd:ws_attach();
 end
 
 local file_navwnd = {
