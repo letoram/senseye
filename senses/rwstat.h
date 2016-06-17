@@ -51,6 +51,12 @@ enum ptn_flags {
 	FLAG_STATE = 2  /* if set, alpha value will be used until next state- ptn */
 };
 
+enum damage_flags {
+	FLAG_RELATIVE = 1, /* relative current base offset rather than stream-0 */
+	FLAG_INSERT = 2, /* default behavior is replace, this attempts to injects */
+	FLAG_NOTRUNC = 4, /* default is to write but truncate if we don't fit */
+};
+
 struct rwstat_ch {
 	void (*free)(struct rwstat_ch**);
 
@@ -80,20 +86,14 @@ struct rwstat_ch {
  * underlying sensor - if it is set to support such operations by overwriting
  * this member.
  *
- * mode = implementation defined, rand = user requested randomization,
  * ofs  = last known base offset (where applicable),
- * rows = number of injection sequences
- * skip = bytes between each injection sequence.
- *
- * the rows / skip fields are needed to map from user 2D to 1D data source,
- * seek(ofs), for rows: write n bytes, seek forward skip;
+ * buf  = buffer with bytes to inject at the specified ofset
+ * fl   = set if offset is relative current initial offset or start of stream
  *
  * when done, signal the need for repopulating the input buffer.
  */
 	void (*damage)(struct rwstat_ch*,
-		uint8_t mode, bool rand, uint64_t ofs,
-		size_t bytes, size_t rows, size_t skip
-	);
+		uint64_t ofs, uint8_t* buf, size_t buf_sz, enum damage_flags);
 
 	void* damage_tag;
 /*

@@ -193,53 +193,24 @@ static void push_data(struct rwstat_ch* ch,
 	ch->data(ch, buf, left, &ign);
 }
 
-static void damage_mem(struct rwstat_ch* ch, uint8_t mode,
-	bool rand, uint64_t ofs, size_t bytes, size_t rows, size_t skip)
+static void damage_mem(struct rwstat_ch* ch,
+	uint64_t ofs, uint8_t* buf, size_t buf_sz, enum damage_flags fl)
 {
 	struct arcan_shmif_cont* cont = ch->context(ch);
 	struct page_ch* pch = ch->damage_tag;
 	struct map_ctx* memmap = pch->mctx;
 
-/* currently, mode just represents the byte value we want repeated,
- * this will be configurable later on to correspond to various kinds
- * of suitable payloads (or even cut'n'paste clipboard contents) */
-
-	int state = 0;
-	uint8_t* dbuf = malloc(bytes);
-
-	if (!dbuf)
+	if (fl & FLAG_RELATIVE){
+		fprintf(stderr, "damage_mem - recalc offset\n");
 		return;
-
-	if (!rand){
-		for (size_t i = 0; i < bytes; i++)
-			dbuf[i] = mode;
 	}
 
-	while(rows--){
-		if (rand)
-			for (size_t i = 0; i < bytes; i++)
-				dbuf[i] = random();
-
-		if (0 == memif_write(memmap, ofs, dbuf, bytes)){
-			fprintf(stderr, "damage_mem(%"PRIx64") failed to write\n", ofs);
-			state = 2;
-			break;
-		}
-		state = 1;
-		ofs += bytes + skip;
+	if (fl & FLAG_INSERT){
+		fprintf(stderr, "damage_mem - inject unsupported\n");
+		return;
 	}
 
-/* send UI update */
-	arcan_event ev = {
-		.category = EVENT_EXTERNAL,
-		.ext.kind = ARCAN_EVENT(IDENT)
-	};
-	const char* msg = "";
-	snprintf((char*)ev.ext.message.data, sizeof(ev.ext.message.data),
-		(state == 0 ? "area damage completed" :
-			(state == 1 ? "area damage partial" : "area damage failed")));
-
-	arcan_shmif_enqueue(cont, &ev);
+	memif_write(memmap, ofs, buf, buf_sz);
 }
 
 void* data_loop(void* th_data)
