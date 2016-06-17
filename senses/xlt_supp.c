@@ -193,6 +193,8 @@ static void overlay_event(struct xlt_session* sess)
 		}
 
 		if (ev.tgt.kind == TARGET_COMMAND_DISPLAYHINT){
+			if (ev.tgt.ioevs[0].iv == 0 || ev.tgt.ioevs[0].iv == 0)
+				return;
 			arcan_shmif_resize(&sess->olay,
 				ev.tgt.ioevs[0].iv, ev.tgt.ioevs[1].iv);
 		}
@@ -234,6 +236,8 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 			if ((sess->flags & XLT_DYNSIZE)){
 				size_t width = ev->tgt.ioevs[0].iv;
 				size_t height = ev->tgt.ioevs[1].iv;
+				if (0 == width || 0 == height)
+					return true;
 				width = width < 32 ? 32 : width;
 				height = height < 32 ? 32 : height;
 				arcan_shmif_resize(&sess->out, width, height);
