@@ -25,6 +25,18 @@ local function add_olay(xlt, wnd)
 	wnd:add_overlay(olay, xlt.external);
 end
 
+local function xlt_focus(xlt, x, y)
+	target_input(xlt.external, {
+		kind = "touch",
+		devid = 0,
+		subid = 0,
+		x = x,
+		y = y,
+		pressure = 1,
+		size = 1
+	});
+end
+
 local function add_xlt(xlt, dst)
 	local wnd;
 
@@ -68,6 +80,7 @@ local function add_xlt(xlt, dst)
 	wnd = active_display():add_window(vid);
 	wnd.external = feed;
 	wnd.scalemode = "stretch";
+	wnd.focus_point = xlt_focus;
 	wnd.handlers.mouse.canvas.motion = function() end;
 
 	shader_setup(wnd.canvas, "simple", "autocrop");

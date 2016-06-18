@@ -574,30 +574,34 @@ function senseye_regionsel_input(iotbl)
 		return;
 	end
 
+	local finish = false;
+
 	if (iotbl.translated and iotbl.active) then
 		local sym, lutsym = SYMTABLE:patch(iotbl);
 
 		if (SYSTEM_KEYS["cancel"] == sym) then
 			mouse_select_end();
-			iostatem_restore();
-			senseye_input = senseye_normal_input;
+			finish = true;
 		elseif (SYSTEM_KEYS["accept"] == sym) then
 			mouse_select_end(SENSEYE_REGIONSEL_TRIGGER);
-			iostatem_restore();
-			senseye_input = senseye_normal_input;
+			finish = true;
 		elseif (SYSTEM_KEYS["meta_1"] == sym) then
 			mouse_select_set();
 		end
-
 	elseif (iotbl.mouse) then
 		if (iotbl.digital) then
-			mouse_select_end(SENSEYE_REGIONSEL_TRIGGER);
-			iostatem_restore();
-			mouse_lockto();
-			senseye_input = senseye_normal_input;
+			finish = true;
 		else
 			mousemotion(iotbl);
 		end
+	end
+
+	if (finish) then
+		mouse_select_end(SENSEYE_REGIONSEL_TRIGGER);
+		iostatem_restore();
+		mouse_lockto();
+		dispatch_meta_reset();
+		senseye_input = senseye_normal_input;
 	end
 end
 

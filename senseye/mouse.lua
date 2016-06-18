@@ -1110,7 +1110,9 @@ function mouse_select_begin(vid, constrain)
 	mstate.autohide = false;
 
 	mouse_show();
--- just save any old constrain- vid and create a new one that match
+-- just save any old constrain- vid and create a new one that match,
+-- the reason for this is that we don't want the select to trigger any
+-- events
 	if (constrain) then
 		assert(constrain[4] - constrain[2] > 0);
 		assert(constrain[3] - constrain[1] > 0);
@@ -1125,7 +1127,6 @@ function mouse_select_begin(vid, constrain)
 	else
 		mstate.lockvid = null_surface(MAX_SURFACEW, MAX_SURFACEH);
 	end
-
 -- set order
 	link_image(vid, mstate.cursor);
 	image_mask_clear(vid, MASK_POSITION);
@@ -1135,6 +1136,7 @@ function mouse_select_begin(vid, constrain)
 	resize_image(vid, 1, 1);
 	move_image(vid, mstate.x, mstate.y);
 	table.insert(mstate.in_select.autodelete, vid);
+	table.insert(mstate.in_select.autodelete, mstate.lockvid);
 
 -- normal constrain- handler will deal with clamping etc.
 	mstate.lockfun = function()

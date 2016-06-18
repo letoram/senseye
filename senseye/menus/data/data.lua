@@ -24,7 +24,6 @@ local function dec_stream(wnd, source, status)
 		pack_sz = pack_sz
 	};
 
-	print("packing mode set to:", pack_sz);
 	for k,v in ipairs(wnd.translators) do
 		target_graphmode(v.external, pack_sz);
 	end
@@ -76,16 +75,22 @@ print("post:", s1, t1, s2, t2);
 	image_set_txcos(wnd.canvas, txcos);
 end
 
-local function fs_upd(wnd, source, status)
-	wnd.offset = status.pts;
-
--- overlays get their stepping as part of the normal feedchain
+local function all_subs(wnd, func, ...)
 	for k,v in ipairs(wnd.tools) do
-		if (v.pupdate) then
-			v:pupdate(wnd);
+		if (v[func]) then
+			v[func](v, ...);
 		end
 	end
+	for k,v in ipairs(wnd.translators) do
+		if (v[func]) then
+			v[func](v, ...);
+		end
+	end
+end
 
+local function fs_upd(wnd, source, status)
+	wnd.offset = status.pts;
+	all_subs(wnd, "pupdate");
 	return true;
 end
 
@@ -117,6 +122,18 @@ end
 -- they are actually active to prevent storms
 local function datawnd_resize(wnd)
 	wnd:synch_overlays();
+end
+
+local function update_txcos(wnd)
+	local x1 = wnd.zoom[1] / wnd.base;
+	local y1 = wnd.zoom[2] / wnd.base;
+	local x2 = wnd.zoom[3] / wnd.base;
+	local y2 = wnd.zoom[4] / wnd.base;
+	local txcos = {x1, y1, x2, y1, x2, y2, x1, y2};
+	image_set_txcos(wnd.canvas, txcos);
+
+	wnd:synch_overlays();
+	all_subs(wnd, "on_zoom", wnd.zoom);
 end
 
 local function dec_resize(wnd, source, status)
@@ -189,21 +206,8 @@ function datawnd_setup(newwnd)
 
 -- and texture coordinates
 			ctx.zoom = {x1, y1, x2, y2};
-			x1 = x1 / ctx.base;
-			y1 = y1 / ctx.base;
-			x2 = x2 / ctx.base;
-			y2 = y2 / ctx.base;
-			local txcos = {x1, y1, x2, y1, x2, y2, x1, y2};
-			image_set_txcos(ctx.canvas, txcos);
-
--- update zoom, propagate values to children
 		end
-		newwnd:synch_overlays();
-		for k,v in ipairs(ctx.tools) do
-			if (v.on_zoom) then
-				v:on_zoom(ctx.canvas, ctx.zoom);
-			end
-		end
+		update_txcos(ctx);
 	end
 
 	newwnd.refresh = function(ctx)
@@ -212,6 +216,24 @@ function datawnd_setup(newwnd)
 		else
 			stepframe_target(ctx.external, 0);
 		end
+	end
+
+	newwnd.handlers.mouse.canvas.drag = function(ctx, source, dx, dy)
+		if (ctx.drag_action == "focus") then
+			local mx, my = mouse_xy();
+			x,y = translate_2d(ctx.tag.canvas, mx, my);
+			all_subs(ctx.tag, "focus_point", x, y);
+			return;
+-- drag action is pan
+		elseif (ctx.in_zoom) then
+-- FIXME: depends on zoom-mouse bug, but drag should be implemented
+-- as a thresholded delta to zoom[] values, then just run update_txcos
+		end
+	end
+
+	newwnd.handlers.mouse.canvas.click = function(ctx, source, x, y)
+		x, y = translate_2d(ctx.tag.canvas, x, y);
+		all_subs(ctx.tag, "focus_point", x, y);
 	end
 
 	image_framesetsize(newwnd.external, 2, FRAMESET_MULTITEXTURE);
@@ -484,12 +506,10 @@ handler = function(ctx)
 	if (ctx.wm.selected.in_zoom) then
 		ctx.wm.selected:set_zoom();
 	else
-		mouse_lockto(ctx.wm.selected.canvas);
 		suppl_region_select(255, 255, 255,
 			function(x1, y1, x2, y2)
 				ctx.wm.selected:set_zoom(x1, y1, x2, y2);
-			end, ctx.wm.selected.canvas, true
-		);
+			end, ctx.wm.selected.canvas);
 	end
 end
 }

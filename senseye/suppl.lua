@@ -289,11 +289,11 @@ function suppl_region_select(r, g, b, handler, vid)
 	local col = fill_surface(1, 1, r, g, b);
 	local ct;
 	if (valid_vid(vid)) then
-		local p = image_surface_resolve_properties(vid);
-		ct = {p.x, p.y, p.x+p.width, p.y+p.height};
+		local props = image_surface_resolve_properties(vid);
+		ct = {props.x, props.y, props.x + props.width, props.y + props.height};
 	end
 
-	blend_image(col, 0.5);
+	blend_image(col, 0.6);
 	iostatem_save();
 	mouse_select_begin(col, ct);
 	shader_setup(col, "ui", "regsel", "active");
