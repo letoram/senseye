@@ -2140,14 +2140,31 @@ local canvas_mh = {
 	end
 };
 
-local function wnd_overlay(wnd, vid)
+local function send_olay_meta(olay, w, h, zoom)
+	target_displayhint(olay[1], w, h);
+	local iotbl = {
+		kind = "analog",
+		devid = 0,
+		subid = 0,
+		samples = zoom
+	};
+	target_input(olay[2], iotbl);
+end
+
+local function synch_olay_meta(wnd)
+	local txcos = image_get_txcos(wnd.canvas);
+	local sp = image_storage_properties(wnd.canvas);
+
+	for k,v in ipairs(wnd.overlays) do
+		send_olay_meta(v, wnd.effective_w, wnd.effective_h, wnd.zoom, txcos);
+		resize_image(v[1], wnd.effective_w, wnd.effective_h);
+	end
+end
+
+local function wnd_overlay(wnd, vid, ctrl)
 	if (not valid_vid(vid)) then
 		warning("trying to add an invalid overlay");
 		return;
-	end
-
-	if (valid_vid(vid, TYPE_FRAMESERVER)) then
-		target_displayhint(vid, wnd.width, wnd.height);
 	end
 
 	link_image(vid, wnd.canvas);
@@ -2155,7 +2172,7 @@ local function wnd_overlay(wnd, vid)
 	order_image(vid, 1);
 	image_mask_set(vid, MASK_UNPICKABLE);
 
-	table.insert(wnd.overlays, vid);
+	table.insert(wnd.overlays, {vid, ctrl});
 	if (#wnd.overlays == 1) then
 		wnd:toggle_overlay(1);
 	end
@@ -2163,12 +2180,19 @@ end
 
 local function wnd_overlay_toggle(wnd, ind)
 	local vid = wnd.overlays[ind];
+	vid = vid and vid[1] or vid;
+
 	if (valid_vid(vid)) then
 		local p = image_surface_properties(vid);
 		if (p.opacity == 0) then
 			blend_image(vid, gconfig_get("olay_opa"));
 			if (valid_vid(vid, TYPE_FRAMESERVER)) then
 				resume_target(vid);
+				local sp = image_storage_properties(wnd.canvas);
+				send_olay_meta(wnd.overlays[ind],
+					wnd.effective_w, wnd.effective_h, sp.width,
+					sp.height, image_get_txcos(wnd.canvas)
+				);
 			end
 		else
 			hide_image(vid);
@@ -2353,6 +2377,7 @@ wnd_setup = function(wm, source, opts)
 		add_overlay = wnd_overlay,
 		toggle_overlay = wnd_overlay_toggle,
 		delete_overlay = wnd_overlay_delete,
+		synch_overlays = synch_olay_meta,
 		rebuild_border = wnd_rebuild,
 		toggle_maximize = wnd_toggle_maximize,
 		to_front = wnd_tofront,

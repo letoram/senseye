@@ -182,7 +182,6 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* standard calculation for finding active region and scale factors */
 	float w = zoom_ofs[2] - zoom_ofs[0];
 	float h = zoom_ofs[3] - zoom_ofs[1];
-
 	float b_w = (float)over->w / w;
 	float b_h = (float)over->h / h;
 	float d_w = ceil(b_w);

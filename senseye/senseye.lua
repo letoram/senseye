@@ -278,8 +278,12 @@ function rebalance_space(space)
 		return;
 	end
 
--- improvements: fair vertical weight, guarantee % basesize for right column
--- to reduce aliasing artifacts for histograms etc.
+-- autocollapse second slot if it exists
+	local orsz = space.resize;
+	space.resize = function() end;
+	space.children[2]:collapse();
+	space.resize = orsz;
+
 	if (#space.children == 2) then
 		space.children[1].weight = 0.5;
 		space.children[2].weight = 2.0;
@@ -300,6 +304,7 @@ function rebalance_space(space)
 
 	space:set_label(title and title or "");
 	space:activate();
+	space.children[2]:select();
 end
 
 local function assign_wnd_ws(wnd, subvid)
@@ -335,6 +340,10 @@ local function assign_wnd_ws(wnd, subvid)
 	return;
 end
 
+local function sel_destroy(wnd)
+	print(wnd.space);
+end
+
 -- we have received both a sensor and it's parent window --
 -- assign a space and begin setting up.
 -- [basetype] reserved right now, should be data
@@ -353,7 +362,6 @@ function senseye_launch(wnd, subvid, basetype, typedescr)
 
 -- data resize needs to propagate to assigned tools and translators
 -- in order for underlying backing stores to be rebuilt
-	newwnd:add_handler("resize", data_resize);
 	newwnd.no_shared = true;
 	wnd.data = newwnd;
 	newwnd.master = wnd;
@@ -409,6 +417,7 @@ function durden_launch(vid, prefix, title, wnd)
 	wnd:add_handler("resize", senseye_tile_changed);
 	wnd:add_handler("select", sel_input);
 	wnd:add_handler("deselect", desel_input);
+	wnd:add_handler("destroy", sel_destr);
 
 -- may use this function to launch / create some internal window
 -- that don't need all the external dispatch stuff, so make sure

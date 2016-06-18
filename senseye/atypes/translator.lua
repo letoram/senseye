@@ -22,7 +22,7 @@ local function add_olay(xlt, wnd)
 	end
 
 -- takes care of mapping UI controls, switching / pacifying etc.
-	wnd:add_overlay(olay);
+	wnd:add_overlay(olay, xlt.external);
 end
 
 local function add_xlt(xlt, dst)
@@ -68,6 +68,8 @@ local function add_xlt(xlt, dst)
 	wnd = active_display():add_window(vid);
 	wnd.external = feed;
 	wnd.scalemode = "stretch";
+	wnd.handlers.mouse.canvas.motion = function() end;
+
 	shader_setup(wnd.canvas, "simple", "autocrop");
 	wnd:add_handler("resize", senseye_tile_changed);
 	rebalance_space(wnd.wm.spaces[wnd.wm.space_ind]);

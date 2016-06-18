@@ -23,16 +23,21 @@ local function dec_stream(wnd, source, status)
 		size = size_cur,
 		pack_sz = pack_sz
 	};
+
+	print("packing mode set to:", pack_sz);
+	for k,v in ipairs(wnd.translators) do
+		target_graphmode(v.external, pack_sz);
+	end
 end
 
-local function translate_2d(wnd, vid, x, y)
+local function translate_2d(vid, x, y)
 -- figure out surface relative coordinate
-	local oprops = image_storage_properties(wnd.canvas);
-	local rprops = image_surface_resolve_properties(wnd.canvas);
+	local oprops = image_storage_properties(vid);
+	local rprops = image_surface_resolve_properties(vid);
 	x = (x - rprops.x) / rprops.width;
 	y = (y - rprops.y) / rprops.height;
 
-	local txcos = image_get_txcos(wnd.canvas);
+	local txcos = image_get_txcos(vid);
 	x = txcos[1] + x * (txcos[3] - txcos[1]);
 	y = txcos[2] + y * (txcos[6] - txcos[2]);
 
@@ -55,12 +60,15 @@ local function recalc_zoom(wnd)
 	local step_t = 1.0 / props.height;
 
 -- align against grid to lessen precision effects in linked windows
+	if (false) then
 	s1 = s1 - math.fmod(s1, step_s);
 	t1 = t1 - math.fmod(t1, step_t);
 	s2 = s2 + math.fmod(s2, step_s);
 	t2 = t2 + math.fmod(t2, step_t);
 	t2 = t2 > 1.0 and 1.0 or t2;
 	s2 = s2 > 1.0 and 1.0 or s2;
+	end
+print("post:", s1, t1, s2, t2);
 
 	wnd.zoom = {s1, t1, s2, t2};
 	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
@@ -108,17 +116,15 @@ end
 -- propagate resized dimensions to connected overlays, but only if
 -- they are actually active to prevent storms
 local function datawnd_resize(wnd)
-	for k,v in ipairs(wnd.translators) do
-		local p = image_surface_properties(v);
-		resize_image(v, wnd.width, wnd.height);
-		if (v.opacity > 0 and valid_vid(v, TYPE_FRAMESERVER)) then
-			target_displayhint(v, wnd.width, wnd.height);
-		end
-	end
+	wnd:synch_overlays();
 end
 
 local function dec_resize(wnd, source, status)
 	wnd.base = status.width;
+	for k,v in ipairs(wnd.translators) do
+		target_displayhint(v.external, wnd.base, wnd.base);
+	end
+
 	if (status.width ~= status.height) then
 		warning(string.format("resize(%d,%d) expected pow2 and w=h",
 			status.width, status.height));
@@ -169,19 +175,30 @@ function datawnd_setup(newwnd)
 
 	newwnd.set_zoom = function(ctx, x1, y1, x2, y2)
 		if (not x1) then
-			ctx.zoom = {0.0, 0.0, 1.0, 1.0};
+			ctx.zoom = {0.0, 0.0, ctx.base, ctx.base};
 			ctx.in_zoom = false;
+			image_set_txcos(ctx.canvas, {0, 0, 1, 0, 1, 1, 0, 1});
 		else
 			local rp = image_surface_resolve_properties(ctx.canvas);
 			ctx.in_zoom = true;
-			ctx.zoom = {
-				(x1 - rp.x) / rp.width,
-				(y1 - rp.y) / rp.height,
-				(x2 - rp.x) / rp.width;
-				(y2 - rp.y) / rp.height
-			};
+-- translate to canvas-relative
+			x1 = math.floor((x1 - rp.x) / rp.width * ctx.base);
+			y1 = math.floor((y1 - rp.y) / rp.height * ctx.base);
+			x2 = math.ceil((x2 - rp.x) / rp.width * ctx.base);
+			y2 = math.ceil((y2 - rp.y) / rp.height * ctx.base);
+
+-- and texture coordinates
+			ctx.zoom = {x1, y1, x2, y2};
+			x1 = x1 / ctx.base;
+			y1 = y1 / ctx.base;
+			x2 = x2 / ctx.base;
+			y2 = y2 / ctx.base;
+			local txcos = {x1, y1, x2, y1, x2, y2, x1, y2};
+			image_set_txcos(ctx.canvas, txcos);
+
+-- update zoom, propagate values to children
 		end
-		recalc_zoom(ctx);
+		newwnd:synch_overlays();
 		for k,v in ipairs(ctx.tools) do
 			if (v.on_zoom) then
 				v:on_zoom(ctx.canvas, ctx.zoom);
@@ -205,7 +222,7 @@ function datawnd_setup(newwnd)
 -- bleeding between sensors
 
 	newwnd.dispatch["streaminfo"] = dec_stream;
-	newwnd.dispatch["resized"] = dec_rzev;
+	newwnd.dispatch["resized"] = dec_resize;
 	newwnd.dispatch["frame"] = fs_upd;
 	newwnd.dispatch["framestatus"] = fs_stat;
 
@@ -214,13 +231,22 @@ function datawnd_setup(newwnd)
 	newwnd:set_alpha(gconfig_get("data_alpha"));
 	newwnd:set_mapping(gconfig_get("data_map"));
 	newwnd:set_step(gconfig_get("data_step"));
-	newwnd:add_handler("resized", datawnd_resize);
+	newwnd:add_handler("resize", datawnd_resize);
 	shader_setup(newwnd.wm.selected.canvas, "color", "normal");
 
+	newwnd.base = image_storage_properties(newwnd.canvas).width;
 	newwnd.offset = 0;
-	newwnd.zoom = {0.0, 0.0, 1.0, 1.0};
+	newwnd.zoom = {0, 0, newwnd.base, newwnd.base};
 	newwnd:refresh();
 end
+
+local step_lut = {};
+step_lut["Byte"] = "STEP_BYTE";
+step_lut["Pixel"] = "STEP_PIXEL";
+step_lut["Row"] = "STEP_ROW";
+step_lut["Halfpage"] = "STEP_HALFPAGE";
+step_lut["Page"] = "STEP_PAGE";
+step_lut["Align-512"] = "STEP_ALIGN_512";
 
 local step_act = {
 {
@@ -320,14 +346,6 @@ handler = function(ctx)
 end
 }
 };
-
-local step_lut = {};
-step_lut["Byte"] = "STEP_BYTE";
-step_lut["Pixel"] = "STEP_PIXEL";
-step_lut["Row"] = "STEP_ROW";
-step_lut["Halfpage"] = "STEP_HALFPAGE";
-step_lut["Page"] = "STEP_PAGE";
-step_lut["Align-512"] = "STEP_ALIGN_512";
 
 DATA_ACTIONS = {
 {

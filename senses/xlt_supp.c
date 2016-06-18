@@ -216,11 +216,11 @@ static bool dispatch_event(struct xlt_session* sess, arcan_event* ev)
 		sess->zoom_range[1] = 0;
 		sess->zoom_range[2] = sess->olay.w;
 		sess->zoom_range[3] = sess->olay.h;
-		arcan_shmif_resize(&sess->olay, sess->in.w, sess->in.h);
 	}
 /* really weird packing sizes are ignored / clamped */
 	else if (ev->tgt.kind == TARGET_COMMAND_GRAPHMODE){
 		sess->pack_sz = ev->tgt.ioevs[0].iv;
+
 		if (sess->pack_sz <= 0){
 			fprintf(stderr, "translator: invalid packing size (%d) received.\n",
 				(int)sess->pack_sz);

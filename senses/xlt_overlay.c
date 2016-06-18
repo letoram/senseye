@@ -53,7 +53,7 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	float h = zoom_range[3] - zoom_range[1];
 
 	if (bpp != 1 || w < 0.0001 || h < 0.0001 || over->w < w || over->h < h)
-		return false;
+		return true;
 
 /* scale factors */
 	float b_w = (float)over->w / w;
