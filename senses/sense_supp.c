@@ -28,6 +28,61 @@ static FILE* logout;
 
 #define FLOG(...) ( (logout ? fprintf(logout, __VA_ARGS__) : true ) )
 
+static uint8_t b64dec_lut[256] = {
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 0, 0, 0,
+63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+22, 23, 24, 25, 0, 0, 0, 0, 0, 0, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+uint8_t* arcan_base64_decode(const uint8_t* instr, size_t *outlen)
+{
+	size_t inlen = strlen((char*)instr);
+
+	if (inlen % 4 != 0 || inlen < 2)
+		return NULL;
+
+	*outlen = inlen / 4 * 3;
+	if (instr[inlen - 1] == '=')
+		(*outlen)--;
+
+	if (instr[inlen - 2] == '=')
+		(*outlen)--;
+
+	uint8_t* outb = malloc(*outlen);
+
+	if (!outb)
+		return NULL;
+	memset(outb, '\0', *outlen);
+
+	uint32_t val;
+	for (int i = 0, j = 0; i < inlen; i+= 4) {
+		val  = (instr[i+0] == '=' ? 0 & (i+0) : b64dec_lut[instr[i+0]]) << 18;
+		val += (instr[i+1] == '=' ? 0 & (i+1) : b64dec_lut[instr[i+1]]) << 12;
+		val += (instr[i+2] == '=' ? 0 & (i+2) : b64dec_lut[instr[i+2]]) <<  6;
+		val += (instr[i+3] == '=' ? 0 & (i+3) : b64dec_lut[instr[i+3]]) <<  0;
+
+		if (j < *outlen)
+			outb[j++] = (val >> 16) & 0xff;
+
+		if (j < *outlen)
+			outb[j++] = (val >>  8) & 0xff;
+
+		if (j < *outlen)
+			outb[j++] = (val >>  0) & 0xff;
+	}
+
+	return outb;
+}
+
+
 /*
  * default options, modifyable dynamically thorough various events
  * and changeable at load time through the arcan_args mechanism.
@@ -73,7 +128,7 @@ static void dispatch_event(arcan_event* ev,
 				arcan_shmif_resize(&chp->cont, base, base))
 				ch->resize(ch, base);
 			else
-				FLOG("Senseye:FDsense: bad displayhint: %d\n", ev->tgt.ioevs[0].iv);
+				FLOG("Senseye:support: bad displayhint: %d\n", ev->tgt.ioevs[0].iv);
 		}
 
 /* resize buffer to new base */
@@ -81,6 +136,12 @@ static void dispatch_event(arcan_event* ev,
 
 		case TARGET_COMMAND_UNPAUSE:
 			chp->paused = false;
+		break;
+
+		case TARGET_COMMAND_MESSAGE:{
+/* grab message unpack from sense_file and add to interface here */
+			printf("corruption message received\n");
+		}
 		break;
 
 		case TARGET_COMMAND_STEPFRAME:

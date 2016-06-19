@@ -78,9 +78,9 @@ local function quick_delete(wnd)
 	end
 end
 
-local function wnd_destroy(wnd)
+local function wnd_destroy(wnd, force)
 	local wm = wnd.wm;
-	if (wnd.delete_protect) then
+	if (wnd.delete_protect and not force) then
 		return;
 	end
 
@@ -957,8 +957,15 @@ local function workspace_destroy(space)
 		space.mode_hook = nil;
 	end
 
+	for i=1,10 do
+		if (space.wm.spaces[i] == space) then
+			space.wm.spaces[i] = nil;
+			break;
+		end
+	end
+
 	while (#space.children > 0) do
-		space.children[1]:destroy();
+		space.children[1]:destroy(true);
 	end
 
 	if (valid_vid(space.rtgt_id)) then
@@ -2258,6 +2265,10 @@ local function wnd_ws_attach(res)
 	local wm = res.wm;
 	res.ws_attach = nil;
 
+	if (wm.spaces[wm.space_ind] == nil) then
+		wm.spaces[wm.space_ind] = create_workspace(wm);
+	end
+
 -- actual dimensions depend on the state of the workspace we'll attach to
 	local space = wm.spaces[wm.space_ind];
 	res.space_ind = wm.space_ind;
@@ -2267,10 +2278,6 @@ local function wnd_ws_attach(res)
 		res.height = math.floor(wm.height * gconfig_get("float_defh"));
 	else
 end
-
-	if (wm.spaces[wm.space_ind] == nil) then
-		wm.spaces[wm.space_ind] = create_workspace(wm);
-	end
 
 -- same goes for hierarchical position and relatives
 	if (not wm.selected or wm.selected.space ~= space) then
@@ -2508,7 +2515,7 @@ local function tiler_switchws(wm, ind)
 	end
 
 	local cw = wm.selected;
-	if (ind == wm.space_ind) then
+	if (ind == wm.space_ind and wm.spaces[wm.space_ind]) then
 		return;
 	end
 
@@ -2531,20 +2538,22 @@ local function tiler_switchws(wm, ind)
 		image_sharestorage(cursp.background, oldbg);
 	end
 
-	if (cursp.switch_hook) then
-		cursp:switch_hook(false, nd, nextbg, oldbg);
-	else
-		workspace_deactivate(cursp, false, nd, nextbg);
-	end
+	if (cursp) then
+		if (cursp.switch_hook) then
+			cursp:switch_hook(false, nd, nextbg, oldbg);
+		else
+			workspace_deactivate(cursp, false, nd, nextbg);
+		end
 -- policy, don't autodelete if the user has made some kind of customization
-	if (#cursp.children == 0 and gconfig_get("ws_autodestroy") and
-		(cursp.label == nil or string.len(cursp.label) == 0 ) and
-		(cursp.background_name == nil or cursp.background_name == wm.background_name)) then
-		cursp:destroy();
-		wm.spaces[wm.space_ind] = nil;
-		wm.sbar_ws[wm.space_ind]:hide();
-	else
-		cursp.selected = cw;
+		if (#cursp.children == 0 and gconfig_get("ws_autodestroy") and
+			(cursp.label == nil or string.len(cursp.label) == 0 ) and
+			(cursp.background_name == nil or cursp.background_name == wm.background_name)) then
+			cursp:destroy();
+			wm.spaces[wm.space_ind] = nil;
+			wm.sbar_ws[wm.space_ind]:hide();
+		else
+			cursp.selected = cw;
+		end
 	end
 
 	wm.sbar_ws[wm.space_ind]:switch_state("inactive");

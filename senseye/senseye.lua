@@ -274,7 +274,7 @@ function durden_prelaunch()
 end
 
 function rebalance_space(space)
-	if (#space.children == 1) then
+	if (#space.children == 1 or not space.children[2]) then
 		return;
 	end
 

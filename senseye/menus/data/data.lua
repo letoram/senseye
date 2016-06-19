@@ -67,7 +67,6 @@ local function recalc_zoom(wnd)
 	t2 = t2 > 1.0 and 1.0 or t2;
 	s2 = s2 > 1.0 and 1.0 or s2;
 	end
-print("post:", s1, t1, s2, t2);
 
 	wnd.zoom = {s1, t1, s2, t2};
 	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
@@ -90,7 +89,7 @@ end
 
 local function fs_upd(wnd, source, status)
 	wnd.offset = status.pts;
-	all_subs(wnd, "pupdate");
+	all_subs(wnd, "pupdate", wnd);
 	return true;
 end
 
@@ -138,8 +137,10 @@ end
 
 local function dec_resize(wnd, source, status)
 	wnd.base = status.width;
-	for k,v in ipairs(wnd.translators) do
-		target_displayhint(v.external, wnd.base, wnd.base);
+	if (wnd.resize and wnd.translators) then
+		for k,v in ipairs(wnd.translators) do
+			target_displayhint(v.external, wnd.base, wnd.base);
+		end
 	end
 
 	if (status.width ~= status.height) then
@@ -369,6 +370,53 @@ end
 }
 };
 
+local corrupt_menu = {
+{
+name = "hex",
+label = "Hex",
+kind = "value",
+validator = function(val)
+	val = string.trim(val);
+	local elems = string.split(val, " ");
+	if (not elems or #elems == nil) then
+		return false;
+	end
+	for k,v in ipairs(elems) do
+		if (tonumber("0x" .. v) == nil or tonumber("0x" .. v) > 255) then
+			return false;
+		end
+	end
+	return true;
+end,
+handler = function(ctx, val)
+	local mx, my = mouse_xy();
+	mx, my = translate_2d(ctx.wm.selected.canvas, mx, my);
+	local bbuf = string.format("%d,%d,-1\n", mx, my);
+	local elems = string.split(string.trim(val), " ");
+
+	local outl = {};
+	for k,v in ipairs(elems) do
+		table.insert(outl, string.char(tonumber("0x" .. v)));
+	end
+
+	local msg = util.to_base64(bbuf .. table.concat(outl, ""));
+	target_input(ctx.wm.selected.external, msg);
+end
+},
+{
+name = "asm",
+label = "Assembly",
+kind = "action",
+submenu = true,
+eval = function() return
+	keystone_architectures ~= nil and #keystone_architectures() > 0; end,
+handler = function(ctx, val)
+	return gen_keystone_menu(ctx);
+end
+}
+};
+
+
 DATA_ACTIONS = {
 {
 name = "size",
@@ -470,6 +518,13 @@ handler = function(ctx)
 	if (not ctx) then print(debug.traceback()); end
 	return list_tools(ctx.wm.selected);
 end
+},
+{
+name = "corrupt",
+kind = "action",
+label = "Corrupt",
+submenu = true,
+handler = corrupt_menu
 },
 -- generate a list of available overlays, requires connected translators
 {

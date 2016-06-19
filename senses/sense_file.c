@@ -52,6 +52,13 @@ struct {
 	.bytes_perline = 1
 };
 
+struct ch_user_damage {
+	uint8_t acc[1024];
+	size_t ofs;
+};
+
+static void refresh_data(struct rwstat_ch* ch, size_t pos);
+
 /*
  * input mapping :
  *  LCLICK (move position)
@@ -72,6 +79,78 @@ void control_event(struct senseye_cont* cont, arcan_event* ev)
 		break;
 		}
 	}
+}
+
+static void damage_msg(struct senseye_ch* ch, arcan_event* ev)
+{
+	struct ch_user_damage* buf = ch->user;
+	size_t len = strnlen(ev->tgt.message, COUNT_OF(ev->tgt.message));
+
+/* truncate if we get too big */
+	if (len > COUNT_OF(buf->acc)-buf->ofs-2)
+		len = COUNT_OF(buf->acc)-buf->ofs-2;
+
+	memcpy(&buf->acc[buf->ofs], ev->tgt.message, len);
+	buf->ofs += len;
+	buf->acc[buf->ofs] = '\0';
+
+/* return on continued multipart */
+	if (ev->tgt.ioevs[0].iv)
+		return;
+
+	size_t bsz;
+	char* msg = (char*) arcan_base64_decode(buf->acc, &bsz);
+	buf->ofs = 0;
+	if (!buf){
+		fprintf(stderr, "damage_msg - couldn't b64-decode payload\n");
+		return;
+	}
+
+/* need to decode adressing and operation (%d,%d,-1\n), then convert to
+ * an offset relative to fsense.ofs */
+	size_t ofs = 0;
+
+/* _decode guarantees NUL */
+	while (msg[ofs] && msg[ofs] != '\n')
+		ofs++;
+
+	if (msg[ofs] == '\0'){
+		fprintf(stderr, "damage_msg - bad format, %%d,%%d,%%d\n expected\n");
+		return;
+	}
+
+/* terminate and convert */
+	msg[ofs++] = '\0';
+	int mx, my, mode;
+	if (3 != sscanf(msg, "%d,%d,%d", &mx, &my, &mode)){
+		fprintf(stderr, "damage_msg - bad format, %%d,%%d,%%d\n expected\n");
+		return;
+	}
+
+/* now we know what position to "seek" to locally or globally, the formula:
+ * ofs = (y * w + x) * pack_sz works. bounds-check and there we go */
+	size_t pos = fsense.ofs;
+
+/* for some reason we did not expose the current packing size (?) so regrab
+ * from the row size */
+	struct arcan_shmif_cont* cont = ch->in->context(ch->in);
+	size_t row_sz = ch->in->row_size(ch->in);
+	pos += (my * row_sz + mx * (row_sz / cont->w));
+
+/*
+ * this is possibly a casde we want to support (along with insert rather
+ * than replace, but as a first round, skip that)
+ */
+	if ((bsz-ofs) + pos >= fsense.fmap_sz){
+		fprintf(stderr, "damage_msg - write would exceed mapped boundary\n");
+		return;
+	}
+
+	for (size_t i = ofs, j = pos; i < bsz && j < fsense.fmap_sz; i++, j++)
+		fsense.fmap[j] = msg[i];
+
+	msync(&fsense.fmap[fsense.ofs], bsz, MS_SYNC);
+	refresh_data(ch->in, fsense.ofs);
 }
 
 static void refresh_data(struct rwstat_ch* ch, size_t pos)
@@ -122,7 +201,8 @@ void* data_loop(void* th_data)
 {
 /* we ignore the senseye- abstraction here and works
  * directly with the rwstat and shmif context */
-	struct rwstat_ch* ch = ((struct senseye_ch*)th_data)->in;
+	struct senseye_ch* sch = th_data;
+	struct rwstat_ch* ch = sch->in;
 	struct arcan_shmif_cont* cont = ch->context(ch);
 
 	arcan_event ev = {
@@ -205,6 +285,9 @@ void* data_loop(void* th_data)
 			}
 			break;
 
+			case TARGET_COMMAND_MESSAGE:
+				damage_msg(sch, &ev);
+
 			case TARGET_COMMAND_SEEKTIME:{
 				pthread_mutex_lock(&fsense.flock);
 					fsense.ofs = fix_ofset(ch, ev.tgt.ioevs[1].fv);
@@ -257,6 +340,7 @@ static int usage()
 		"\t-h x,--height=x \tpreview window height (default: 512)\n"
 		"\t-p x,--pcomp=x \thistogram row-row comparison in preview\n"
 		"\t               \targ. val (0.0 - 1.0) sets cutoff level\n"
+		"\t-X             \twrite- enable, this may permanently damage file\n"
 		"\t-d,--pdetail \tuse entire data range for pcomparison\n"
 		"\t-?,--help \tthis text\n"
 	);
@@ -300,8 +384,11 @@ int main(int argc, char* argv[])
 	bool detailed = false;
 	float cutoff = NAN;
 	int ch;
+	int fl_flag = O_RDONLY;
+	int map_flag = PROT_READ | PROT_WRITE;
+	int map_mode = MAP_PRIVATE;
 
-	while((ch = getopt_long(argc, argv, "Ww:h:p:d?", longopts, NULL)) >= 0)
+	while((ch = getopt_long(argc, argv, "XWw:h:p:d?", longopts, NULL)) >= 0)
 	switch(ch){
 	case '?' :
 		return usage();
@@ -312,6 +399,10 @@ int main(int argc, char* argv[])
 			0.9 : cutoff;
 	break;
 	case 'd' : detailed = true;
+	break;
+	case 'X' :
+		fl_flag = O_RDWR;
+		map_mode = MAP_SHARED;
 	break;
 	case 'W' :
 		fsense.wrap = true;
@@ -339,7 +430,7 @@ int main(int argc, char* argv[])
 		return usage();
 	}
 
-	int fd = open(argv[optind], O_RDONLY);
+	int fd = open(argv[optind], fl_flag);
 	struct stat buf;
 	if (-1 == fstat(fd, &buf)){
 		fprintf(stderr, "couldn't stat file, check permissions and file state.\n");
@@ -356,7 +447,7 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	fsense.fmap = mmap(NULL, buf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	fsense.fmap = mmap(NULL, buf.st_size, map_flag, map_mode, fd, 0);
 	if (MAP_FAILED == fsense.fmap){
 		fprintf(stderr, "couldn't mmap file.\n");
 		return EXIT_FAILURE;
@@ -373,6 +464,14 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "couldn't map data channel, parent rejected.\n");
 		return EXIT_FAILURE;
 	}
+
+	chan->user = malloc(sizeof(struct ch_user_damage));
+	if (!chan->user){
+		fprintf(stderr, "error allocating damage buffer.\n");
+		return EXIT_FAILURE;
+	}
+
+	memset(chan->user, '\0', sizeof(struct ch_user_damage));
 
 /* use a pipe to signal / wake to split polling events on
  * shared memory interface with communication between main and secondary
@@ -457,6 +556,8 @@ int main(int argc, char* argv[])
 		;
 
 done:
+	if (fsense.fmap)
+		munmap(fsense.fmap, buf.st_size);
 	arcan_shmif_drop(c);
 	return EXIT_SUCCESS;
 }

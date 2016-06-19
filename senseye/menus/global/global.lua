@@ -84,6 +84,19 @@ local toplevel = {
 		handler = wm
 	},
 	{
+		name = "drop_sensor",
+		label = "Destroy Sensor",
+		kind = "action",
+		eval = function()
+			return TILER.spaces[TILER.space_ind] ~= nil;
+		end,
+		handler = function()
+			local ind = TILER.space_ind;
+			TILER.spaces[ind]:destroy();
+			TILER:switch_ws(ind);
+		end
+	},
+	{
 		name = "terminal",
 		label = "Terminal",
 		kind = "action",

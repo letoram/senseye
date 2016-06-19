@@ -17,6 +17,11 @@ enum sense_id {
 	SENSE_MFILE = 0xa1e
 };
 
+#ifndef COUNT_OF
+#define COUNT_OF(x) \
+	((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+#endif
+
 struct senseye_ch {
 	void (*pump)(struct senseye_ch*);
 	ssize_t (*data)(struct senseye_ch*, const void* buf, size_t ntw);
@@ -29,6 +34,7 @@ struct senseye_ch {
  * but provided for more advanced use */
 	struct rwstat_ch* in;
 	struct senseye_priv* in_pr;
+	void* user;
 	int in_handle;
 };
 
@@ -44,6 +50,11 @@ struct senseye_cont {
 	void* tag;
 	struct senseye_priv* priv;
 };
+
+/*
+ * needed to decode MESSAGE input values for damage
+ */
+uint8_t* arcan_base64_decode(const uint8_t* instr, size_t *outlen);
 
 /*
  * Initialization - open the connection to the arcan session that is
