@@ -19,7 +19,7 @@
  * is free to switch the feature on or off.
  */
 
-#include "xlt_supp.h"
+#include "libsenseye.h"
 #include "font_8x8.h"
 #include <math.h>
 

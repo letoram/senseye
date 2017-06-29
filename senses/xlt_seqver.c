@@ -9,7 +9,7 @@
 
 #include <inttypes.h>
 
-#include "xlt_supp.h"
+#include "libsenseye.h"
 #include "font_8x8.h"
 
 static bool populate(bool newdata, struct arcan_shmif_cont* in,

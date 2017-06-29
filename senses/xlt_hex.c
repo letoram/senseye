@@ -6,7 +6,8 @@
  * supporting regular, color-coded and detailed viewing modes.
  */
 
-#include "xlt_supp.h"
+#include <arcan_shmif.h>
+#include "libsenseye.h"
 #include "font_8x8.h"
 #include <inttypes.h>
 #include <ctype.h>
@@ -91,11 +92,12 @@ static inline void draw_ch(struct arcan_shmif_cont* out,
 		return;
 
 /* box should indicate alignment */
-	draw_box(out, col, row, 2*(fontw+2), fonth+1, RGBA(0x00, 0x00, 0x00, 0xff));
+	draw_box(out, col,
+		row, 2*(fontw+2), fonth+1, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 /* lookup color against bytevalue if needed */
 	shmif_pixel color = actx->rm == RM_SIMPLE || actx->rm == RM_DETAIL_SIMPLE ?
-		RGBA(0xcc, 0xcc, 0xcc, 0xff) : color_lut[ch];
+		SHMIF_RGBA(0xcc, 0xcc, 0xcc, 0xff) : color_lut[ch];
 
 	draw_char(out, hlut[ch >> 4 & 0xf], col, row, color);
 	draw_char(out, hlut[ch >> 0 & 0xf], col+fontw+2, row, color);
@@ -110,8 +112,8 @@ static void draw_header(struct arcan_shmif_cont* out,
 
 	char chbuf[buf_sz];
 	snprintf(chbuf, buf_sz, "%s @ %"PRIx64, mode_lut[actx->rm], pos);
-	draw_box(out, 0, 0, out->addr->w, fonth+2, RGBA(0x44, 0x44, 0x44, 0xff));
-	draw_text(out, chbuf, 1, 1, RGBA(0xff, 0xff, 0xff, 0xff));
+	draw_box(out, 0, 0, out->addr->w, fonth+2, SHMIF_RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_text(out, chbuf, 1, 1, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 }
 
 /*
@@ -151,7 +153,7 @@ static void draw_footer(struct arcan_shmif_cont* out, struct hex_user* actx,
 	memcpy(&vbuf, buf, buf_sz < sizeof(vbuf) ? buf_sz : sizeof(vbuf));
 
 	draw_box(out, 0, y, out->addr->w,
-		out->addr->h - y, RGBA(0x44, 0x44, 0x44, 0xff));
+		out->addr->h - y, SHMIF_RGBA(0x44, 0x44, 0x44, 0xff));
 	y+=2;
 
 /* a little bit messy as we want to have the labels in one color
@@ -159,9 +161,9 @@ static void draw_footer(struct arcan_shmif_cont* out, struct hex_user* actx,
 
 	char work[chw];
 #define DO_ROW(label, data, ...) { snprintf(work, chw, label); \
-	draw_text(out, work, 1, y, RGBA(0xff, 0xff, 0xff, 0xff));\
+	draw_text(out, work, 1, y, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));\
 	snprintf(work, chw, data, __VA_ARGS__);\
-	draw_text(out, work, 1, y, RGBA(0x44, 0xff, 0x44, 0xff));\
+	draw_text(out, work, 1, y, SHMIF_RGBA(0x44, 0xff, 0x44, 0xff));\
 	y += fonth + 2;\
 	}
 
@@ -204,7 +206,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	}
 
 	draw_box(out, 0, fonth+2,
-		out->addr->w, out->addr->h, RGBA(0x00, 0x00, 0x00, 0xff));
+		out->addr->w, out->addr->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 	struct hex_user* actx = out->user;
 	if (newdata || actx->last_w != out->addr->w || actx->last_h != out->addr->h){
@@ -236,13 +238,13 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 /* underline current position and mark related sizes, e.g. +2, 4, 8 */
 			if (buf_ind == cursor_ind)
-				draw_box(out, col-1, row-1, ch_w+2, fonth+3, RGBA(0x00, 0xff, 0x00, 0xff));
+				draw_box(out, col-1, row-1, ch_w+2, fonth+3, SHMIF_RGBA(0x00, 0xff, 0x00, 0xff));
 			else if (buf_ind == cursor_ind+1)
-				draw_box(out, col-1, row-1, ch_w+2, fonth+3, RGBA(0xff, 0xff, 0x00, 0xff));
+				draw_box(out, col-1, row-1, ch_w+2, fonth+3, SHMIF_RGBA(0xff, 0xff, 0x00, 0xff));
 			else if (buf_ind > cursor_ind && buf_ind <= cursor_ind+3)
-				draw_box(out, col-1, row-1, ch_w+2, fonth+3, RGBA(0xff, 0x00, 0x00, 0xff));
+				draw_box(out, col-1, row-1, ch_w+2, fonth+3, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 			else if (buf_ind > cursor_ind+3 && buf_ind <= cursor_ind+7)
-				draw_box(out, col-1, row-1, ch_w+2, fonth+3, RGBA(0xff, 0x00, 0xff, 0xff));
+				draw_box(out, col-1, row-1, ch_w+2, fonth+3, SHMIF_RGBA(0xff, 0x00, 0xff, 0xff));
 
 			draw_ch(out, actx, buf[buf_ind++], col, row);
 		}
@@ -267,7 +269,7 @@ int main(int argc, char* argv[])
 	for (size_t i = 0; i < 256; i++){
 		uint8_t pixel[3];
 		HEADER_PIXEL(header_data, pixel);
-		color_lut[i] = RGBA(pixel[0], pixel[1], pixel[2], 0xff);
+		color_lut[i] = SHMIF_RGBA(pixel[0], pixel[1], pixel[2], 0xff);
 	}
 
 	return xlt_setup("hex", populate, input, XLT_DYNSIZE, confl) == true ?

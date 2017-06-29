@@ -21,7 +21,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#include "sense_supp.h"
+#include "libsenseye.h"
 #include "rwstat.h"
 
 static FILE* logout;
@@ -68,13 +68,14 @@ static void dispatch_event(arcan_event* ev,
 
 		case TARGET_COMMAND_DISPLAYHINT:{
 			size_t base = ev->tgt.ioevs[0].iv;
-			if (base > 0 && (base & (base - 1)) == 0 &&
-				arcan_shmif_resize(&chp->cont, base, base))
+			if (!base)
+				return;
+
+			if ((base & (base-1)) == 0 && arcan_shmif_resize(&chp->cont, base, base))
 				ch->resize(ch, base);
 			else
-				FLOG("Senseye:FDsense: bad displayhint: %d\n", ev->tgt.ioevs[0].iv);
+				FLOG("(libsenseye:) bad displayhint: %d\n", ev->tgt.ioevs[0].iv);
 		}
-
 /* resize buffer to new base */
 		break;
 
@@ -217,7 +218,7 @@ static void ch_queue(struct senseye_ch* ch, arcan_event* ev)
 	ch->in->event(ch->in, ev);
 }
 
-static void ch_close(struct senseye_ch* ch)
+static void ch_close(struct senseye_ch* ch, const char* msg)
 {
 	if (!ch || !ch->in_pr)
 		return;

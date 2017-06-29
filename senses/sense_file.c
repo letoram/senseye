@@ -28,7 +28,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#include "sense_supp.h"
+#include "libsenseye.h"
 #include "rwstat.h"
 
 #define EPSILON 0.0000001f

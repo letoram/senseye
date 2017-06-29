@@ -19,7 +19,7 @@
 #include <pthread.h>
 
 #include <arcan_shmif.h>
-#include "sense_supp.h"
+#include "libsenseye.h"
 
 static size_t inp_buf_sz = 1024 * 1;
 static struct arcan_shmif_cont* shm;
@@ -93,7 +93,7 @@ error:
 			shm->vidp[i] = SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
 				arcan_shmif_signal(shm, SHMIF_SIGVID);
 
-			ch->close(ch);
+			ch->close(ch, NULL);
 			return NULL;
 		}
 	}

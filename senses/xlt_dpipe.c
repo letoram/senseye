@@ -7,9 +7,10 @@
  * a pipes and filters basis) in order to classify and output a string
  * that describes the format of the current buffer.
  */
-#include "xlt_supp.h"
-#include "font_8x8.h"
-
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -17,6 +18,10 @@
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include <arcan_shmif.h>
+#include "libsenseye.h"
+#include "font_8x8.h"
 
 static int glob_argc;
 static char** glob_argv;
@@ -132,17 +137,17 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	if (!out->user){
 		arcan_shmif_resize(out, 512, 32);
 		draw_box(out, 0, 0, out->addr->w,
-			out->addr->h, RGBA(0x00, 0x00, 0x00, 0xff));
+			out->addr->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 		arcan_shmif_signal(out, SHMIF_SIGVID);
 	}
 
 	size_t inbuf_sz = (out->addr->w / fontw) * (out->addr->h / fonth);
 	char* msg = pipe_step(inbuf_sz, buf_sz, buf);
 	draw_box(out, 0, 0, out->addr->w,
-		out->addr->h, RGBA(0x00, 0x00, 0x00, 0xff));
+		out->addr->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 	if (msg){
-		draw_text(out, msg, 2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+		draw_text(out, msg, 2, 2, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 		free(msg);
 		return true;
 	}

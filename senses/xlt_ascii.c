@@ -5,7 +5,14 @@
  * Description: Simple 7-bit ascii translator
  */
 
-#include "xlt_supp.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <arcan_shmif.h>
+
+#include "libsenseye.h"
 #include "font_8x8.h"
 #include <inttypes.h>
 
@@ -59,12 +66,12 @@ static inline void draw_ch(struct arcan_shmif_cont* out,
 	if (col < 0)
 		return;
 
-	draw_box(out, col, row, fontw+2, fonth+2, RGBA(0x00, 0x00, 0x00, 0xff));
+	draw_box(out, col, row, fontw+2, fonth+2, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 	if (ch < 127)
-		draw_char(out, ch, col, row, RGBA(0xcc, 0xcc, 0xcc, 0xff));
+		draw_char(out, ch, col, row, SHMIF_RGBA(0xcc, 0xcc, 0xcc, 0xff));
 	else
-		draw_box(out, col, row, fontw, fonth, RGBA(0x55, 0x00, 0x00, 0xff));
+		draw_box(out, col, row, fontw, fonth, SHMIF_RGBA(0x55, 0x00, 0x00, 0xff));
 }
 
 static size_t find_lf(enum linefeed_mode mode, size_t buf_sz, uint8_t* buf)
@@ -97,8 +104,8 @@ static void draw_header(struct arcan_shmif_cont* out,
 	char chbuf[buf_sz];
 	snprintf(chbuf, buf_sz, "%s [%d:%d] @ %"PRIx64" %d%%",
 		mode_lut[actx->lfm], actx->row, actx->col, pos, (int)pct);
-	draw_box(out, 0, 0, out->w, fonth+2, RGBA(0x44, 0x44, 0x44, 0xff));
-	draw_text(out, chbuf, 2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+	draw_box(out, 0, 0, out->w, fonth+2, SHMIF_RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_text(out, chbuf, 2, 2, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 }
 
 static bool populate(bool newdata, struct arcan_shmif_cont* in,
@@ -118,7 +125,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 	}
 
 	draw_box(out, 0, fonth+2,
-		out->w, out->h, RGBA(0x00, 0x00, 0x00, 0xff));
+		out->w, out->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 /* based on CRLF mode and desired left row / column, forward buf */
 	if (newdata)

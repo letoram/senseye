@@ -8,11 +8,10 @@
  * base dimensions and the active packing mode).
  */
 
-#include <inttypes.h>
-#include <unistd.h>
-
-#include "xlt_supp.h"
+#include <arcan_shmif.h>
+#include "libsenseye.h"
 #include "font_8x8.h"
+#include <inttypes.h>
 
 enum view_mode {
 	VIEW_LIST = 0,
@@ -85,7 +84,7 @@ struct magic magic[] = {
 		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x37, 0x61},
 		.used = 6,
-		.col = RGBA(0xff, 0xff, 0x00, 0xff),
+		.col = SHMIF_RGBA(0xff, 0xff, 0x00, 0xff),
 		.decodable = true
 	},
 	{
@@ -93,7 +92,7 @@ struct magic magic[] = {
 		.ext = "gif",
 		.buf = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61},
 		.used = 6,
-		.col = RGBA(0xaa, 0xaa, 0x00, 0xff),
+		.col = SHMIF_RGBA(0xaa, 0xaa, 0x00, 0xff),
 		.decodable = true
 	},
 	{
@@ -101,7 +100,7 @@ struct magic magic[] = {
 		.ext = "png",
 		.buf = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a},
 		.used = 8,
-		.col = RGBA(0x00, 0xff, 0xff, 0xff),
+		.col = SHMIF_RGBA(0x00, 0xff, 0xff, 0xff),
 		.decodable = true
 	},
 	{
@@ -109,7 +108,7 @@ struct magic magic[] = {
 		.ext = "jpg",
 		.buf = {0xff, 0xd8},
 		.used = 2,
-		.col = RGBA(0xff, 0x00, 0xff, 0xff),
+		.col = SHMIF_RGBA(0xff, 0x00, 0xff, 0xff),
 		.decodable = true
 	},
 	{
@@ -117,7 +116,7 @@ struct magic magic[] = {
 		.ext = "bmp",
 		.buf = {0x42, 0x4d},
 		.used = 2,
-		.col = RGBA(0xff, 0xaa, 0x66, 0xff),
+		.col = SHMIF_RGBA(0xff, 0xaa, 0x66, 0xff),
 		.decodable = true
 	}
 };
@@ -286,7 +285,7 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 	xlt_ofs_coord(sess, ofs + ctx->over_count, &x2, &y2);
 
 	shmif_pixel col = ctx->over_state == 1 ?
-		RGBA(0x00, 0xff, 0x00, 0xff) : RGBA(0xff, 0x00, 0x00, 0xff);
+		SHMIF_RGBA(0x00, 0xff, 0x00, 0xff) : SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
 
 /* if within zoom_range, draw_box with d_w, d_h */
 	while ((x1 != x2 || y1 != y2) && y1 <= zoom_ofs[3] && y1 <= y2){
@@ -306,15 +305,15 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 
 static size_t draw_header(struct arcan_shmif_cont* c, struct xlti_ctx* ctx)
 {
-	draw_box(c, 0, 0, c->w, fonth + 4, RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_box(c, 0, 0, c->w, fonth + 4, SHMIF_RGBA(0x44, 0x44, 0x44, 0xff));
 	switch (ctx->current){
 	case VIEW_LIST:
 		draw_text(c, "View Mode (List), a: auto-decode",
-			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+			2, 2, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 	break;
 	case VIEW_AUTO:
 		draw_text(c, "View Mode (Auto), l: list",
-			2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+			2, 2, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 	break;
 	default:
 	break;
@@ -388,14 +387,14 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 			pos + item->ofs, suspect ? "suspicious" : "decoded",
 			magic[item->magic].ident, w, h, (float)(w*h*4)/(float)ctx->over_count
 		);
-		draw_text(out, scratch, (fontw+1)*2, y, RGBA(0x00,0xff,0x00,0xff));
+		draw_text(out, scratch, (fontw+1)*2, y, SHMIF_RGBA(0x00,0xff,0x00,0xff));
 		y+=fonth+2;
 
 		if (suspect)
 			return true;
 
 		draw_text(out, "(d) save original (r) save raw (rgba)",
-			(fontw+1)*2, y, RGBA(0xff, 0xff, 0x00, 0xff));
+			(fontw+1)*2, y, SHMIF_RGBA(0xff, 0xff, 0x00, 0xff));
 		y+=fonth+2;
 
 		if (ctx->decoded.raw){
@@ -423,11 +422,11 @@ static bool process_decode(struct xlti_ctx* ctx, struct arcan_shmif_cont* out,
 	else{
 		ctx->over_state = -1;
 		draw_text(out, "Decoding failed",
-			(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+			(fontw+1)*2, y, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 		const char* msg = stbi_failure_reason();
 		if (msg)
 			draw_text(out, msg, (fontw+1)*2, y+fonth+2,
-				RGBA(0xff, 0x00, 0x00, 0xff));
+				SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 		return false;
 	}
 }
@@ -478,7 +477,7 @@ alloc_nv:
 /* depending on view mode, we autodecode first or just list matches */
 	switch (ctx->current){
 	case VIEW_LIST:{
-		draw_box(out, 0, 0, out->w, out->h, RGBA(0x00, 0x00, 0x00, 0xff));
+		draw_box(out, 0, 0, out->w, out->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 		size_t y = draw_header(out, ctx);
 
 		ctx->found = scan(buf, buf_sz, ctx->items, ctx->count);
@@ -490,14 +489,14 @@ alloc_nv:
 				draw_text(out, m->ident, (fontw+1)*2, y+i*(fonth), m->col);
 				snprintf(scratch, 32, "@ %zu", ctx->items[i].ofs);
 				draw_text(out, scratch,
-					(chw+3)*(fontw+1), y + i * (fonth + 1), RGBA(0x00,0xff,0x00,0xff));
+					(chw+3)*(fontw+1), y + i * (fonth + 1), SHMIF_RGBA(0x00,0xff,0x00,0xff));
 			}
 		return true;
 	}
 	break;
 
 	case VIEW_AUTO:{
-		draw_box(out, 0, 0, out->w, out->h, RGBA(0x00, 0x00, 0x00, 0xff));
+		draw_box(out, 0, 0, out->w, out->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 		ctx->found = scan(buf, buf_sz, ctx->items, ctx->count);
 		size_t y = draw_header(out, ctx);
 		if (ctx->found){
@@ -509,10 +508,10 @@ alloc_nv:
 		}
 		else{
 			draw_text(out, "No supported formats found",
-				(fontw+1)*2, y, RGBA(0xff, 0x00, 0x00, 0xff));
+				(fontw+1)*2, y, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 			const char* reason = stbi_failure_reason();
 			draw_text(out, reason ? reason : "Unknown Failure Reason",
-				(fontw+1)*2, y+fonth+2, RGBA(0xff, 0x00, 0x00, 0xff));
+				(fontw+1)*2, y+fonth+2, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 		}
 		return true;
 	}

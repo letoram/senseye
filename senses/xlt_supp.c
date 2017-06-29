@@ -9,7 +9,8 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include "xlt_supp.h"
+#include <arcan_shmif.h>
+#include "libsenseye.h"
 
 /*
  * tracks basic/default setup that is copied to every new

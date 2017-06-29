@@ -10,7 +10,8 @@
  * Current state is unusable, the parsing and rendering is incomplete and
  * there is no overlay support.
  */
-#include "xlt_supp.h"
+#include <arcan_shmif.h>
+#include "libsenseye.h"
 #include "font_8x8.h"
 #include <inttypes.h>
 
@@ -360,9 +361,9 @@ static bool draw_pef_state(struct arcan_shmif_cont* out, struct pefh* pefh)
 	size_t y = 0;
 
 #define DO_ROW(label, data, ...) { snprintf(work, chw, label); \
-	draw_text(out, work, 1, y, RGBA(0xff, 0xff, 0xff, 0xff));\
+	draw_text(out, work, 1, y, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));\
 	snprintf(work, chw, data, __VA_ARGS__);\
-	draw_text(out, work, strlen(label)*fontw, y, RGBA(0x44, 0xff, 0x44, 0xff));\
+	draw_text(out, work, strlen(label)*fontw, y, SHMIF_RGBA(0x44, 0xff, 0x44, 0xff));\
 	y += fonth + 2;\
 	}
 
@@ -376,12 +377,12 @@ static bool draw_pef_state(struct arcan_shmif_cont* out, struct pefh* pefh)
 	size_t xofs = 2;
 	char work[chw];
 
-	shmif_pixel cc = RGBA(0x00, 0x00, 0x00, 0xff);
+	shmif_pixel cc = SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 	for (size_t i = 0; i < out->w * out->h; i++)
 		out->vidp[i] = cc;
 
-	shmif_pixel good = RGBA(0x00, 0xff, 0x00, 0xff);
-	shmif_pixel bad = RGBA(0xff, 0x00, 0x00, 0xff);
+	shmif_pixel good = SHMIF_RGBA(0x00, 0xff, 0x00, 0xff);
+	shmif_pixel bad = SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
 
 	DO_PEH("complete", !(pef->state & STATE_TRUNC));
 	DO_PEH("suspicious", !(pef->state & STATE_WEIRD));

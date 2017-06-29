@@ -29,7 +29,7 @@
 #include <sys/wait.h>
 #include <sys/resource.h>
 
-#include "sense_supp.h"
+#include "libsenseye.h"
 #include "font_8x8.h"
 #include "rwstat.h"
 #include "memif.h"
@@ -106,7 +106,7 @@ static void launch_addr(PROCESS_ID pid, struct map_descr* ent, size_t base)
 	if (-1 == pthread_create(&pth, NULL, data_loop, pch)){
 		fprintf(stderr, "launch_addr(%" PRIxPTR ")+%zx "
 			"couldn't spawn processing thread\n", base, size);
-		ch->close(ch);
+		ch->close(ch, NULL);
 		free(pch);
 		memif_closemapping(mctx);
 		return;
@@ -306,7 +306,7 @@ void* data_loop(void* th_data)
 		}
 	}
 
-	pch->channel->close(pch->channel);
+	pch->channel->close(pch->channel, NULL);
 	free(th_data);
 	return NULL;
 }

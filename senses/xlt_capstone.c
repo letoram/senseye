@@ -8,7 +8,8 @@
  * options. The overlay attempts to show coverage of the current disassembly
  * range, colored by instruction group.
  */
-#include "xlt_supp.h"
+#include <arcan_shmif.h>
+#include "libsenseye.h"
 #include <inttypes.h>
 #include <getopt.h>
 #include <math.h>
@@ -53,18 +54,18 @@ bool lookup_mnemonic(const char* arch, const char* mnen, const char** outdescr)
 }
 #endif
 
-static const shmif_pixel col_err = RGBA(0xff, 0x00, 0x00, 0xff);
-static const shmif_pixel col_bg  = RGBA(0x00, 0x00, 0x00, 0xff);
+static const shmif_pixel col_err = SHMIF_RGBA(0xff, 0x00, 0x00, 0xff);
+static const shmif_pixel col_bg  = SHMIF_RGBA(0x00, 0x00, 0x00, 0xff);
 static char* fmtstr = "%p:%c%t%r%n";
 static long ts = 80;
 
 static const shmif_pixel insn_lut[] = {
-	RGBA(0xff, 0x00, 0x00, 0xff), /* GRP_INVALID */
-	RGBA(0xff, 0xff, 0x00, 0xff), /* GRP_JUMP */
-	RGBA(0xaa, 0xaa, 0x00, 0xff), /* GRP_CALL */
-	RGBA(0x00, 0xff, 0xff, 0xff), /* GRP_RET */
-	RGBA(0xff, 0x00, 0xff, 0xff), /* GRP_INT */
-	RGBA(0x00, 0xaa, 0xaa, 0xff), /* GRP_IRET */
+	SHMIF_RGBA(0xff, 0x00, 0x00, 0xff), /* GRP_INVALID */
+	SHMIF_RGBA(0xff, 0xff, 0x00, 0xff), /* GRP_JUMP */
+	SHMIF_RGBA(0xaa, 0xaa, 0x00, 0xff), /* GRP_CALL */
+	SHMIF_RGBA(0x00, 0xff, 0xff, 0xff), /* GRP_RET */
+	SHMIF_RGBA(0xff, 0x00, 0xff, 0xff), /* GRP_INT */
+	SHMIF_RGBA(0x00, 0xaa, 0xaa, 0xff), /* GRP_IRET */
 };
 
 /*
@@ -118,11 +119,11 @@ static inline shmif_pixel opcode_color(cs_insn* m)
 {
 	switch (cmode){
 	case COLOR_NONE:
-	return RGBA(0xff, 0xff, 0xff, 0xff);
+	return SHMIF_RGBA(0xff, 0xff, 0xff, 0xff);
 	case COLOR_GROUP:{
 		int gind = 0;
 		if (!m->detail)
-			return RGBA(0xff, 0xaa, 0xff, 0xff);
+			return SHMIF_RGBA(0xff, 0xaa, 0xff, 0xff);
 
 		for (size_t i = 0; i < m->detail->groups_count; i++)
 			gind += m->detail->groups[i];
@@ -131,7 +132,7 @@ static inline shmif_pixel opcode_color(cs_insn* m)
 	}
 	case COLOR_SIMPLE:
 	default:
-	return RGBA(0xff, 0xaa, 0xff, 0xff);
+	return SHMIF_RGBA(0xff, 0xaa, 0xff, 0xff);
 	}
 }
 
@@ -139,11 +140,11 @@ static inline shmif_pixel raw_color()
 {
 	switch (cmode){
 	case COLOR_NONE:
-	return RGBA(0xff, 0xff, 0xff, 0xff);
+	return SHMIF_RGBA(0xff, 0xff, 0xff, 0xff);
 	case COLOR_GROUP:
 	case COLOR_SIMPLE:
 	default:
-	return RGBA(0xff, 0xff, 0xaa, 0xff);
+	return SHMIF_RGBA(0xff, 0xff, 0xaa, 0xff);
 	}
 }
 
@@ -151,11 +152,11 @@ static inline shmif_pixel oper_color(cs_insn* m)
 {
 	switch (cmode){
 	case COLOR_NONE:
-	return RGBA(0xff, 0xff, 0xff, 0xff);
+	return SHMIF_RGBA(0xff, 0xff, 0xff, 0xff);
 	case COLOR_GROUP:
 	case COLOR_SIMPLE:
 	default:
-	return RGBA(0xaa, 0xff, 0xff, 0xff);
+	return SHMIF_RGBA(0xaa, 0xff, 0xff, 0xff);
 	}
 }
 
@@ -163,12 +164,12 @@ static inline shmif_pixel position_color()
 {
 	switch (cmode){
 	case COLOR_NONE:
-	return RGBA(0xff, 0xff, 0xff, 0xff);
+	return SHMIF_RGBA(0xff, 0xff, 0xff, 0xff);
 
 	case COLOR_GROUP:
 	case COLOR_SIMPLE:
 	default:
-	return RGBA(0xaa, 0xff, 0xaa, 0xff);
+	return SHMIF_RGBA(0xaa, 0xff, 0xaa, 0xff);
 	}
 }
 
@@ -265,7 +266,7 @@ static inline void draw_mnemonic(
 
 	char* pos = fmtstr;
 	bool inctx = false;
-	shmif_pixel col = RGBA(0xff, 0xff, 0xff, 0xff);
+	shmif_pixel col = SHMIF_RGBA(0xff, 0xff, 0xff, 0xff);
 
 #define FLUSH() flush(cont, buf, &ofs, xpos, *yofs, col)
 
@@ -359,8 +360,9 @@ static void draw_header(struct arcan_shmif_cont* out,
 	char chbuf[buf_sz];
 	snprintf(chbuf, buf_sz, "%s @ %"PRIx64" +%d",
 		interp_lut[actx->mode], pos, actx->disass_ofs);
-	draw_box(out, 0, 0, out->addr->w, fonth+2, RGBA(0x44, 0x44, 0x44, 0xff));
-	draw_text(out, chbuf, 2, 2, RGBA(0xff, 0xff, 0xff, 0xff));
+	draw_box(out, 0, 0,
+		out->addr->w, fonth+2, SHMIF_RGBA(0x44, 0x44, 0x44, 0xff));
+	draw_text(out, chbuf, 2, 2, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 }
 
 static void group_disass(struct arcan_shmif_cont* c, cs_insn* in, size_t cnt)
@@ -387,9 +389,9 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 
 		if (err){
 			arcan_shmif_resize(out, 256, 16);
-			draw_box(out, 0, 0, 256, fonth + 6, RGBA(0x00, 0x00, 0x00, 0xff));
+			draw_box(out, 0, 0, 256, fonth + 6, SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 			draw_text(out, "Failed to initialize capstone (%d:%d)",
-				2, 2, RGBA(0xff, 0x00, 0x00, 0xff));
+				2, 2, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 			inh->active = false;
 			return true;
 		}

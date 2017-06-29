@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015, Björn Ståhl
+ * Copyright 2014-2017, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in the senseye source repository.
  * Reference: http://senseye.arcan-fe.com
  * Description: This translator is just used to test crash management
@@ -7,7 +7,7 @@
  * The overlay will show the counter state.
  */
 
-#include "xlt_supp.h"
+#include "libsenseye.h"
 #include "font_8x8.h"
 static int ccount;
 
