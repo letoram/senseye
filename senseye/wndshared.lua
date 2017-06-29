@@ -1,30 +1,17 @@
 -- Copyright 2014-2015, Björn Ståhl
 -- License: 3-Clause BSD
 -- Reference: http://senseye.arcan-fe.com
--- Description: Basic UI / Popup Menu / management.
--- Provides default input dispatch routines shared by
--- most windows.
+-- Description:
+-- The functions in here deal with window management, window creation
+-- and adding type- specific features when it comes to mouse actions on
+-- the window surface.
 --
--- Exported Functions:
---  focus_window(wnd)   hook to map to window manager
---  defocus_window(wnd) hook to map to window manager
---  check_listeners(wnd)hook to map to window manager for cleanup
---  setup_dispatch(tbl) add basic input dispatch to table
---  window_shared(wnd)  add basic popups etc. to window
---  merge_menu(m1, m2)  combine two popup menus into one
---  table.remove_match  find one occurence of (tbl, match) and remove
---  repos_window(wnd)   handle for automated positioning
---  copy_surface(vid)   readback and create a new raw surface
---  translate_2d(wnd, vid, x, y) get coordinates accounting for zoom
---
-
--- some more complex window setups are kept separately
-system_load("histogram.lua")();
-system_load("modelwnd.lua")();
-system_load("distgram.lua")();
-system_load("patfind.lua")();
-system_load("alphamap.lua")();
-system_load("pictune.lua")();
+-- system_load("histogram.lua")();
+-- system_load("modelwnd.lua")();
+-- system_load("distgram.lua")();
+-- system_load("patfind.lua")();
+-- system_load("alphamap.lua")();
+-- system_load("pictune.lua")();
 
 local function wnd_reset(wnd)
 	wnd.zoom_range = 1.0;
@@ -35,61 +22,37 @@ local function wnd_reset(wnd)
 	wnd:update_zoom();
 end
 
-local function gen_dumpname(sens, suffix)
-	local testname;
-	local attempt = 0;
-
-	repeat
-		testname = string.format("dumps/%s_%d%s.%s", sens,
-			benchmark_timestamp(1), attempt > 0 and tostring(CLOCK) or "", suffix);
-		attempt = attempt + 1;
-	until (resource(testname) == nil);
-
-	return testname;
-end
-
-local function gen_dumpid(wnd)
-	local s1 = wnd.zoom_ofs[1];
-	local t1 = wnd.zoom_ofs[2];
-	local s2 = wnd.zoom_ofs[3];
-	local t2 = wnd.zoom_ofs[4];
-
-	local did = valid_vid(wnd.ctrl_id) and wnd.ctrl_id or wnd.canvas;
-
--- zoomed case, create an intermediate recipient that has the dimensions
--- of the zoomed range but uses the source buffer and copies into a
--- temporary calctarget
-	local res = image_storage_properties(did);
-	local x1 = s1 * res.width;
-	local y1 = t1 * res.height;
-	local x2 = s2 * res.width;
-	local y2 = t2 * res.height;
-	local interim = alloc_surface(x2-x1, y2-y1);
-	local csurf = null_surface(x2-x1, y2-t1);
-	image_sharestorage(did, csurf);
-	show_image({interim, csurf});
-	local txcos = {s1, t1, s2, t1, s2, t2, s1, t2};
-	image_set_txcos(csurf, txcos);
-	force_image_blend(csurf, BLEND_NONE);
-
-	if (wnd.shtbl) then
-		switch_shader(wnd, csurf);
-	end
-
-	define_calctarget(interim, {csurf}, RENDERTARGET_DETACH,
-		RENDERTARGET_NOSCALE, 0, function() end);
-	rendertarget_forceupdate(interim);
-
-	return interim;
-end
-
-local function dump_png(wnd)
-	local name = gen_dumpname(wnd.basename, "png");
-	local img = gen_dumpid(wnd);
-	save_screenshot(name, FORMAT_PNG, img);
-	delete_image(img);
-	wnd:set_message(render_text(
-		{menu_text_fontstr, name .. " saved"}), DEFAULT_TIMEOUT);
+-- setup bars, scrollhandlers, input handlers etc. based on type
+-- control : windows spawned from here are treated as data
+-- data (overlays, top and bottom, possible scroll-areas,
+-- view (data views)
+-- generic (used for mapping in normal clients like terminal)
+function wndshared_setup(wnd, wndtype)
+	local fontfn = function() return "\\f,0"; end
+-- default buttons
+	local tb = wnd:set_bar("t", 18);
+	tb:add_button("right", "DEFAULT", "DEFAULT", "X", 0, fontfn, 16, 16,
+		{
+			click = function()
+				wnd:destroy();
+			end
+		}
+	);
+	tb:add_button("center", "DEFAULT", "DEFAULT", "", 0, fontfn, 16, 16,
+		{
+			drag = function(ctx, vid, dx, dy)
+				nudge_image(wnd.anchor, dx, dy);
+			end
+		}
+	);
+	local bb = wnd:set_bar("b", 18);
+	bb:add_button("right", "DEFAULT", "DEFAULT", "Z", 0, fontfn, 15, 15,
+		{
+			drag = function() print("drag zoom"); end,
+			rclick = function() print("popup"); end
+		}
+	);
+	bb:add_button("center", "DEFAULT", "DEFAULT", "defuq", 0, fontfn, 16, 16);
 end
 
 local function zoom_position(wnd, x, y, click)
@@ -143,64 +106,6 @@ function repos_window(wnd)
 	end
 end
 
---
--- needs framestatus events forwarded from subwindow event handler
---
-local function spawn_messages(wnd)
-end
-
---
--- Combine and validate the menus supplied in m1 with m2.
--- m2 can override and cancel out menus in m1.
---
-function merge_menu(m1, m2)
-	local res = {};
-
--- shallow mapping
-	for k,v in ipairs(m1) do
-		table.insert(res, v);
-	end
-
--- projection
-	for k, v in ipairs(m2) do
-		local found = false;
-		for j,m in ipairs(res) do
-			if (m.label == v.label) then
-				res[j] = v;
-				found = true;
-				break;
-			end
-		end
-
-		if (not found) then
-			table.insert(res, v);
-		end
-	end
-
--- filter out "broken"
-	local i = 1;
-	while i <= #res do
-		if (res[i].submenu == nil and
-			res[i].value == nil and res[i].handler == nil) then
-			table.remove(res, i);
-		else
-			i = i + 1;
-		end
-	end
-
-	return res;
-end
-
-local function ppot(val)
-	val = math.pow(2, math.floor( math.log(val) / math.log(2) ));
-	return val < 32 and 32 or val;
-end
-
-local function npot(val)
-	val = math.pow(2, math.ceil( math.log(val) / math.log(2) ));
-	return val < 32 and 32 or val;
-end
-
 local function drop_rmeta(wnd)
 	if (wnd.wm.meta_detail) then
 		wnd:set_message();
@@ -215,38 +120,10 @@ end
 -- Main keybindings and functions for features like zoom and window management
 --
 function setup_dispatch(dt)
-	local point_sz = gconfig_get("point_size");
-
-	shader_pcloud_pointsz(point_sz);
-
-	dt[BINDINGS["SCREENSHOT"]] = function(wn)
-		if (wm.meta and wm.selected) then
-			local name = gen_dumpname("screenshot", "png");
-			local img = gen_dumpid(wm.selected);
-			save_screenshot(name, FORMAT_PNG, img);
-			statusbar:set_message("Window saved as " .. name, DEFAULT_TIMEOUT);
-			delete_image(img);
-		else
-			local name = gen_dumpname("screenshot", "png");
-			save_screenshot(name, FORMAT_PNG_FLIP);
-			statusbar:set_message("Screen saved as " .. name, DEFAULT_TIMEOUT);
-		end
-	end
-
-	if (demo_mode) then
-			dt["F9"] = function(wm)
-				local ns = null_surface(VRESW, VRESH);
-				image_sharestorage(WORLDID, ns);
-				image_set_txcos_default(ns, 1);
-				show_image(ns);
-				local buf = alloc_surface(VRESW, VRESH);
-				define_recordtarget(buf, "demo.mkv", "vpreset=8:fps=60:noaudio",
-					{ns}, {}, RENDERTARGET_DETACH, RENDERTARGET_NOSCALE, -1);
-			end
-	end
-
-	dt[BINDINGS["HELP"]] = function(wm)
-		show_help();
+	dt[BINDINGS["POPUP"]] =
+	function(wm)
+		spawn_popupmenu(wm, (wm.selected and wm.selected.popup) and
+			wm.selected.popup or MENUS["system"]);
 	end
 
 	dt[BINDINGS["CANCEL"]] = function(wm)
@@ -258,59 +135,6 @@ function setup_dispatch(dt)
 
 		elseif (wm.selected) then
 			wm.selected:deselect();
-		end
-	end
-
-	dt[BINDINGS["TRANSLATORS"]] = function(wm)
-		if (wm.fullscreen or wm.selected == nil) then
-			return;
-		end
-
-		if (wm.meta and #translator_popup > 0) then
-			spawn_popupmenu(wm, translator_popup);
-		end
-	end
-
-	dt[BINDINGS["RESIZE_X2"]] = function(wm)
-		if (wm.fullscreen) then
-			return;
-		end
-
-		local wnd = wm.selected;
-		if (wnd == nil) then
-			return;
-		end
-
-		if (wm.meta) then
-			local basew = ppot(wnd.width - 1);
-			local baseh = ppot(wnd.height - 1);
-			if (basew / baseh == wnd.width / wnd.height) then
-				wnd:resize(basew, baseh);
-			end
-		else
-			local basew = npot(wnd.width + 1);
-			local baseh = npot(wnd.height + 1);
-			wnd:resize(basew, baseh);
-		end
-
-		local x, y = mouse_xy();
-		wnd:reposition();
-		wnd:motion(wm.selected.canvas, x, y);
-	end
-
-	dt[BINDINGS["FULLSCREEN"]] = function(wm)
-		wm:toggle_fullscreen();
-	end
-
-	dt["BACKSPACE"] = function(wm)
-		if (wm.fullscreen) then
-			return;
-		end
-
-		if (wm.meta) then
-			if (wm.selected) then
-				wm.selected:destroy();
-			end
 		end
 	end
 end
@@ -396,36 +220,6 @@ local function update_zoom(wnd, nalign)
 	end
 end
 
-function table.remove_match(tbl, match)
-	if (tbl == nil) then
-		return;
-	end
-
-	for k,v in ipairs(tbl) do
-		if (v == match) then
-			table.remove(tbl, k);
-			return v;
-		end
-	end
-
-	return nil;
-end
-
-function table.remove_vmatch(tbl, match)
-	if (tbl == nil) then
-		return;
-	end
-
-	for k,v in pairs(tbl) do
-		if (v == match) then
-			tbl[k] = nil;
-			return v;
-		end
-	end
-
-	return nil;
-end
-
 local function drop_zoom_handler(wnd, zoomh)
 	if (wnd.zoomh) then
 		table.remove_match(wnd.zoomh, zoomh);
@@ -495,10 +289,6 @@ local function update_zoom_preview(wnd, x, y)
 end
 
 local function motion_2d(wnd, vid, x, y)
-	if (wnd.wm.meta) then
-		mouse_switch_cursor(resize_zone(wnd) and "scale" or "move");
-	end
-
 	if (wnd.wm.meta_detail and wnd.wm.selected == wnd and not wnd.dz) then
 		local lx, ly = translate_2d(wnd, BADID, x, y);
 		zoom_position(wnd, lx, ly);
@@ -593,17 +383,8 @@ local function wnd_drag(wnd, vid, x, y)
 		update_zoom_preview(wnd, mx, my);
 	end
 
-	if (wnd.wm.meta and not wnd.dz) then
-		if (wnd.dragmode) then
-			return wnd:dragmode(vid, x, y);
-		else
-			if (resize_zone(wnd)) then
-				wnd.dragmode = wnd_resize;
-				mouse_switch_cursor("scale");
-				return wnd:dragmode(vid, x, y);
-			end
-			return wnd.prev_drag(wnd, vid, x, y);
-		end
+	if (wnd.dragmode) then
+		return wnd:dragmode(vid, x, y);
 	end
 
 -- pan and clamp
@@ -803,216 +584,4 @@ function window_shared(wnd)
 	end
 end
 
-local function wnd_vistog(wnd)
-	if (wnd.all_hidden) then
-		for i,v in ipairs(wnd.children) do
-			v:show();
-		end
-		wnd.all_hidden = false;
-	else
-		for i,v in ipairs(wnd.children) do
-			v:hide();
-		end
-		wnd.all_hidden = true;
-	end
-end
 
-local views_sub = {
-	{
-		label = "Point Cloud",
-		name = "view_pointcloud",
-		handler = spawn_pointcloud
-	},
-	{
-		label = "Alpha Map",
-		name = "view_alpa",
-		handler = spawn_alphamap
-	},
-	{
-		label = "Histogram",
-		name = "view_histogram",
-		handler = spawn_histogram
-	},
-	{
-		label = "Distance Tracker",
-		name = "view_distgram",
-		handler = spawn_distgram
-	},
-	{
-		label = "Picture Tuner",
-		name = "pictune",
-		handler = spawn_pictune
-	},
-	{
-		label = "Pattern Finder",
-		name = "view_patfind",
-		handler = function(wnd)
-			spawn_patfind(wnd, copy_surface(wnd.canvas));
-		end
-	}
-};
-
-local wnd_subwin = {
-	{
-		label = "Gather",
-		name = "subwin_gather",
-		handler = wnd_gather
-	},
-	{
-		label = "Hide/Show All",
-		name = "subwin_vistog",
-		handler = wnd_vistog
-	}
-};
-
-controlwnd_menu = {
-	{
-		label = "Subwindows...",
-		name  = "ctrl_subwin",
-		submenu = wnd_subwin
-	},
-	{
-		label = "Reset",
-		name = "zoom_reset",
-		handler = wnd_reset
-	},
-};
-
-local wnd_xl = {
-	{
-		label = "Toggle On/Off",
-		handler = subwnd_toggle
-	},
-};
-
-local function dump_full(wnd)
-	local name = gen_dumpname(wnd.basename, "raw");
-	local img = gen_dumpid(wnd);
-	save_screenshot(name, FORMAT_RAW32, wnd.ctrl_id);
-	delete_image(img);
-	wnd:set_message(render_text({menu_text_fontstr,
-		name .. " saved"}), DEFAULT_TIMEOUT);
-end
-
-local function dump_noalpha(wnd)
-	local name = gen_dumpname(wnd.basename, "raw");
-	local fmt = FORMAT_RAW32;
-
-	if wnd.size_cur == 1 then
-		fmt = FORMAT_RAW8;
-	elseif wnd.size_cur == 3 then
-		fmt = FORMAT_RAW24;
-	end
-
-	local img = gen_dumpid(wnd);
-	save_screenshot(name, fmt, img);
-	delete_image(img);
-	wnd:set_message(render_text({
-		menu_text_fontstr, name .. " saved"}), DEFAULT_TIMEOUT);
-end
-
-function copy_surface(vid)
-	local newimg = BADID;
-
-	image_access_storage(vid, function(tbl, w, h)
-		local out = {};
-		for y=1,h do
-			for x=1,w do
-				local r,g, b = tbl:get(x-1, y-1, 3);
-				table.insert(out, r);
-				table.insert(out, g);
-				table.insert(out, b);
-			end
-		end
-		newimg = raw_surface(w, h, 3, out);
-	end);
-
-	return newimg;
-end
-
---
--- This only affects the visuals of the overlay, not its status
---
-local function overlay_opa(wnd)
-	local mnu = {};
-	for i=0, 10, 2 do
-		table.insert(mnu, {label = tostring(i*10) .. "%", value=i*10});
-	end
-	mnu.handler = function(wnd, value)
-		wnd.overlay_opa = value / 100;
-		blend_image(wnd.overlay, value / 100);
-	end
-	return mnu;
-end
-
-local function overlay_popup(wnd)
-	local olist = {
-		{
-			label = "Opacity...",
-			submenu = overlay_opa
-		}
-	};
-
-	for i=1,#wnd.children do
-		if (wnd.children[i].overlay_support) then
-			table.insert(olist, {
-				label = wnd.children[i].translator_name,
-				handler = function()
-					wnd.children[i]:activate_overlay();
-				end
-			});
-		end
-	end
-
-	if (#olist > 0) then
-		return olist;
-	else
-		return {{
-			label = "No Overlays Available",
-			handler = function() end
-		}};
-	end
-end
-
-local wnd_dump = {
-	{
-		label = "PNG",
-		handler = dump_png
-	},
-	{
-		label = "Full",
-		handler = dump_full
-	},
-	{
-		label = "No Alpha",
-		handler = dump_noalpha
-	}
-};
-
-subwnd_menu = {
-	{
-		label = "Reset",
-		name = "zoom_reset",
-		handler = reset_wnd
-	},
-	{
-		label = "Views...",
-		submenu = views_sub,
-	},
-	{
-		label = "Translation...",
-		submenu = function()
-			return data_meta_popup[1].submenu();
-		end
-	},
-	{
-		label = "Overlay...",
-		submenu = function(wnd)
-			return overlay_popup(wnd);
-		end
-	},
-	{
-		label = "Dump...",
-		submenu = wnd_dump
-	},
-};

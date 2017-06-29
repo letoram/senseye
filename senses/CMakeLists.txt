@@ -64,8 +64,7 @@ endif()
 include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
 link_libraries(pthread ${ARCAN_SHMIF_LIBRARY} m)
 
-add_library(xlt_supp STATIC xlt_supp.c xlt_supp.h)
-add_library(sense_supp STATIC sense_supp.c rwstat.c rwstat.h sense_supp.h)
+add_library(senseye STATIC xlt_supp.c sense_supp.c rwstat.c)
 
 set(TRANSLATORS
 	xlt_hex
@@ -85,19 +84,19 @@ set(SENSES
 
 foreach(xlt ${TRANSLATORS})
 	add_executable(${xlt} "${xlt}.c")
-	target_link_libraries(${xlt} xlt_supp)
+	target_link_libraries(${xlt} senseye)
 	install(TARGETS ${xlt} DESTINATION bin)
 endforeach()
 
 if (SENSE_MEM)
 	add_executable(sense_mem ${SENSE_MEM})
-	target_link_libraries(sense_mem sense_supp)
+	target_link_libraries(sense_mem senseye)
 	install(TARGETS ${sense} DESTINATION bin)
 endif()
 
 foreach(sense ${SENSES})
 	add_executable(${sense} "${sense}.c")
-	target_link_libraries(${sense} sense_supp)
+	target_link_libraries(${sense} senseye)
 	install(TARGETS ${sense} DESTINATION bin)
 endforeach()
 

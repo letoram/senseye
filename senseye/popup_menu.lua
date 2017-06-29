@@ -9,6 +9,39 @@
 local menu_border_color = {140, 140, 140};
 local menu_bg_color = {80, 80, 80};
 
+local function popup_destroy(wm, popup, cascade)
+-- need to track this so we can re-focus the right window on
+-- a deleted cascade
+	local lp = popup.previous;
+	mouse_droplistener(popup.capt_mh);
+	local p = popup.parent;
+
+-- recursively drop mouse handlers
+	while (p and cascade) do
+		if (p.capt_mh) then
+			mouse_droplistener(p.capt_mh);
+			p.capt_mh = nil;
+		end
+
+		if (p.previous) then
+			lp = p.previous;
+		end
+
+		p = p.parent;
+	end
+
+	if (not p) then
+		wm:lock_input();
+	end
+
+	popup:destroy(cascade);
+	if (lp and lp.activate) then
+		lp:activate();
+		lp:select();
+	end
+	return p;
+end
+
 local function menu_input(wm, popup, iv, cascade)
 	if (type(iv) == "table") then
 	else
@@ -19,43 +52,51 @@ local function menu_input(wm, popup, iv, cascade)
 		elseif (iv == "RIGHT") then
 			popup.click(true);
 		elseif (iv == "ESCAPE" or iv == "LEFT") then
-			mouse_droplistener(popup.capt_mh);
-			local p = popup.parent;
-			if (p ~= nil) then
-				local x, y = mouse_xy();
-				p:motion(0, x, y);
-			end
-
--- need to track this so we can re-focus the right window on
--- a deleted cascade
-			local lp = popup.previous;
-
--- recursively drop mouse handlers
-			while (p and cascade) do
-				if (p.capt_mh) then
-					mouse_droplistener(p.capt_mh);
-					p.capt_mh = nil;
-				end
-
-				if (p.previous) then
-					lp = p.previous;
-				end
-
-				p = p.parent;
-			end
-
-			if (not p) then
-				wm:lock_input();
-			end
-
-			if (popup.destroy == nil) then
-				print(debug.traceback());
-			end
-			popup:destroy(cascade);
-			lp:activate();
-			lp:select();
+			popup_destroy(wm, popup, iv == "ESCAPE");
 		end
 	end
+end
+
+--
+-- Combine and validate the menus supplied in m1 with m2.
+-- m2 can override and cancel out menus in m1.
+--
+function merge_menu(m1, m2)
+	local res = {};
+
+-- shallow mapping
+	for k,v in ipairs(m1) do
+		table.insert(res, v);
+	end
+
+-- projection
+	for k, v in ipairs(m2) do
+		local found = false;
+		for j,m in ipairs(res) do
+			if (m.label == v.label) then
+				res[j] = v;
+				found = true;
+				break;
+			end
+		end
+
+		if (not found) then
+			table.insert(res, v);
+		end
+	end
+
+-- filter out "broken"
+	local i = 1;
+	while i <= #res do
+		if (res[i].submenu == nil and
+			res[i].value == nil and res[i].handler == nil) then
+			table.remove(res, i);
+		else
+			i = i + 1;
+		end
+	end
+
+	return res;
 end
 
 function popup_inactivate(wnd)
@@ -137,7 +178,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 	popup:resize(props.width + 10, props.height);
 	popup:set_border(1, menu_border_color);
-	if (not cursorpos) then
+	if (not cursorpos or not prev) then
 		local x, y = mouse_xy();
 		popup:move(x - 5, y - 5, true); -- true makes sure we don't flow outside win
 	else
@@ -148,7 +189,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	end
 
 -- we set this to cascade destroy when an item is selected
-	if (prev.flag_popup) then
+	if (prev and prev.flag_popup) then
 		popup.parent = prev;
 	end
 
@@ -156,7 +197,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	popup.click = function(cpop, rv)
 		if (menutbl[index].handler) then
 			menutbl[index].handler(target, rv);
-			menu_input(wm, popup, "ESCAPE", true);
+			popup_destroy(wm, popup, true);
 
 		elseif (menutbl[index].submenu) then
 			local mnu = menutbl[index].submenu;
@@ -171,7 +212,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 		elseif (menutbl[index].value) then
 			menutbl.handler(target, menutbl[index].value, rv);
-			menu_input(wm, popup, "ESCAPE", true);
+			popup_destroy(wm, popup, true);
 		end
 	end
 
@@ -206,7 +247,8 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	end
 
 -- locking input will prevent other actions from having effect
-	wm:lock_input(function(inp) menu_input(wm, wm.selected, inp); end );
+	wm:lock_input(function(inp)
+		menu_input(wm, wm.selected, inp); end );
 
 -- and a "capture all" surface for preventing other objects
 -- from receiving mouse events
@@ -225,7 +267,7 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 		capture = capt,
 		press = function(vid)
 			mouse_state().click_cnt = 0;
-			menu_input(wm, popup, "ESCAPE");
+			popup_destroy(wm, popup, true);
 		end,
 		own = function(wnd, vid)
 			return vid == wnd.capture;

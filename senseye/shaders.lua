@@ -420,6 +420,9 @@ function shader_pcloud_pointsz(val)
 	end
 end
 
+local point_sz = gconfig_get("point_size");
+shader_pcloud_pointsz(point_sz);
+
 function shader_update_range(wnd, low, high)
 	low = low < 0.0 and 0.0 or low;
 	high = high > 1.0 and 1.0 or high;
@@ -429,6 +432,9 @@ function shader_update_range(wnd, low, high)
 			shader_uniform(j.shid, "highlight_range", "ff", NOPERSIST, low, high);
 		end
 	end
+end
+
+function shader_setup(vid, group, name, state)
 end
 
 function switch_shader(wnd, target, shtbl, rec)

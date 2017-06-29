@@ -85,6 +85,7 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 
 	image_tracetag(interim, string.format("translator:%d - interim", value));
 
+-- provide a direct copy link
 	local neww = nil;
 	local tgt = define_feedtarget(value, wnd.ctrl_id, function(s, st)
 	end);
@@ -94,6 +95,7 @@ function activate_translator(wnd, vtbl, ign, srcwnd)
 		delete_image(interim);
 		return;
 	end
+	image_tracetag(tgt, string.format("translator:%d feedtarget", tgt));
 
 -- then the output that's connected to the new window
 	local vid = target_alloc(value, function(source, status)

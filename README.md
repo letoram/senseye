@@ -15,6 +15,9 @@ future.
 Compiling
 ======
 
+NOTE: CURRENTLY UNDERGOING SERIOUS REFACTORING, THE MASTER BRANCH IS NOT IN
+A WORKING STATE. PLEASE STICK TO THE 0.3 TAG.
+
 Senseye uses [Arcan](https://github.com/letoram/arcan) as display server
 and graphics engine to provide the user interface, representations and
 other data transformations.

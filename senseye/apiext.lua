@@ -1,3 +1,33 @@
+function table.remove_match(tbl, match)
+	if (tbl == nil) then
+		return;
+	end
+
+	for k,v in ipairs(tbl) do
+		if (v == match) then
+			table.remove(tbl, k);
+			return v;
+		end
+	end
+
+	return nil;
+end
+
+function table.remove_vmatch(tbl, match)
+	if (tbl == nil) then
+		return;
+	end
+
+	for k,v in pairs(tbl) do
+		if (v == match) then
+			tbl[k] = nil;
+			return v;
+		end
+	end
+
+	return nil;
+end
+
 function string.split(instr, delim)
 	local res = {};
 	local strt = 1;

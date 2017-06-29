@@ -13,70 +13,13 @@
 -- The use for this is both traditional window management but also for nested
 -- window managing purposes, like recording, remote desktop etc.
 --
-
---
 -- compiled shaders, indexed by both type and by width
 -- (so uniform state is combined with shader identifier)
 --
-local border_shaders = {
-};
 
 local default_width = 1;
 
---
--- support different border shaders to allow i.e.
--- blurred or textured etc.
---
-local shader_types = {};
-if (SHADER_LANGUAGE == "GLSL120" or SHADER_LANGUAGE == "GLSL100") then
-	shader_types["default"] = [[
-	uniform sampler2D map_diffuse;
-	uniform float border;
-	uniform float obj_opacity;
-	uniform vec2 obj_output_sz;
-
-	varying vec2 texco;
-
-	void main()
-	{
-		vec3 col = texture2D(map_diffuse, texco).rgb;
-		float margin_s = (border / obj_output_sz.x);
-		float margin_t = (border / obj_output_sz.y);
-
-		if ( texco.s <= 1.0 - margin_s && texco.s >= margin_s &&
-			texco.t <= 1.0 - margin_t && texco.t >= margin_t )
-			discard;
-
-		gl_FragColor = vec4(col.r, col.g, col.b, 1.0);
-	}
-	]];
-else
--- note, no support for GLES or PIXMAN specific shaders yet
-end
-
-local function get_border_shader(width, subtype)
-	if (subtype == nil) then
-		subtype = "default";
-	end
-
-	if (shader_types[subtype] == nil) then
-		warning("composition_surface.lua::get_border_shader()" ..
-			"invalid_subtype: " .. subtype);
-		return border_shaders[default][default_width];
-	end
-
-	if (border_shaders[subtype][width] ~= nil) then
-		return border_shaders[subtype][width];
-	end
-
-	border_shaders[subtype][width] = build_shader(nil,
-		shader_types[subtype], "border_shader_" .. tostring(width));
-
-	shader_uniform(border_shaders[subtype][width],
-		"border", "f", PERSIST, width);
-
-	return border_shaders[subtype][width];
-end
+system_load("uiprim.lua")();
 
 local function compsurf_find(ctx, name)
 	if (type(name) == "string") then
@@ -129,22 +72,25 @@ end
 -- primarily for popup purposes
 local function compsurf_wnd_activate(wnd)
 end
+
 local function compsurf_wnd_deactivate(wnd)
 end
 
 local function compsurf_wnd_select(wnd)
 	if (wnd.wm.selected == wnd) then
-		return
+		return;
 	end
-
 	local wm = wnd.wm;
 
+-- update visual state, trigger external event listeners
 	if (wm.selected) then
+		wm.selected:deactivate();
 		broadcast(wm.handlers.deselect, wm.selected, wnd);
 		order_image(wm.selected.anchor, wm.selected.deselorder);
 	end
 
 	wm.selected = wnd;
+	wnd:activate();
 	broadcast(wm.handlers.select, wnd);
 
 -- we use the flat windows list to determine drawing order
@@ -166,6 +112,7 @@ local function compsurf_wnd_select(wnd)
 		table.insert(wnd.wm.windows, v);
 	end
 
+-- 10 order slots per window should be enough for everyone
 	for i, v in ipairs(wnd.wm.windows) do
 		order_image(v.anchor, 1 + i * 10);
 	end
@@ -256,49 +203,12 @@ end
 local function compsurf_wnd_dblclick(wnd)
 end
 
---
 -- set prerendered msg vid in message slot
---
-local function compsurf_wnd_message(ctx, msg, expiration, anchor)
-	anchor = anchor == nil and ANCHOR_LL or anchor;
-
-	if (valid_vid(ctx.message)) then
-		delete_image(ctx.message);
-		ctx.message = nil;
-	end
-
-	if (msg == nil) then
+local function compsurf_wnd_message(ctx, msg, expiration)
+	if (not ctx.bottom_bar) then
 		return;
 	end
-
-	if (type(msg) == "string") then
-		msg = render_text(menu_text_fontstr .. string.gsub(msg, "\\", "\\\\"));
-	end
-
-	local props = image_surface_properties(msg);
-	local bg = color_surface(props.width + 10, props.height + 5, 0, 0, 0);
-	blend_image(bg, 0.8);
-	image_mask_set(bg, MASK_UNPICKABLE);
-	image_mask_clear(msg, MASK_OPACITY);
-	image_mask_set(msg, MASK_UNPICKABLE);
-	image_tracetag(bg, "compsurf_wnd_msgbg");
-
-	show_image(msg);
-	move_image(msg, 5, 2);
-	image_inherit_order(msg, true);
-	image_inherit_order(bg, true);
-	order_image(bg, 1);
-	link_image(msg, bg);
-	link_image(bg, ctx.border and ctx.border or ctx.canvas, anchor);
-
-	if (anchor == ANCHOR_LL) then
-		move_image(bg, 0, -1 * (props.height+5));
-	end
-
-	ctx.message = bg;
-	if (expiration ~= -1 and expiration ~= nil) then
-		expire_image(bg, expiration);
-	end
+	ctx.bottom_bar:update("center", 1, msg, expiration);
 end
 
 local function resolve_abs_xy(wnd, newx, newy)
@@ -375,22 +285,22 @@ local function compsurf_wnd_resize(wnd, neww, newh, interm)
 
 	resize_image(wnd.canvas, neww, newh);
 	resize_image(wnd.overlay, neww, newh);
+	resize_image(wnd.anchor, neww, newh);
+	if (wnd.top_bar) then
+		wnd.top_bar:resize(neww, wnd.top_bar.height);
+	end
+	if (wnd.bottom_bar) then
+		wnd.bottom_bar:resize(neww, wnd.top_bar.height);
+	end
 
 	wnd.width = neww;
 	wnd.height = newh;
-
-	if (wnd.border) then
-		resize_image(wnd.border, wnd.width + wnd.borderw * 2,
-			wnd.height + wnd.borderw * 2);
-	end
-
-	resize_image(wnd.anchor, neww, newh);
 
 	if (wnd.overlay_resize) then
 		wnd:overlay_resize(wnd.width, wnd.height);
 	end
 
---	compsurf_wnd_repos(wnd);
+	compsurf_wnd_repos(wnd);
 end
 
 local function compsurf_wnd_drag(wnd, vid, x, y)
@@ -433,52 +343,33 @@ end
 local function compsurf_wnd_hover(wnd)
 end
 
---
--- return or create a bar with desired thickness
---
 local function compsurf_wnd_bar(wnd, dir, thickness)
-end
-
---
--- enable (width > 0) / disable border with optional color ([4])
---
-local function compsurf_wnd_border(wnd, width, r, g, b)
-	if (type(r) == "table") then
-		g = r[2];
-		b = r[3];
-		r = r[1];
-	end
-
-	if (r ~= nil) then
-
-	end
-
--- need to do this trick as other things might have been attached to
--- the border, thus deleting them would cascade in unfortunate ways
-	if (valid_vid(wnd.border)) then
-		local cs = fill_surface(2, 2, r, g, b);
-		image_sharestorage(cs, wnd.border);
-		delete_image(cs);
+	if (dir == "t") then
+		if (wnd.top_bar) then
+			wnd.top_bar:destroy();
+			wnd.top_bar = nil;
+		end
+		wnd.top_bar = uiprim_bar(
+			wnd.canvas, ANCHOR_UL, wnd.width, thickness, nil);
+		move_image(wnd.top_bar.anchor, 0, -thickness);
+		wnd.pad_top = thickness;
+		compsurf_wnd_repos(wnd);
+		return wnd.top_bar;
+-- add titlebar action handler for drag etc.
+	elseif (dir == "b") then
+		if (wnd.bottom_bar) then
+			wnd.bottom_bar:destroy();
+			wnd.bottom_bar = nil;
+		end
+		wnd.bottom_bar = uiprim_bar(
+			wnd.canvas, ANCHOR_LL, wnd.width, thickness, nil);
+		wnd.pad_bottom = thickness;
+		compsurf_wnd_repos(wnd);
+	return wnd.bottom_bar;
 	else
-		wnd.border = fill_surface(2, 2, r, g, b);
-	end
-
-	if (width <= 0) then
-		wnd.border = nil;
-		wnd.borderw = 0;
+		warning("add_bar(dir), unsupported direction, only 't' and 'b' allowed");
 		return;
 	end
-
-	image_tracetag(wnd.border, tostring(wnd) .. "_border");
-	wnd.borderw = width;
-	image_mask_set(wnd.border, MASK_UNPICKABLE);
-
-	image_shader(wnd.border, get_border_shader(width));
-	resize_image(wnd.border, wnd.width + width * 2, wnd.height + width * 2);
-	show_image(wnd.border);
-	link_image(wnd.border, wnd.anchor);
-	move_image(wnd.border, -1 * width, -1 * width);
-	image_inherit_order(wnd.border, true);
 end
 
 local function compsurf_wnd_parent(ctx, wnd, relative)
@@ -506,12 +397,12 @@ end
 
 local wseq = 1;
 
-local function input_stub()
+local function input_stub(iotbl)
 end
 
-local function input_dispatch(wnd, sym, active)
-	if (wnd.wm.meta and wnd.parent and wnd.dispatch[sym] == nil
-		and wnd.parent.dispatch[sym]) then
+local function input_dispatch(wnd, sym, active, srctbl)
+	if (wnd.wm.meta and wnd.parent and
+		wnd.dispatch[sym] == nil and wnd.parent.dispatch[sym]) then
 		wnd = wnd.parent;
 	end
 
@@ -577,13 +468,13 @@ local function compsurf_add_window(ctx, surf, opts)
 		move = compsurf_wnd_move,
 		hide = compsurf_wnd_hide,
 		show = compsurf_wnd_show,
-		inactivate = compsurf_wnd_inactivate,
+		deactivate = compsurf_wnd_deactivate,
 		activate = compsurf_wnd_activate,
 		abs_xy = resolve_abs_xy,
 		set_overlay = compsurf_wnd_overlay,
 		set_parent = compsurf_wnd_parent,
 		set_bar = compsurf_wnd_bar,
-		set_border = compsurf_wnd_border,
+		set_border = function() print("border missing"); end,
 		set_message = compsurf_wnd_message,
 
 -- account for additional "tacked-on" surfaces (border, bars, ...)
@@ -700,29 +591,32 @@ local function compsurf_input(ctx, iotbl)
 	end
 end
 
-local function compsurf_input_sym(ctx, sym, active)
+local function compsurf_input_sym(ctx, sym, active, tbl)
 	if (not active) then
 		sym = "r" .. sym;
 	end
 
 	if (ctx.inp_lock) then
-		ctx.inp_lock(sym);
+		ctx.inp_lock(sym, active, tbl);
 		return;
 	end
 
-	if (ctx.dispatch[sym]) then
-		return ctx.dispatch[sym](ctx, sym);
+	if (ctx.meta and ctx.dispatch[sym]) then
+		return ctx.dispatch[sym](ctx, sym, active, tbl);
 	end
 
 	if (ctx.fullscreen) then
 		if (ctx.fullscreen.fullscreen_input_sym) then
-			ctx.fullscreen:fullscreen_input_sym(sym, ctx.fullscreen_vid);
+			ctx.fullscreen:fullscreen_input_sym(sym, ctx.fullscreen_vid, active, tbl);
 		end
 		return;
 	end
 
 	if (ctx.selected) then
-		ctx.selected:input_sym(sym);
+		ctx.selected:input_sym(sym, active, tbl);
+
+	elseif (ctx.dispatch[sym]) then
+		ctx.dispatch[sym](ctx, sym, active, tbl);
 	end
 end
 
@@ -895,8 +789,3 @@ if (defw == nil) then
 end
 
 default_width = defw;
-
-for k, v in pairs(shader_types) do
-	border_shaders[k] = {};
-	get_border_shader(default_width, k);
-end
