@@ -1,5 +1,5 @@
 --
--- Copyright 2014-2015, Björn Ståhl
+-- Copyright 2014-2017, Björn Ståhl
 -- License: 3-Clause BSD.
 -- Reference: http://arcan-fe.com
 --
@@ -19,7 +19,7 @@
 
 local default_width = 1;
 
-system_load("uiprim.lua")();
+system_load("support/uiprim.lua")();
 
 local function compsurf_find(ctx, name)
 	if (type(name) == "string") then
@@ -87,6 +87,7 @@ local function compsurf_wnd_select(wnd)
 		wm.selected:deactivate();
 		broadcast(wm.handlers.deselect, wm.selected, wnd);
 		order_image(wm.selected.anchor, wm.selected.deselorder);
+		wm.selected:deselect();
 	end
 
 	wm.selected = wnd;
@@ -400,17 +401,6 @@ local wseq = 1;
 local function input_stub(iotbl)
 end
 
-local function input_dispatch(wnd, sym, active, srctbl)
-	if (wnd.wm.meta and wnd.parent and
-		wnd.dispatch[sym] == nil and wnd.parent.dispatch[sym]) then
-		wnd = wnd.parent;
-	end
-
-	if (wnd.dispatch[sym] ~= nil) then
-		wnd.dispatch[sym](wnd);
-	end
-end
-
 local function compsurf_wnd_activate(wnd)
 end
 
@@ -474,7 +464,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		set_overlay = compsurf_wnd_overlay,
 		set_parent = compsurf_wnd_parent,
 		set_bar = compsurf_wnd_bar,
-		set_border = function() print("border missing"); end,
+		set_border = function() end,
 		set_message = compsurf_wnd_message,
 
 -- account for additional "tacked-on" surfaces (border, bars, ...)
@@ -497,7 +487,7 @@ local function compsurf_add_window(ctx, surf, opts)
 -- stub symbol, replace with eg. target_input(source, iotbl)
 		dispatch = {},
 		input = input_stub,
-		input_sym = input_dispatch,
+		input_sym = compsurf_input_sym,
 
 -- always on top => re-order on new window
 		ontop = opts.ontop,
@@ -612,7 +602,7 @@ local function compsurf_input_sym(ctx, sym, active, tbl)
 		return;
 	end
 
-	if (ctx.selected) then
+	if (ctx.selected and ctx.selected.input_sym) then
 		ctx.selected:input_sym(sym, active, tbl);
 
 	elseif (ctx.dispatch[sym]) then

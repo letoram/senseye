@@ -28,28 +28,6 @@ local share_submenu = {
 --		end
 };
 
-local termwnd = {};
-local function terminal_handler(source, status)
-	if (status.kind == "resized") then
-		if (termwnd[source]) then
-			termwnd[source]:resize(status.width, status.height);
-		else
-			termwnd[source] = wm:add_window(source, {});
-			termwnd[source]:resize(status.width, status.height);
-			termwnd[source].input = function(ctx, iotbl)
-				target_input(source, iotbl);
-			end
-			termwnd[source].input_sym = function(ctx, sym, active, iotbl)
-				target_input(source, iotbl);
-			end
-			wndshared_setup(termwnd[source], "generic");
-		end
-	elseif (status.kind == "terminated") then
-		delete_image(source);
-		termwnd[source] = nil;
-	end
-end
-
 return {
 	{
 		name = "input",
@@ -64,7 +42,16 @@ return {
 		handler = function()
 			local vid = launch_avfeed(
 				string.format("force_bitmap:env=ARCAN_CONNPATH=%s",
-					connection_path), "terminal", terminal_handler);
+					connection_path), "terminal", function() end);
+			if (valid_vid(vid)) then
+				local wnd = wm:add_window(vid, {});
+				if (wnd) then
+					wndshared_setup(wnd, "cli");
+					wnd:hide();
+				else
+					delete_image(vid);
+				end
+			end
 		end,
 	},
 	{

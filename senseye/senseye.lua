@@ -73,49 +73,31 @@ pending_lim = 4;
 menu_text_fontstr = "\\f,0\\#cccccc ";
 MENUS = {};
 
---
--- customized dispatch handlers based on registered sensor type populated by
--- scanning senses/[name].lua
---
-type_handlers = {};
-type_helpers = {};
-
 -- primarily used by picture tune and other processes that rely heavily on
 -- multiple readbacks in short succession
 postframe_handlers = {};
 
---
--- external clients that register with the segkind 'encoder' + ident will
--- be added to the list of possible translators that can be added to a
--- data window
---
-translators = {};
-
 function senseye()
 -- basic functions
-	system_load("gconf.lua")();
-	system_load("apiext.lua")();
+	system_load("support/gconf.lua")();
+	system_load("support/apiext.lua")();
 	system_defaultfont("default.ttf", 16, 2);
 
 -- input control
-	system_load("mouse.lua")();
+	system_load("support/mouse.lua")();
 	mouse_setup(load_image("images/cursor.png"), 65535, 1, true);
-	symtable = system_load("symtable.lua")();
+	symtable = system_load("support/symtable.lua")();
 	kbd_repeat(gconfig_get("repeat_period"), gconfig_get("repeat_delay"));
 	system_load("keybindings.lua")();
 
 -- UI management
-	system_load("composition_surface.lua")();
-	system_load("popup_menu.lua")();
+	system_load("support/composition_surface.lua")();
+	system_load("support/popup_menu.lua")();
 	system_load("wndshared.lua")();
 
--- client event dispatch
-	system_load("handlers.lua")();
-
 -- specific support / drawing functions
-	system_load("hilbert.lua")();
-	system_load("shaders.lua")();
-	system_load("translators.lua")();
+	system_load("support/hilbert.lua")();
+	system_load("views/shaders.lua")();
 	MENUS["system"] = system_load("menus/system.lua")();
 
 	if (API_VERSION_MAJOR <= 0 and API_VERSION_MINOR < 11) then
@@ -161,7 +143,7 @@ function senseye()
 	switch_default_texfilter(FILTER_NONE);
 
 -- map bindings to default UI actions (wndshared.lua + keybindings.lua)
-	setup_dispatch(wm.dispatch);
+	wndshared_init(wm);
 
 -- setup our 'senseye' listening connection point.
 	local lp = target_alloc(connection_path, new_connection);
@@ -170,34 +152,6 @@ function senseye()
 			shutdown("couldn't allocate connection_path (" .. connection_path .. ")");
 	end
 	image_tracetag(lp, connection_path .. "conn_" .. tonumber(wndcnt));
-end
-
-function add_window(source, wtype, parent)
-	local wnd = wm:add_window(source, {});
-	wndshared_setup(wnd, wtype);
-
--- custom handlers and bindings
-	window_shared(wnd, true);
-	wnd.fullscreen_disabled = true;
-	wnd.ctrl_id = source;
-	wnd.zoom_preview = true;
-	wnd.highlight = shader_update_range;
-	wnd.source_listener = {};
-	wnd.shader_group = shaders_2dview;
-	target_flags(source, TARGET_VSTORE_SYNCH);
-	wnd.shind = 1;
-	wnd.pending = 0;
-	wnd.popup = controlwnd_menu;
-	if (parent) then
-		wnd:set_parent(parent, ANCHOR_UR);
-	end
-	return wnd;
-end
-
-local function add_subwindow(parent, id)
-	local wnd = add_window(id);
-	wnd:set_parent(parent, ANCHOR_UR);
-	return wnd;
 end
 
 --
@@ -247,39 +201,43 @@ end
 -- correct subid to remain alive, and have a timeout (i.e. mouse_tick on
 -- pending connections) but >currently< we expect the sensor to cooperate.
 --
+local typetbl = {
+	sensor = "control",
+	encoder = "translator"
+};
+
+-- trivial external connection manager, just spawn new ones when the CP is
+-- consumed, map to window if known type and route through wndshared.lua to
+-- add menus, UI primitives etc.
 function new_connection(source, status)
--- need to distinguish between a translator (data interpreter)
--- and a sensor (data provider) as they have different usr-int schemes
 	if (status.kind == "connected") then
 		local vid = target_alloc(status.key, new_connection);
-
 		if (not valid_vid(vid)) then
 			warning("connection limit reached, non-auth connections disabled.");
 			return;
 		end
-
-		wndcnt = wndcnt + 1;
 		image_tracetag(vid, connection_path .. "conn_" .. tonumber(wndcnt));
 		return;
 
 	elseif (status.kind ~= "registered") then
+		warning(string.format(
+			"unaccepted state %s from %s", status.kind, image_tracetag(source)));
 		delete_image(source);
-		warning("connection attempted from uncooperative client." .. status.kind);
 	end
 
-	print("registered:", status.segkind, handler_control_window);
--- sensor : used as data control source
-	if (status.segkind == "sensor") then
-		target_updatehandler(source, handler_control_window);
-		local wnd = add_window(source, "sensor");
-		wnd:select();
-
--- encoder : used for translators
-	elseif (status.segkind == "encoder") then
-		target_updatehandler(source, handler_translate_control);
-
--- integrators register as both sensors and encoders and we're not interested
--- in any other types
+	if (typetbl[status.segkind]) then
+		local wnd = wm:add_window(source, {});
+		if (wnd) then
+			image_tracetag(source, image_tracetag(source) .. "_" .. status.segkind);
+			local gm, gw, gh = wndshared_setup(wnd, typetbl[status.segkind]);
+			if (not gh) then
+				warning("couldn't locate event handler for "..typetbl[status.segkind]);
+				wnd:destroy();
+			end
+		else
+			delete_image(source);
+			warning("couldn't create window");
+		end
 	else
 		warning("attempted connection from unsupported type, " .. status.segkind);
 		delete_image(source);

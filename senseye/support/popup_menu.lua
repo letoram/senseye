@@ -35,8 +35,7 @@ local function popup_destroy(wm, popup, cascade)
 	end
 
 	popup:destroy(cascade);
-	if (lp and lp.activate) then
-		lp:activate();
+	if (lp and lp.select) then
 		lp:select();
 	end
 	return p;
@@ -165,13 +164,12 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 
 -- setup the popup, focus it, add a border and position close to either
 -- the mouse cursor or the previous window
-	local prev = wm.selected;
 	local popup = wm:add_window(canvas, {});
 	popup.flag_popup = true;
 	popup.cursor = cursor;
+	popup.previous = wm.selected;
 	popup:select();
 	popup.noblend = true;
-	popup.previous = prev;
 	popup.inactivate = popup_inactivate;
 	popup.activate = popup_activate;
 	popup.name = popup.name .. "_popup";
@@ -277,6 +275,5 @@ function spawn_popupmenu(wm, menutbl, target, cursorpos)
 	popup:step(0);
 	popup.capt_mh = mh;
 	mouse_addlistener(mh, {"press", "rclick"});
-
 	return popup;
 end
