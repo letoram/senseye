@@ -23,6 +23,7 @@
 --
 
 local window_manager;
+local consumers_pending;
 
 -- setup bars, scrollhandlers, input handlers etc. based on type
 -- control : windows spawned from here are treated as data
@@ -38,6 +39,7 @@ function wndshared_setup(wnd, wndtype)
 	local fontfn = function() return "\\f,0"; end
 
 -- window- management keybindings
+	wnd.labels = {};
 	wnd.dispatch[BINDINGS["POPUP"]] = function()
 		spawn_popupmenu(window_manager, wnd.popup and wnd.popup or MENUS["system"]);
 	end
@@ -88,6 +90,14 @@ function wndshared_setup(wnd, wndtype)
 					name = "global",
 					label = "Global",
 					submenu = MENUS["system"]
+				});
+				table.insert(wnd.popup, {
+					name = "input",
+					label = "Inputs",
+					eval = function()
+						return #wnd.labels > 0;
+					end,
+					submenu = wnd.labels
 				});
 				got_menu = true;
 			else
@@ -170,7 +180,48 @@ local function repos_window(wnd)
 end
 
 --
--- Main keybindings and functions for features like zoom and window management
+-- shared handler for coreopts and for inputs
+--
+function wndshared_defhandler(wnd, source, status)
+-- initial: iotbl.keysym handler
+-- modifiers: goes with initial
+-- labelhint:
+-- description: user-readable
+-- datatype
+	if (status.kind == "input_label") then
+		if (status.datatype ~= "digital") then
+			return;
+		end
+
+-- map the input binding if it's not used for something else
+		if (status.initial ~= 0 and wnd.dispatch[status.initial] == nil) then
+			print("adding dispatch:", status.initial, symtable[status.initial]);
+			wnd.dispatch[status.initial] = function()
+				print("bind me");
+				target_input(wnd.control_id, {
+					devid = 0, subid = 0,
+					digital = true, active = true, label = status.labelhint});
+			end
+		end
+
+-- add to the popup menu as well
+		table.insert(wnd.labels,
+			{
+				name = "label_" .. tostring(#wnd.labels),
+				label = status.labelhint,
+				handler = function()
+					target_input(wnd.control_id, {
+						devid = 0, subid = 0,
+						digital = true, active = true, label = status.labelhint});
+				end
+			});
+
+	elseif (status.kind == "coreopt") then
+	end
+end
+
+--
+-- enable zoom, window positioning, stepping management etc.
 --
 function wndshared_init(wm)
 	window_manager = wm;

@@ -6,6 +6,7 @@
  * input segment on the output one, optionally with packing.
  */
 
+#include <arcan_shmif.h>
 #include "libsenseye.h"
 
 static bool populate(bool newdata, struct arcan_shmif_cont* in,

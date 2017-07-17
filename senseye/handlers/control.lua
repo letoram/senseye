@@ -32,8 +32,19 @@ return function(wnd, source, status)
 	elseif (status.kind == "terminated") then
 		wnd:destroy();
 
+	elseif (status.kind == "framestatus") then
+		if (wnd.pending > 0) then
+			wnd.pending = wnd.pending - 1;
+		end
+
+		if (wnd.pending == 0 and wnd.autostep) then
+			target_stepframe(wnd.control_id, wnd.autostep);
+		end
+
 	elseif (status.kind == "ident") then
 	-- wnd.top_bar:update("fill", 1, status
 		print(status.message);
+	else
+		wndshared_defhandler(wnd, source, status);
 	end
 end

@@ -267,6 +267,29 @@ bool senseye_pump(struct senseye_cont* cont, bool block)
 	return rc != -1;
 }
 
+void senseye_register_input(
+	struct arcan_shmif_cont* c, const char* label,
+		const char* descr, int default_sym, unsigned modifiers)
+{
+	if (!label)
+		return;
+
+	struct arcan_event ev = {
+		.ext.kind = ARCAN_EVENT(LABELHINT),
+		.ext.labelhint = {
+			.idatatype = EVENT_IDATATYPE_DIGITAL,
+			.initial = default_sym,
+			.modifiers = modifiers
+		}
+	};
+
+	strncpy(ev.ext.labelhint.label, label, COUNT_OF(ev.ext.labelhint.label)-1);
+	if (descr)
+		strncpy(ev.ext.labelhint.descr, descr, COUNT_OF(ev.ext.labelhint.descr)-1);
+
+	arcan_shmif_enqueue(c, &ev);
+}
+
 struct senseye_ch* senseye_open(struct senseye_cont* cont,
 	const char* const ident, size_t base)
 {
@@ -329,6 +352,7 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				opts.def_map, opts.def_pack, base, &cp->cont);
 			rv->in_handle = cp->cont.epipe;
 			rwstat_addpatterns(rv->in, opts.args);
+			register_data_inputs(&cpriv->cont);
 			break;
 		}
 		else

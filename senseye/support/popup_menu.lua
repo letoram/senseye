@@ -115,17 +115,24 @@ function popup_activate(wnd)
 	end
 end
 
-function spawn_popupmenu(wm, menutbl, target, cursorpos)
+function spawn_popupmenu(wm, menu_in, target, cursorpos)
 	local list = {
 		menu_text_fontstr
 	};
 
-	if (menutbl == nil) then
+	if (menu_in == nil) then
 		return;
 	end
 
 	if (target == nil) then
 		target = wm.selected;
+	end
+
+	local menutbl = {};
+	for i, v in ipairs(menu_in) do
+		if (not v.eval or v.eval(target)) then
+			table.insert(menutbl, v);
+		end
 	end
 
 	for k, v in ipairs(menutbl) do

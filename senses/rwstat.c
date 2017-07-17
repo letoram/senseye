@@ -728,6 +728,44 @@ bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 	return true;
 }
 
+static void reg_input(
+	struct arcan_shmif_cont* c, const char* label,
+		const char* descr, int default_sym, unsigned modifiers)
+{
+	if (!label)
+		return;
+
+	struct arcan_event ev = {
+		.ext.kind = ARCAN_EVENT(LABELHINT),
+		.ext.labelhint = {
+			.idatatype = EVENT_IDATATYPE_DIGITAL,
+			.initial = default_sym,
+			.modifiers = modifiers
+		}
+	};
+
+	strncpy(ev.ext.labelhint.label, label, COUNT_OF(ev.ext.labelhint.label)-1);
+	if (descr)
+		strncpy(ev.ext.labelhint.descr, descr, COUNT_OF(ev.ext.labelhint.descr)-1);
+
+	arcan_shmif_enqueue(c, &ev);
+}
+
+
+static void register_data_inputs(struct arcan_shmif_cont* cont)
+{
+	senseye_register_input(cont, "SMALL_PIXEL",
+		"Change stepping size to 'per packed pixel'", '1', 0);
+	senseye_register_input(cont, "SMALL_BYTE",
+		"Change stepping size to 'per consumed byte'", '2', 0);
+	senseye_register_input(cont, "SMALL_ROW",
+		"Change stepping size to 'per consumed byte'", '5', 0);
+	senseye_register_input(cont, "LARGE_HALFPAGE",
+		"Change stepping size to 'per consumed byte'", '3', 0);
+	senseye_register_input(cont, "LARGE_PAGE",
+		"Change stepping size to 'per consumed byte'", '4', 0);
+}
+
 /*
  * Each pattern is 8-bit unsigned represented as hexadecimal in ascii.
  * This feature should be expanded to something slightly more flexible

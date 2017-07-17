@@ -19,6 +19,7 @@
  * is free to switch the feature on or off.
  */
 
+#include <arcan_shmif.h>
 #include "libsenseye.h"
 #include "font_8x8.h"
 #include <math.h>
@@ -47,7 +48,7 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* need to clear (or track zoom + precision etc. which means its usually
  * just cheaper to reset between updates */
 	int bpp = buf_sz / (in->w*in->h);
-	draw_box(over, 0, 0, over->w, over->h, RGBA(0x00, 0x00, 0x00, 0x00));
+	draw_box(over, 0, 0, over->w, over->h, SHMIF_RGBA(0x00, 0x00, 0x00, 0x00));
 
 	float w = zoom_range[2] - zoom_range[0];
 	float h = zoom_range[3] - zoom_range[1];
@@ -74,11 +75,11 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 /* we fight a lot of precision issues here, and the possibility that
  * we have a non-uniform sized output target, round each square upwards */
 			if (pxv > 200){
-				draw_box(over, xpos, ypos, d_w, d_h, RGBA(0xff, 0x00, 0x00, 0xff));
+				draw_box(over, xpos, ypos, d_w, d_h, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 
 				if (d_w > fontw && d_h > fonth)
 					draw_char(over, msg[ch = (ch + 1) % (sizeof(msg)-1)],
-						xpos + 1, ypos + 1, RGBA(0xff, 0xff, 0xff, 0xff));
+						xpos + 1, ypos + 1, SHMIF_RGBA(0xff, 0xff, 0xff, 0xff));
 			}
 		}
 

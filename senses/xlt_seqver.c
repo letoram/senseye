@@ -8,7 +8,7 @@
  */
 
 #include <inttypes.h>
-
+#include <arcan_shmif.h>
 #include "libsenseye.h"
 #include "font_8x8.h"
 
@@ -28,7 +28,7 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 			break;
 
 	draw_box(out, 0, 0, out->addr->w, out->addr->h,
-		RGBA(0x00, 0x00, 0x00, 0xff));
+		SHMIF_RGBA(0x00, 0x00, 0x00, 0xff));
 
 	if (ofs < buf_sz){
 
@@ -41,10 +41,10 @@ static bool populate(bool newdata, struct arcan_shmif_cont* in,
 		snprintf(buf, sizeof(buf), "Failed at %"PRIu64" +%zu (%" PRIu8
 			" vs. %" PRIu8 ")", pos, ofs, (uint8_t)(buf[ofs-1]+1), buf[ofs]);
 
-		draw_text(out, buf, 4, 4, RGBA(0xff, 0x00, 0x00, 0xff));
+		draw_text(out, buf, 4, 4, SHMIF_RGBA(0xff, 0x00, 0x00, 0xff));
 	}
 	else
-		draw_text(out, "Passed", 4, 4, RGBA(0x00, 0xff, 0x00, 0xff));
+		draw_text(out, "Passed", 4, 4, SHMIF_RGBA(0x00, 0xff, 0x00, 0xff));
 
 	return true;
 }

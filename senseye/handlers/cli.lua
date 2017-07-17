@@ -20,5 +20,7 @@ return function(wnd, source, status)
 	elseif (status.kind == "terminated") then
 		delete_image(source);
 		termwnd[source] = nil;
+	else
+		wndshared_defhandler(wnd, source, status);
 	end
 end

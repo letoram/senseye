@@ -32,6 +32,11 @@
 	struct arcan_event;
 #endif
 
+#ifndef COUNT_OF
+#define COUNT_OF(x) \
+	((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+#endif
+
 struct rwstat_ch;
 struct senseye_priv;
 
@@ -57,6 +62,7 @@ struct senseye_ch {
 	struct rwstat_ch* in;
 	struct senseye_priv* in_pr;
 	int in_handle;
+	size_t step_sz;
 };
 
 /*
@@ -78,7 +84,9 @@ struct senseye_cont {
  * key will be used, or whatever ARCAN_CONNPATH override it is that has been
  * set.
  *
- * will return a fdsense context in which new data channels can be opened
+ * Will return a fdsense context in which new data channels can be opened.
+ * To implement event handlers, replace the .refresh and the .dispatch
+ * members.
  */
 bool senseye_connect(const char* key, FILE* logout,
 	struct senseye_cont*, struct arg_arr**, enum ARCAN_FLAGS flags);
@@ -87,23 +95,39 @@ bool senseye_connect(const char* key, FILE* logout,
  * treat as main-loop, implements the main control channel semantics for
  * connection with the UI (override the default refresh and event handlers in
  * the structure if needed)
+ *
+ * senseye_pump -> (wait or poll event?) -> TARGET_EXIT : dispatch
+ *           <-------------false ------------|                |
+ *                                                            |
+ *           <------------- true ------[ctx:refresh] <-y--STEPFRAME
+ *           <------------- true ----- [ctx:dispatch] <-y-----|
  */
 bool senseye_pump(struct senseye_cont*, bool block);
 
 /*
- * Path is just a hint that will be used as a textual identifier in the
- * user-interface. Base is the initial dimensions of the data transfers to the
- * UI (should be a square power of 2 or 0 to let the connection side determine
- * the desired sample base)
+ * [ident] is just a hint that will be used as a textual identifier in the
+ * user-interface. [base] is the initial dimensions of the data transfers to
+ * the UI (should be a square power of 2 and larger than 32).
+ *
+ * Will maintain the event loop shown in pump until the request has been
+ * handled. Will return NULL if the the request was rejected or if there is
+ * already a request pending.
  */
 struct senseye_ch* senseye_open(
 	struct senseye_cont* cont, const char* const ident, size_t base);
 
+struct senseye_ch* senseye_update_identity(
+	struct senseye_cont* cont, const char* const ident);
+
 /*
- *
+ * Indicate that the primary connection accepts a certain specialized input
+ * See shmif_tuisym for list of valid symbols. Note that it's an arcan
+ * shmif context, so it has to be extracted from the senseye_ch or the
+ * senseye_cont.
  */
 void senseye_register_input(
-	struct senseye_cont*, const char* lbl, uint32_t default_sym);
+	struct arcan_shmif_cont*, const char* label,
+		const char* descr, int default_sym, unsigned modifiers);
 
 /*
  * TRANSLATOR functions

@@ -7,6 +7,7 @@
  * The overlay will show the counter state.
  */
 
+#include <arcan_shmif.h>
 #include "libsenseye.h"
 #include "font_8x8.h"
 static int ccount;
@@ -20,9 +21,9 @@ static bool over_pop(bool newdata, struct arcan_shmif_cont* in,
 		return false;
 
 	char outb[4];
-	draw_box(over, 0, 0, over->w, fonth+4, RGBA(0x00, 0x00, 0x00, 0x00));
+	draw_box(over, 0, 0, over->w, fonth+4, SHMIF_RGBA(0x00, 0x00, 0x00, 0x00));
 	snprintf(outb, 4, "%d", ccount);
-	draw_text(over, outb, 2, 2, RGBA(0xff, 0xff, 0x00, 0xff));
+	draw_text(over, outb, 2, 2, SHMIF_RGBA(0xff, 0xff, 0x00, 0xff));
 
 	return true;
 }

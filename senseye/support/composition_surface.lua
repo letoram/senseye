@@ -602,9 +602,12 @@ local function compsurf_input_sym(ctx, sym, active, tbl)
 		return;
 	end
 
-	if (ctx.selected and ctx.selected.input_sym) then
-		ctx.selected:input_sym(sym, active, tbl);
-
+	if (ctx.selected) then
+		if (ctx.selected.input_sym) then
+			ctx.selected:input_sym(sym, active, tbl);
+		elseif (ctx.selected.dispatch[sym]) then
+			ctx.selected.dispatch[sym](ctx, sym, active, tbl);
+		end
 	elseif (ctx.dispatch[sym]) then
 		ctx.dispatch[sym](ctx, sym, active, tbl);
 	end

@@ -461,5 +461,23 @@ function check_listeners(wnd)
 	end
 end
 
+--
+-- some functions may override this in order to be the one to drive
+-- the controls, typically automated pattern matching or histogram that
+-- are triggered by asynchronous events
+--
+local function default_steph(wnd, steps)
+	print("step:", steps);
+	stepframe_target(wnd.control_id, steps);
+end
+
 return function(wnd)
+	wnd.schedule_step = default_steph;
+	wnd.dispatch[BINDINGS["FORWARD"]] = function()
+		print("STEP");
+		wnd:schedule_step(1);
+	end
+	wnd.dispatch[BINDINGS["BACKWARD"]] = function()
+		wnd:schedule_step(-1);
+	end
 end
