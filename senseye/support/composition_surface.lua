@@ -68,14 +68,6 @@ local function forward_children(wm, wnd)
 	end
 end
 
--- visual queue that the window is not currently used,
--- primarily for popup purposes
-local function compsurf_wnd_activate(wnd)
-end
-
-local function compsurf_wnd_deactivate(wnd)
-end
-
 local function compsurf_wnd_select(wnd)
 	if (wnd.wm.selected == wnd) then
 		return;
@@ -402,9 +394,23 @@ local function input_stub(iotbl)
 end
 
 local function compsurf_wnd_activate(wnd)
+	if (wnd.top_bar) then
+		wnd.top_bar:switch_state("active", true);
+	end
+
+	if (wnd.bottom_bar) then
+		wnd.bottom_bar:switch_state("active", true);
+	end
 end
 
-local function compsurf_wnd_inactivate(wnd)
+local function compsurf_wnd_deactivate(wnd)
+	if (wnd.top_bar) then
+		wnd.top_bar:switch_state("inactive", true);
+	end
+
+	if (wnd.bottom_bar) then
+		wnd.bottom_bar:switch_state("inactive", true);
+	end
 end
 
 local function compsurf_wnd_hide(wnd)

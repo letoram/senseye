@@ -176,7 +176,8 @@ local function button_constrain(btn, pad, minw, minh, maxw, maxh)
 	btn:update();
 end
 
-local evset = {"click", "rclick", "drag", "drop", "dblclick", "over", "out"};
+local evset = {
+	"click", "rclick", "drag", "drop", "dblclick", "over", "out", "press"};
 
 local function button_mh(ctx, mh)
 	if (not mh) then
@@ -234,7 +235,6 @@ function uiprim_button(anchor, bgshname, lblshname, lbl,
 	ind = ind + 1;
 	assert(pad);
 	local res = {
-		lblfmt = "\\f,0\\#ffffff",
 		bgsh = bgshname,
 		lblsh = lblshname,
 		fontfn = fontfn,

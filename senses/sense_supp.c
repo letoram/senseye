@@ -352,7 +352,6 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				opts.def_map, opts.def_pack, base, &cp->cont);
 			rv->in_handle = cp->cont.epipe;
 			rwstat_addpatterns(rv->in, opts.args);
-			register_data_inputs(&cpriv->cont);
 			break;
 		}
 		else

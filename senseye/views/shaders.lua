@@ -434,7 +434,33 @@ function shader_update_range(wnd, low, high)
 	end
 end
 
+-- used by ui-prim
+build_shader(nil, [[
+	uniform sampler2D map_tu0;
+	float obj_opacity;
+
+	void main(){
+		gl_FragColor = vec4(0.4, 0.4, 0.4, 1.0);
+	}
+]], "uiprim_inactive");
+
+-- used by ui-prim
+build_shader(nil, [[
+	uniform sampler2D map_tu0;
+	float obj_opacity;
+
+	void main(){
+		gl_FragColor = vec4(0.6, 0.6, 0.6, 1.0);
+	}
+]], "uiprim_active");
+
+
 function shader_setup(vid, group, name, state)
+	if (name == "bar_label") then
+		blend_image(vid, state == "active" and 1.0 or 0.6);
+	else
+		image_shader(vid, "uiprim_" .. state);
+	end
 end
 
 function switch_shader(wnd, target, shtbl, rec)

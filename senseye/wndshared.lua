@@ -36,7 +36,7 @@ function wndshared_setup(wnd, wndtype)
 		return;
 	end
 
-	local fontfn = function() return "\\f,0"; end
+	local fontfn = function() return "\\f,0\\#ffffff"; end
 
 -- window- management keybindings
 	wnd.labels = {};
@@ -46,25 +46,31 @@ function wndshared_setup(wnd, wndtype)
 
 -- default buttons
 	local tb = wnd:set_bar("t", 18);
-	tb:add_button("right", "DEFAULT", "DEFAULT", "X", 0, fontfn, 16, 16,
+	tb:add_button("right", "bar_button", "bar_label", "X", 0, fontfn, 16, 16,
 		{
 			click = function()
 				wnd:destroy();
 			end
 		}
 	);
-	tb:add_button("center", "DEFAULT", "DEFAULT", "", 0, fontfn, 16, 16,
+	tb:add_button("center", "bar_button", "bar_label", "", 0, fontfn, 16, 16,
 		{
 			drag = function(ctx, vid, dx, dy)
 				nudge_image(wnd.anchor, dx, dy);
 			end,
+			press = function(ctx, vid, dx, dy)
+				wnd:select();
+			end
 		}
 	);
 	local bb = wnd:set_bar("b", 18);
-	bb:add_button("right", "DEFAULT", "DEFAULT", "Z", 0, fontfn, 15, 15,
+	bb:add_button("right", "bar_button", "bar_label", "Z", 0, fontfn, 15, 15,
 		{
 			drag = function(ctx, vid, dx, dy)
 				wnd:resize(wnd.width + dx, wnd.height + dy);
+			end,
+			press = function(ctx, vid, dx, dy)
+				wnd:select();
 			end,
 			drop = function()
 			end,
@@ -73,7 +79,7 @@ function wndshared_setup(wnd, wndtype)
 			end
 		}
 	);
-	bb:add_button("center", "DEFAULT", "DEFAULT", "defuq", 0, fontfn, 16, 16);
+	bb:add_button("center", "bar_button", "bar_label", "defuq", 0, fontfn, 16, 16);
 
 -- first try and load the type specific menus
 	local basename = wndtype .. ".lua";
@@ -83,7 +89,7 @@ function wndshared_setup(wnd, wndtype)
 		if (pc) then
 			local status, res = pcall(pc, wnd);
 			if (status) then
-				tb:add_button("left", "DEFAULT", "DEFAULT", "M", 0, fontfn, 16, 16,
+				tb:add_button("left", "bar_button", "bar_label", "M", 0, fontfn, 16, 16,
 					{click = function() spawn_popupmenu(window_manager, wnd.popup) end});
 				wnd.popup = res;
 				table.insert(wnd.popup, {
@@ -150,10 +156,10 @@ local function wnd_gather(wnd)
 	local off_x = 0;
 	local off_y = 0;
 
-	for i=1, #wm.windows do
-		if (wm.windows[i].parent and
-			wm.windows[i].parent == wnd) then
-			move_image(wm.windows[i].anchor, off_x, off_y);
+	for i=1, #window_manager.windows do
+		if (window_manager.windows[i].parent and
+			window_manager.windows[i].parent == wnd) then
+			move_image(window_manager.windows[i].anchor, off_x, off_y);
 			off_x = off_x + 10;
 			off_y = off_y + 10;
 		end

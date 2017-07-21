@@ -3,6 +3,12 @@ local system_submenu = {
 		name = "shutdown",
 		label = "Shutdown",
 		handler = function() shutdown(); end
+	},
+	{
+		name = "dump_mouse",
+		label = "Dump Mouse Handlers",
+		eval = function() return DEBUGLEVEL > 0; end,
+		handler = mouse_dumphandlers;
 	}
 };
 
