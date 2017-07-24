@@ -26,7 +26,7 @@ return function(wnd, source, status)
 
 		image_tracetag(id, image_tracetag(source) .. "_data");
 		wndshared_setup(child, "data");
-		child:set_parent(wnd);
+		child:set_parent(wnd, ANCHOR_UR);
 		child:resize(status.width, status.height);
 		child:select();
 	elseif (status.kind == "terminated") then

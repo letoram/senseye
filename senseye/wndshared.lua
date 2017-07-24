@@ -200,10 +200,9 @@ function wndshared_defhandler(wnd, source, status)
 		end
 
 -- map the input binding if it's not used for something else
-		if (status.initial ~= 0 and wnd.dispatch[status.initial] == nil) then
-			print("adding dispatch:", status.initial, symtable[status.initial]);
-			wnd.dispatch[status.initial] = function()
-				print("bind me");
+		local sym = symtable[status.initial];
+		if (sym and status.initial ~= 0 and wnd.dispatch[sym] == nil) then
+			wnd.dispatch[sym] = function()
 				target_input(wnd.control_id, {
 					devid = 0, subid = 0,
 					digital = true, active = true, label = status.labelhint});

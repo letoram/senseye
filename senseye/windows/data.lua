@@ -467,17 +467,21 @@ end
 -- are triggered by asynchronous events
 --
 local function default_steph(wnd, steps)
-	print("step:", steps);
 	stepframe_target(wnd.control_id, steps);
 end
 
 return function(wnd)
 	wnd.schedule_step = default_steph;
 	wnd.dispatch[BINDINGS["FORWARD"]] = function()
-		print("STEP");
 		wnd:schedule_step(1);
 	end
 	wnd.dispatch[BINDINGS["BACKWARD"]] = function()
 		wnd:schedule_step(-1);
+	end
+	wnd.dispatch[BINDINGS["BIG_BACKWARD"]] = function()
+		wnd:schedule_step(-2);
+	end
+	wnd.dispatch[BINDINGS["BIG_FORWARD"]] = function()
+		wnd:schedule_step(2);
 	end
 end

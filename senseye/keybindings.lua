@@ -21,7 +21,8 @@ BINDINGS["TRANSLATORS"]   = "t" -- requires meta
 BINDINGS["POPUP"]         = "TAB" -- meta cycles selected window
 BINDINGS["FORWARD"]       = "RIGHT"
 BINDINGS["BACKWARD"]      = "LEFT"
-
+BINDINGS["BIG_FORWARD"]   = "DOWN"
+BINDINGS["BIG_BACKWARD"]  = "UP"
 BINDINGS["CANCEL"]        = "ESCAPE"
 
 -- 3d model based windows

@@ -14,7 +14,9 @@
 #include <math.h>
 
 #include <arcan_shmif.h>
+#include <arcan_shmif_tuisym.h>
 
+#include "libsenseye.h"
 #include "rwstat.h"
 
 struct pattern {
@@ -634,98 +636,96 @@ static void ch_damage(struct rwstat_ch* ch, uint8_t val, bool rand,
 	arcan_shmif_signal(chp->cont, SHMIF_SIGVID);
 }
 
+/*
+ * Build one big table of input labels and effects
+ *
+ */
+static void map_tuple(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_TUPLE);}
+static void map_wrap(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_WRAP);}
+static void map_tacc(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_TUPLE_ACC);}
+static void map_hilb(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_HILBERT);}
+static void pack_intens(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_INTENS);}
+static void pack_tight(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_TIGHT);}
+static void pack_tnoal(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_TNOALPHA);}
+static void alpha_full(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_FULL);}
+static void alpha_ptn(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_PTN);}
+static void alpha_dlt(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_DELTA);}
+static void alpha_ent(struct rwstat_ch* ch){
+/*
+ * BASE + block-size
+ */
+	ch->switch_alpha(ch, RW_ALPHA_ENTBASE);
+}
+
+static struct {
+	const char* label;
+	const char* descr;
+	uint16_t sym;
+	uint16_t modifiers;
+	void (*handler)(struct rwstat_ch*);
+} lbl_tbl[] = {
+	{
+		.label = "MAP_WRAP",
+		.descr = "Set mapping mode to wrap/zigzag",
+		.sym = TUIK_W,
+		.handler = map_wrap,
+	},
+	{
+		.label = "MAP_HILBERT",
+		.descr = "Set mapping mode to hilbert curves",
+		.sym = TUIK_H,
+		.handler = map_hilb,
+	},
+	{
+		.label = "MAP_TUPLE",
+		.descr = "Set mapping mode to tuple/bigram",
+		.sym = TUIK_T,
+		.handler = map_tuple,
+	},
+	{
+		.label = "MAP_TUPLE_ACC",
+		.descr = "Set mapping mode to accumulated tuple/bigram",
+		.sym = TUIK_A,
+		.handler = map_tacc,
+	},
+	{
+		.label = "PACK_INTENSITY",
+		.descr = "Set packing mode to 1byte per pixel",
+		.sym = TUIK_1,
+		.handler = pack_intens,
+	},
+	{
+		.label = "PACK_3BM",
+		.descr = "Set packing mode to 3bytes per pixel + meta",
+		.sym = TUIK_3,
+		.handler = pack_tnoal,
+	},
+	{
+		.label = "PACK_4BPP",
+		.descr = "Set packing mode to 4bytes per pixel",
+		.sym = TUIK_4,
+		.handler = pack_tight,
+	},
+	{
+		.label = "ALPHA_FULL",
+		.descr = "Set meta-data (alpha) to full/ignore",
+		.sym = TUIK_F,
+		.handler = alpha_full,
+	},
+};
+
 bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 {
-/* ugly hack treating the input region in the UI as a 4 point region given
- * current projections etc. if the channel has a damage handler, we can
- * resolve and just implement a resample though */
 	struct rwstat_ch_priv* chp = ch->priv;
-	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_ANALOG){
-		size_t x1 = ev->io.input.analog.axisval[0];
-		size_t y1 = ev->io.input.analog.axisval[1];
-		size_t x2 = ev->io.input.analog.axisval[2];
-		size_t y2 = ev->io.input.analog.axisval[3];
-		uint8_t val = ev->io.subid;
-		uint8_t rand = ev->io.devid != 0;
-
-		x2 = x2 >= chp->base ? chp->base - 1 : x2;
-		x1 = x1 >= chp->base ? chp->base - 1 : x1;
-
-		if (ch->damage == NULL)
-			ch_damage(ch, val, rand, x1, y1, x2, y2);
-		else{
-/* dosn't make much sense for the others, or well hilbert does but ignore
- * that for now just to not have to deal with the math and verification :) */
-			if (chp->map == MAP_WRAP && x2 >= x1 && y2 >= y1){
-				size_t bpp = (
-					chp->pack == PACK_TIGHT ? 4 : chp->pack == PACK_TNOALPHA ? 3 : 1);
-
-				ch->damage(ch, val, rand,
-					ch->priv->cnt_total + (y1 * chp->base + x1) * bpp,
-					(x2 - x1 + 1) * bpp,
-					 y2 - y1 + 1,
-					(chp->base - x2 + x1) * bpp
-				);
+	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_DIGITAL){
+		for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+			if (strcmp(lbl_tbl[i].label, ev->io.label) == 0){
+				lbl_tbl[i].handler(ch);
+				return true;
 			}
 		}
-		return true;
 	}
-
-	if (ev->category != EVENT_TARGET || ev->tgt.kind != TARGET_COMMAND_GRAPHMODE)
-		return false;
-
-	bool done = true;
-	switch (ev->tgt.ioevs[0].iv){
-	case 0:
-		ch->switch_clock(ch, RW_CLK_BLOCK);
-	break;
-	case 1:
-		ch->switch_clock(ch, RW_CLK_SLIDE);
-	break;
-	case 10:
-		ch->switch_mapping(ch, MAP_WRAP);
-	break;
-	case 11:
-		ch->switch_mapping(ch, MAP_TUPLE);
-	break;
-	case 12:
-		ch->switch_mapping(ch, MAP_TUPLE_ACC);
-	break;
-	case 13:
-		ch->switch_mapping(ch, MAP_HILBERT);
-	break;
-	case 20:
-		ch->switch_packing(ch, PACK_INTENS);
-	break;
-	case 21:
-		ch->switch_packing(ch, PACK_TIGHT);
-	break;
-	case 22:
-		ch->switch_packing(ch, PACK_TNOALPHA);
-	break;
-	case 30:
-		ch->switch_alpha(ch, RW_ALPHA_FULL);
-	break;
-	case 31:
-		ch->switch_alpha(ch, RW_ALPHA_PTN);
-	case 32:
-		ch->switch_alpha(ch, RW_ALPHA_DELTA);
-	break;
-	default:
-		done = false;
-	}
-
-	if (ev->tgt.ioevs[0].iv >= 33){
-		ch->switch_alpha(ch, RW_ALPHA_ENTBASE + ev->tgt.ioevs[0].iv - 33);
-		done = true;
-	}
-
-	if (!done)
-		fprintf(stderr, "Senseye:FDsense:dispatch_event(),"
-			" unknown graphmode: %d\n", ev->tgt.ioevs[0].iv);
-		return false;
-
-	return true;
+	return false;
 }
 
 static void reg_input(
@@ -754,16 +754,10 @@ static void reg_input(
 
 static void register_data_inputs(struct arcan_shmif_cont* cont)
 {
-	senseye_register_input(cont, "SMALL_PIXEL",
-		"Change stepping size to 'per packed pixel'", '1', 0);
-	senseye_register_input(cont, "SMALL_BYTE",
-		"Change stepping size to 'per consumed byte'", '2', 0);
-	senseye_register_input(cont, "SMALL_ROW",
-		"Change stepping size to 'per consumed byte'", '5', 0);
-	senseye_register_input(cont, "LARGE_HALFPAGE",
-		"Change stepping size to 'per consumed byte'", '3', 0);
-	senseye_register_input(cont, "LARGE_PAGE",
-		"Change stepping size to 'per consumed byte'", '4', 0);
+	for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+		senseye_register_input(cont, lbl_tbl[i].label,
+			lbl_tbl[i].descr, lbl_tbl[i].sym, lbl_tbl[i].modifiers);
+	}
 }
 
 /*
@@ -874,5 +868,6 @@ struct rwstat_ch* rwstat_addch(
 	res->switch_packing(res, PACK_INTENS);
 	res->priv->status_dirty = true;
 
+	register_data_inputs(c);
 	return res;
 }
