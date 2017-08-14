@@ -44,7 +44,8 @@ function wndshared_setup(wnd, wndtype)
 		spawn_popupmenu(window_manager, wnd.popup and wnd.popup or MENUS["system"]);
 	end
 
--- default buttons
+-- default buttons and decorations
+	wnd:set_border(1, {255, 255, 255}, {128, 128, 128});
 	local tb = wnd:set_bar("t", 18);
 	tb:add_button("right", "bar_button", "bar_label", "X", 0, fontfn, 16, 16,
 		{

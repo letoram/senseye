@@ -293,6 +293,15 @@ local function compsurf_wnd_resize(wnd, neww, newh, interm)
 		wnd:overlay_resize(wnd.width, wnd.height);
 	end
 
+	if (wnd.border) then
+		resize_image(wnd.border,
+			neww + wnd.pad_left + wnd.pad_right + 2 * wnd.border_px,
+			newh + wnd.pad_top + wnd.pad_bottom + 2 * wnd.border_px);
+		move_image(wnd.border,
+			-wnd.pad_left - wnd.border_px,
+			-wnd.pad_top - wnd.border_px);
+	end
+
 	compsurf_wnd_repos(wnd);
 end
 
@@ -394,6 +403,7 @@ local function input_stub(iotbl)
 end
 
 local function compsurf_wnd_activate(wnd)
+	wnd.active = true;
 	if (wnd.top_bar) then
 		wnd.top_bar:switch_state("active", true);
 	end
@@ -401,9 +411,14 @@ local function compsurf_wnd_activate(wnd)
 	if (wnd.bottom_bar) then
 		wnd.bottom_bar:switch_state("active", true);
 	end
+
+	if (wnd.border) then
+		image_color(wnd.border, unpack(wnd.border_active));
+	end
 end
 
 local function compsurf_wnd_deactivate(wnd)
+	wnd.active = false;
 	if (wnd.top_bar) then
 		wnd.top_bar:switch_state("inactive", true);
 	end
@@ -411,6 +426,39 @@ local function compsurf_wnd_deactivate(wnd)
 	if (wnd.bottom_bar) then
 		wnd.bottom_bar:switch_state("inactive", true);
 	end
+
+	if (wnd.border) then
+		image_color(wnd.border, unpack(wnd.border_inactive));
+	end
+end
+
+local function compsurf_wnd_border(wnd, px, active, inactive)
+	if (not px or not active or not inactive) then
+		if (wnd.border) then
+			delete_image(wnd.border);
+			wnd.border = nil;
+		end
+	else
+		if (not wnd.border) then
+			wnd.border = color_surface(1, 1,
+				unpack(wnd.active and active or inactive));
+			link_image(wnd.border, wnd.anchor);
+			show_image(wnd.border);
+			image_inherit_order(wnd.border, true);
+-- rebuild on changed border size
+		else
+			if (wnd.border_px ~= px) then
+				compsurf_wnd_border(wnd);
+				compsurf_wnd_border(wnd, px, active, inactive);
+			end
+			image_color(wnd.border, unpack(wnd.active and active or inactive));
+		end
+		wnd.border_px = px;
+		wnd.border_active = active;
+		wnd.border_inactive = inactive;
+	end
+
+	compsurf_wnd_resize(wnd, wnd.width, wnd.height);
 end
 
 local function compsurf_wnd_hide(wnd)
@@ -454,8 +502,6 @@ local function compsurf_add_window(ctx, surf, opts)
 		canvas = surf,
 		children = {},
 		autodelete = {},
-		focus_color = {192, 192, 192},
-		normal_color = {128, 128, 128},
 		overlay = null_surface(w, h),
 		deselect = compsurf_wnd_deselect,
 		select = compsurf_wnd_select,
@@ -470,7 +516,7 @@ local function compsurf_add_window(ctx, surf, opts)
 		set_overlay = compsurf_wnd_overlay,
 		set_parent = compsurf_wnd_parent,
 		set_bar = compsurf_wnd_bar,
-		set_border = function() end,
+		set_border = compsurf_wnd_border,
 		set_message = compsurf_wnd_message,
 
 -- account for additional "tacked-on" surfaces (border, bars, ...)
@@ -484,7 +530,6 @@ local function compsurf_add_window(ctx, surf, opts)
 		y = 0,
 		width = w,
 		height = h,
-		last_border_color = {255, 255, 255, 255},
 
 -- background "only" objects can fix the orderv.
 		selorder = opts.selorder ~= nil and opts.selorder or ctx.selorder,
@@ -525,7 +570,8 @@ local function compsurf_add_window(ctx, surf, opts)
 
 	image_inherit_order(wnd.canvas, true);
 	image_inherit_order(wnd.overlay, true);
-	order_image(wnd.overlay, 1);
+	order_image(wnd.canvas, 1);
+	order_image(wnd.overlay, 2);
 
 	resize_image(wnd.canvas, wnd.width, wnd.height);
 	show_image({wnd.canvas, wnd.anchor});
