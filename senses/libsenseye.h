@@ -129,6 +129,8 @@ void senseye_register_input(
 	struct arcan_shmif_cont*, const char* label,
 		const char* descr, int default_sym, unsigned modifiers);
 
+bool senseye_resize(struct senseye_cont*, size_t neww, size_t newh);
+
 /*
  * TRANSLATOR functions
  */

@@ -52,6 +52,7 @@ local function compsurf_wnd_deselect(wnd)
 	if (wnd.wm.selected == wnd) then
 		broadcast(wnd.wm.handlers.deselect, wnd);
 		wnd.wm.selected = nil;
+		wnd.wm.last_selected = wnd;
 	end
 end
 
@@ -69,6 +70,7 @@ local function forward_children(wm, wnd)
 end
 
 local function compsurf_wnd_select(wnd)
+	print("select:", wnd, wnd.wm.selected, debug.traceback());
 	if (wnd.wm.selected == wnd) then
 		return;
 	end
@@ -118,8 +120,12 @@ local function compsurf_wnd_destroy(wnd, cascade)
 
 	mouse_droplistener(wnd);
 
-	if (wnd.wm.selected == wnd) then
-		wnd.wm.selected = nil;
+	if (wm.last_selected == wnd) then
+		wnd.wm.last_selected = nil;
+	end
+
+	if (wm.selected == wnd) then
+		wm.selected = nil;
 	end
 
 -- need to copy the children list as the recursive destroy
@@ -171,6 +177,10 @@ local function compsurf_wnd_destroy(wnd, cascade)
 		if (cascade) then
 			p:destroy(cascade);
 		end
+	end
+
+	if (wm.last_selected) then
+		wm.last_selected:select();
 	end
 end
 

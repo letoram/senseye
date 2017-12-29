@@ -131,10 +131,10 @@ function senseye()
 			if (old) then
 				old:deselect();
 			end
-				spawn_popupmenu(MENUS["system"]);
-			if (old and old.select) then
-				old:select();
-			end
+			spawn_popupmenu(wm, MENUS["system"]);
+--			if (old and old.select) then
+--				old:select();
+--			end
 		end,
 	}, {"click", "rclick"});
 

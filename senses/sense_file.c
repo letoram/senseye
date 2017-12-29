@@ -6,8 +6,11 @@
  * data channel that build on the rwstats statistics code along with the
  * senseye arcan shmif wrapper.
  *
- *  1. update preview with status of the input channel
- *  2. coreopts for statistics / etc.
+ *  1. preempt update if new resizes are coming, should be time-based
+ *  2. draw cursor in preview
+ *  3. set preview window title
+ *  4. handle input in window (seek)
+ *  5. draw events seem to stack??
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -49,7 +52,13 @@ static struct {
 	uint8_t* map;
 	size_t map_sz;
 	struct senseye_cont cont;
-	bool wrap;
+
+/* copy of the current cursor position */
+	uint16_t pos_row;
+	shmif_pixel row[PP_SHMPAGE_MAXW];
+
+	float cutoff;
+	bool wrap, detailed;
 	uint32_t alloc;
 } fsense;
 
@@ -68,24 +77,6 @@ static int usage()
 	return EXIT_SUCCESS;
 }
 
-void control_event(struct senseye_cont* cont, arcan_event* ev)
-{
-	int nonsense = 0;
-	printf("control event\n");
-/*
-	if (ev->category == EVENT_TARGET){
-		switch(ev->tgt.kind){
-		case TARGET_COMMAND_SEEKTIME:
-			fsense.ofs = fsense.bytes_perline * ev->tgt.ioevs[1].fv;
-			write(fsense.pipe_out, &nonsense, sizeof(nonsense));
-		break;
-		default:
-		break;
-		}
-	}
- */
-}
-
 static const struct option longopts[] = {
 	{"wrap",   no_argument,       NULL, 'w'},
 	{"width",  required_argument, NULL, 'w'},
@@ -96,7 +87,7 @@ static const struct option longopts[] = {
 	{NULL, no_argument, NULL, 0}
 };
 
-float cmp_histo(int32_t* a, int32_t* b, float roww)
+static float cmp_histo(int32_t* a, int32_t* b, float roww)
 {
 	float bcf = 0, sum_1 = 0, sum_2 = 0;
 	for (size_t i = 0; i < 256; i++){
@@ -176,6 +167,44 @@ static bool rebuild_preview(struct senseye_cont* cont,
 	return true;
 }
 
+void control_event(struct senseye_cont* cont, arcan_event* ev)
+{
+	int nonsense = 0;
+	struct arcan_shmif_cont* shmifcon = cont->context(cont);
+	if (ev->category == EVENT_TARGET){
+		switch(ev->tgt.kind){
+		case TARGET_COMMAND_DISPLAYHINT:{
+			bool dev =
+			(ev->tgt.ioevs[0].iv && ev->tgt.ioevs[1].iv) &&
+			(abs((int)ev->tgt.ioevs[0].iv - (int)shmifcon->w) > 0 ||
+			abs((int)ev->tgt.ioevs[1].iv - (int)shmifcon->h) > 0);
+
+			if (dev && senseye_resize(cont, ev->tgt.ioevs[0].iv, ev->tgt.ioevs[1].iv))
+				rebuild_preview(cont,
+					fsense.map, fsense.map_sz, fsense.cutoff, fsense.detailed);
+		}
+
+		break;
+/* deal with input: mouse cursor click == seek, double-click == spawn new */
+		default:
+		break;
+		}
+	}
+
+/*
+	if (ev->category == EVENT_TARGET){
+		switch(ev->tgt.kind){
+		case TARGET_COMMAND_SEEKTIME:
+			fsense.ofs = fsense.bytes_perline * ev->tgt.ioevs[1].fv;
+			write(fsense.pipe_out, &nonsense, sizeof(nonsense));
+		break;
+		default:
+		break;
+		}
+	}
+ */
+}
+
 static bool spawn_ch(
 	size_t ofs, const char* name, size_t base, bool wrap, struct data_window* dst)
 {
@@ -223,18 +252,20 @@ int main(int argc, char* argv[])
 	size_t p_w = 128;
 	size_t p_h = 512;
 	bool detailed = false, wrap = false;
-	float cutoff = NAN;
 	int ch;
+	fsense.cutoff = NAN;
 
 	while((ch = getopt_long(argc, argv, "Ww:h:p:d?", longopts, NULL)) >= 0)
 	switch(ch){
 	case '?' :
 		return usage();
 	break;
-	case 'p' :
-		cutoff = strtof(optarg, NULL);
+	case 'p' :{
+		float cutoff = strtof(optarg, NULL);
 		cutoff = (isinf(cutoff)||isnan(cutoff)||cutoff<=0.0||cutoff>1.0) ?
 			0.9 : cutoff;
+		fsense.cutoff = cutoff;
+	}
 	break;
 	case 'd' : detailed = true;
 	break;
@@ -299,7 +330,8 @@ int main(int argc, char* argv[])
 	fsense.cont.dispatch = control_event;
 
 	if (spawn_ch(0, argv[1], base, wrap, &dwnd) &&
-		rebuild_preview(&fsense.cont, fsense.map, fsense.map_sz, cutoff, detailed)){
+		rebuild_preview(&fsense.cont,
+		fsense.map, fsense.map_sz, fsense.cutoff, detailed)){
 		while (senseye_pump(&fsense.cont, true))
 			;
 	}

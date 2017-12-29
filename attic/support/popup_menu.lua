@@ -13,6 +13,7 @@ local function popup_destroy(wm, popup, cascade)
 -- need to track this so we can re-focus the right window on
 -- a deleted cascade
 	local lp = popup.previous;
+
 	mouse_droplistener(popup.capt_mh);
 	local p = popup.parent;
 
@@ -35,6 +36,7 @@ local function popup_destroy(wm, popup, cascade)
 	end
 
 	popup:destroy(cascade);
+	print(popup.name, lp.name);
 	if (lp and lp.select) then
 		lp:select();
 	end
@@ -49,7 +51,7 @@ local function menu_input(wm, popup, iv, cascade)
 		elseif (iv == "DOWN") then
 			popup:step(1);
 		elseif (iv == "RIGHT") then
-			popup.click(true);
+			popup:click(true);
 		elseif (iv == "ESCAPE" or iv == "LEFT") then
 			popup_destroy(wm, popup, iv == "ESCAPE");
 		end
@@ -115,7 +117,7 @@ function popup_activate(wnd)
 	end
 end
 
-function spawn_popupmenu(wm, menu_in, target, cursorpos)
+function spawn_popupmenu(wm, menu_in, target, cursorpos, prev)
 	local list = {
 		menu_text_fontstr
 	};
@@ -174,15 +176,16 @@ function spawn_popupmenu(wm, menu_in, target, cursorpos)
 	local popup = wm:add_window(canvas, {});
 	popup.flag_popup = true;
 	popup.cursor = cursor;
-	popup.previous = wm.selected;
+	popup.previous = prev and prev or wm.selected;
 	popup:select();
 	popup.noblend = true;
 	popup.inactivate = popup_inactivate;
 	popup.activate = popup_activate;
-	popup.name = popup.name .. "_popup";
+	popup.name = popup.name .. "_popup" .. "_" .. tostring(CLOCK);
 
-	popup:resize(props.width + 10, props.height);
-	popup:set_border(1, menu_border_color);
+	popup:resize(props.width + 10, props.height + 5);
+	popup:set_border(1, {255, 255, 255}, {128, 128, 128});
+
 	if (not cursorpos or not prev) then
 		local x, y = mouse_xy();
 		popup:move(x - 5, y - 5, true); -- true makes sure we don't flow outside win

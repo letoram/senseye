@@ -150,6 +150,10 @@ function wndshared_setup(wnd, wndtype)
 		end
 	end
 
+	if (not window_manager.selected or window_manager.selected == wnd) then
+		wnd:select();
+	end
+
 	return got_base, got_window, got_handler;
 end
 

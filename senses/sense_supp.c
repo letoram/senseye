@@ -26,6 +26,8 @@
 
 static FILE* logout;
 
+#define DATAWINDOW_GUID 0x31b658f436f87453, 0x5167595a82b1768
+
 #define FLOG(...) ( (logout ? fprintf(logout, __VA_ARGS__) : true ) )
 
 /*
@@ -267,6 +269,11 @@ bool senseye_pump(struct senseye_cont* cont, bool block)
 	return rc != -1;
 }
 
+bool senseye_resize(struct senseye_cont* sc, size_t neww, size_t newh)
+{
+	return arcan_shmif_resize(&sc->priv->cont, neww, newh);
+}
+
 void senseye_register_input(
 	struct arcan_shmif_cont* c, const char* label,
 		const char* descr, int default_sym, unsigned modifiers)
@@ -313,7 +320,8 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 		.ext.kind = EVENT_EXTERNAL_SEGREQ,
 		.ext.segreq.width = base,
 		.ext.segreq.height = base,
-		.ext.segreq.id = tag
+		.ext.segreq.id = tag,
+		.ext.segreq.kind = SEGID_SENSOR
 	};
 	arcan_shmif_enqueue(&cpriv->cont, &sr);
 
@@ -344,9 +352,16 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 			cp->running = true;
 			cp->framecount = 0;
 			cp->cont = arcan_shmif_acquire(&cpriv->cont,
-				NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+				NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD | SHMIF_NOREGISTER);
+
 			if (!cp->cont.addr)
 				goto fail;
+
+			arcan_shmif_enqueue(&cp->cont, &(struct arcan_event){
+				.ext.kind = ARCAN_EVENT(REGISTER),
+				.ext.registr.kind = SEGID_SENSOR,
+				.ext.registr.guid = {DATAWINDOW_GUID}
+			});
 
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
 				opts.def_map, opts.def_pack, base, &cp->cont);

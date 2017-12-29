@@ -61,8 +61,8 @@ if (ENABLE_CAPSTONE)
 	set(XLT_CAPSTONE xlt_capstone)
 endif()
 
-include_directories(${ARCAN_SHMIF_INCLUDE_DIR})
-link_libraries(pthread ${ARCAN_SHMIF_LIBRARY} m)
+include_directories(${ARCAN_SHMIF_INCLUDE_DIR} ${ARCAN_TUI_INCLUDE_DIR})
+link_libraries(pthread ${ARCAN_SHMIF_LIBRARY} ${ARCAN_TUI_LIBRARY} m)
 
 add_library(senseye STATIC xlt_supp.c sense_supp.c rwstat.c)
 

@@ -1,23 +1,29 @@
 About
 =====
-
 NOTE: CURRENTLY UNDERGOING SERIOUS REFACTORING, THE MASTER BRANCH IS NOT IN
 A WORKING STATE. PLEASE STICK TO THE 1bab4b9c60ad43302e460a24de14a0ac136bea7f
 COMMIT FOR WORKING WITH THE ARCAN 0.5.2 VERSION.
 
-Senseye is a dynamic visual binary analysis and debugging tool intended to
+Senseye is a toolsuite for dynamic visual binary analysis and debugging,
 assist in monitoring, analysing and grasping large data feeds e.g. static
 files, dynamic streams and live memory. It is also powerful as part of a
 build-test-refine loop when developing parsers and reversing file formats.
 
-It current runs on Linux/FreeBSD/OSX. IRC chat @ #arcan on irc.freenode.net.
+Senseye uses the [Arcan](https://arcan-fe.com) display server for drawing and
+for IPC, along with the associated [Durden](http://durden.arcan-fe.com) desktop
+environment for window management and user interface controls.
+
+It current runs on Linux/BSDs and OSX. IRC chat @ #arcan on irc.freenode.net.
 
 Compiling
 ======
 
-Senseye uses [Arcan](https://github.com/letoram/arcan) as display server and
-graphics engine to provide the user interface, representations and other data
-transformations.
+First make sure that you have a working build of arcan and that it can start
+durden. Familiarize yourself with the UI input and window management scheme
+before moving further.
+
+The short version for building arcan on a system that has native graphics
+already is something like:
 
 The short version for building arcan:
 
@@ -27,6 +33,16 @@ The short version for building arcan:
           -DSTATIC_OPENAL=ON ../src
     make -j 12
     sudo make install
+
+For starting durden:
+
+    git clone https://github.com/letoram/durden.git
+    /usr/local/bin/arcan /path/to/durden/durden
+
+When you are the stage where Arcan is up and running, durden has started,
+you can spawn a terminal (default: meta1+enter) window. These terminals
+will have the environment setup for the senseye sensors to connect and
+start providing data.
 
 Now you are ready to build the sensors and translators:
 
@@ -44,69 +60,74 @@ be cloned and linked statically. To disable disassembly support, add
 -DENABLE\_CAPSTONE=OFF (or use an interactive cmake interface for better
 control).
 
-Starting
+Components
 =====
 
-To just fire up the UI and feed it some of the included testing data,
-you could do the following:
+Senseye is divided up into UI tool scripts, sensors and translators.
 
-First, fire up the UI:
+## UI-Tool scripts
 
-    arcan -p . -w 800 -h 800 /path/to/senseye/senseye &
+Copy or symlink the tools/senseye.lua and the subfolder tools/senseye into the
+corresponding durden/durden/tools/senseye.lua and durden/durden/tools/senseye.
 
-Inside, you get access to the main menu via TAB. From there you can spawn
-a terminal. From there you can attach a sensor or two:
+If you have durden active while you do it, you can rescan/reload the scripts
+by going into the global menu (meta1+g), pick system and then reset.
 
-    ./sense_file ../tests/test.bin &
-    cat ../tests/test.bin | ./sense_pipe 1> /dev/null &
+These scripts hook into the 'target window' menu for windows that have
+identified as senseye data sources and take aggressive control over the
+settings and behavior of the window.
 
-Optionally one or more translators:
+The current toolscripts are:
 
-    ./xlt_ascii &
-    ./xlt_dpipe /usr/bin/file - &
-    ./xlt_hex &
-    ./xlt_capstone -a x86-64 &
+### Color-LUT
 
-Note that on OSX, the default libraries may not be in the search
-path for the linker:
+### Histogram
 
-export DYLD_FALLBACK_LIBRARY_PATH=/usr/local/lib/arcan
+### Point Cloud
 
-And similarly for some other 'nixes (LD_LIBRARY_PATH=/usr/local/lib/arcan)
+### Distance Tracker
 
-Hacking
-=====
+### Pattern Matching / Searching
 
-As mentioned at the top, everything is in flux now and for a month or two.
-The codebase is divided into these folders:
+### Picture Tuner
 
-    senseye/
-           All the main UI code goes in here, along with the GPU part of
-           some of the processing. The code- related folders are structured as:
-           support/ reused UI scripts for components, window management and
-                    input. These are cherry picked from other arcan projects.
-           windows/ window behavior modification code
-           handlers/ sensor and translator event handlers
-           menus/ sensor, translator and system popups
-           views/ data-views that create alternate representations
+## Sensors
+samples input data and packages it in a form where the UI can make sense of it.
 
-    senses/
-           files prefixed with sense_ are sensors
-           files prefxied with xlt_ are translators
-           xlt_supp, sense_supp, rwstat are built into libsenseye that
-           can be used to build sensors.
-           For creating UIs, libshmif-tui from arcan is used, it is
-           similar to TurboVison and NCurses - with better integration.
+The current sensors are:
 
-When a sensor connects, the connection point in senseye.lua is activated which
-creates a window with the 'control' type if it identified as 'sensor' and with
-the 'translator' type if it identified as a translator. When the control window
-requests subwindows, those are created with the 'data' type.
+### sense_file
 
-The window is passed to wndshared_setup(wnd, type) that applies the specific
-UI etc. that are unique to that particular type. The most complex type is 'data'
-as it involves many UI actions like pan, zoom, event control, synchronization
-between sampling offsets and so on.
+This sensor works with a static file. The default window that popups up is a
+preview visualization of the contents of the file, optionally with some
+rudimentary statistical analysis.
 
-The views folder is scanned on startup and scripts that parse are added to the
-data window menu popup.
+Double-click (or hit ENTER) to spawn a new data window at the cursor position
+in the preview window.
+
+### sense_mfile
+
+This sensor works with multiple files that you want to visually diff, along
+with the option to apply some other transformation, e.g. a XOR b = c.
+Double-clicking on a tile will lock stepping.
+
+### sense_pipe
+
+This sensor works with streaming input.
+
+## Translators
+
+Translators are windowed- parsers that take an incoming data stream and provide
+some kind of non-native representation of the contents of the data stream. This
+output comes in two forms, a separate data- window, and a controlable overlay
+that is presented on top of the visualization of the incoming data source in
+itself.
+
+The current translators are:
+
+### xlt_image
+
+### xlt_text
+
+### xlt_disassembly
+

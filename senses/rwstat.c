@@ -14,7 +14,7 @@
 #include <math.h>
 
 #include <arcan_shmif.h>
-#include <arcan_shmif_tuisym.h>
+#include <arcan_tuisym.h>
 
 #include "libsenseye.h"
 #include "rwstat.h"
