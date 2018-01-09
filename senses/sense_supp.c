@@ -363,6 +363,13 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				.ext.registr.guid = {DATAWINDOW_GUID}
 			});
 
+			arcan_shmif_enqueue(&cp->cont, &(struct arcan_event){
+				.ext.kind = ARCAN_EVENT(VIEWPORT),
+				.ext.viewport.focus = 1,
+				.ext.viewport.anchor = 1,
+				.ext.viewport.edge = 3,
+			});
+
 			rv->in = rwstat_addch(RW_CLK_BLOCK,
 				opts.def_map, opts.def_pack, base, &cp->cont);
 			rv->in_handle = cp->cont.epipe;
