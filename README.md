@@ -4,28 +4,45 @@ NOTE: CURRENTLY UNDERGOING SERIOUS REFACTORING, THE MASTER BRANCH IS NOT IN
 A WORKING STATE. PLEASE STICK TO THE 1bab4b9c60ad43302e460a24de14a0ac136bea7f
 COMMIT FOR WORKING WITH THE ARCAN 0.5.2 VERSION.
 
-Senseye is a toolsuite for dynamic visual binary analysis and debugging,
-assist in monitoring, analysing and grasping large data feeds e.g. static
-files, dynamic streams and live memory. It is also powerful as part of a
-build-test-refine loop when developing parsers and reversing file formats.
-
-Senseye uses the [Arcan](https://arcan-fe.com) display server for drawing and
-for IPC, along with the associated [Durden](http://durden.arcan-fe.com) desktop
-environment for window management and user interface controls.
+Senseye is a set of data providers, parsers that work with the
+[Arcan](https://arcan-fe.com) display servers IPC subsystem, and as a set of
+extension script for the [Durden](http://durden.arcan-fe.com) desktop
+environment/window management scheme.
 
 It current runs on Linux/BSDs and OSX. IRC chat @ #arcan on irc.freenode.net.
 
 Compiling
 ======
 
-First make sure that you have a working build of arcan and that it can start
-durden. Familiarize yourself with the UI input and window management scheme
-before moving further.
+First make sure that you have a working build of arcan and durden. Familiarize
+yourself with the UI input and window management scheme before moving further.
+
+On voidlinux, most of this is packaged, you can simply go from the linux
+console (won't cooperate with Xorg, for that you need to rebuild with an SDL
+based backend):
+
+    xbps-install durden
+		durden
+
+Senseye itself and its support scripts have not yet been included in the same
+packaging. Simply do this:
+
+    ln -s /path/to/senseye/senseye $HOME/.arcan/appl/durden/tools
+		ln /path/to/senseye/senseye.lua $HOME/.arcan/appl/durden/tools/senseye.lua
+
+And either restart or activate global/system/reset=yes. You can then find the
+different analysis tools under the target/senseye path, though the set of
+options and features will vary with the source you are using it on.
+
+The individual senses should work fine with any other Arcan based window
+management system though, and the scripts themselves should require little
+repurposing.
+
+For other settings, you can wait for the project to mature enough to be packaged
+in your environment, and be brave and install/build from source.
 
 The short version for building arcan on a system that has native graphics
 already is something like:
-
-The short version for building arcan:
 
     git clone https://github.com/letoram/arcan.git
     mkdir arcan/build ; cd arcan/external/git; ./clone.sh ; cd ../../build
@@ -33,6 +50,9 @@ The short version for building arcan:
           -DSTATIC_OPENAL=ON ../src
     make -j 12
     sudo make install
+
+This one requires libsdl1.2-dev (or whatever the package is called on your
+system).
 
 For starting durden:
 
@@ -79,17 +99,43 @@ settings and behavior of the window.
 
 The current toolscripts are:
 
-### Color-LUT
+### Mapping Window
+
+Missing:
+ [ ] Create a mapping window that allows zoom / etc.
+ [ ] Use a vertex shader or LUT based approach
+ [ ] Alpha channel only- shader
+ [ ] Save buffer
 
 ### Histogram
 
+A histogram window is created via target/senseye/histogram. By default, it will
+be capped to 256x256 linear sampled version of the source window in order to not
+make the UI responsive in the event of a big source.
+
+In the histogram window, you have the following options:
+
+- Imposition-mode (merge, full) : if r,g,b channels should be averaged or separated
+- Size-mode (capped, full) :
+
+Missing:
+ [ ] define reference histogram and pause or log on match
+ [ ] mouse / pattern selection feedback into mapping window
+ [ ] counter in titlebar
+ [ ] keyboard input
+
 ### Point Cloud
 
-### Distance Tracker
+Missing:
+ [ ] Mapping window but with 3D navigation options (rotate/zoom/step point-sz)
 
 ### Pattern Matching / Searching
+ [ ] Basic feature, use browser to load reference
+ [ ] trigger action
 
 ### Picture Tuner
+ [ ] Basic Feature
+ [ ] Color space management
 
 ## Sensors
 samples input data and packages it in a form where the UI can make sense of it.
@@ -97,23 +143,9 @@ samples input data and packages it in a form where the UI can make sense of it.
 The current sensors are:
 
 ### sense_file
-
-This sensor works with a static file. The default window that popups up is a
-preview visualization of the contents of the file, optionally with some
-rudimentary statistical analysis.
-
-Double-click (or hit ENTER) to spawn a new data window at the cursor position
-in the preview window.
-
 ### sense_mfile
-
-This sensor works with multiple files that you want to visually diff, along
-with the option to apply some other transformation, e.g. a XOR b = c.
-Double-clicking on a tile will lock stepping.
-
 ### sense_pipe
-
-This sensor works with streaming input.
+### sense_mem
 
 ## Translators
 

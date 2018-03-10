@@ -1,7 +1,7 @@
 PROJECT( senses )
 cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 include(ExternalProject)
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/modules)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../modules)
 #
 # cmake3.1+ provides this as part of normal flags, but it
 # will take quite a while before we can use that as the
