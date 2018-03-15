@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015, Björn Ståhl
+ * Copyright 2014-2018, Björn Ståhl
  * License: 3-Clause BSD, see COPYING file in arcan source repository.
  * Reference: http://arcan-fe.com
  * Description: Basic pattern matching / transfer statistics / block
@@ -18,6 +18,14 @@
 
 #include "libsenseye.h"
 #include "rwstat.h"
+
+enum step_sz {
+	STEP_NONE = 0,
+	STEP_FWD = 1,
+	STEP_REV = -1,
+	STEP_BIGFWD = 2,
+	STEP_BIGREV = -2
+};
 
 struct pattern {
 	uint8_t* buf;
@@ -111,6 +119,19 @@ static void hilbert_d2xy(int n, int d, int* x, int* y)
 		t /= 4;
 	}
 }
+
+static const char* rwstat_lut[] = {
+	"wrap",
+	"tuple",
+	"tuple(acc)",
+	"hilbert"
+};
+
+static const char* pack_lut[] = {
+	"tight",
+	"noalpha",
+	"mono",
+};
 
 static inline void rebuild_hgram(struct rwstat_ch_priv* chp)
 {
@@ -303,13 +324,21 @@ static void ch_step(struct rwstat_ch* ch)
  * corresponds to.
  */
 	if (chp->status_dirty){
-		outev.ext.kind = EVENT_EXTERNAL_STREAMINFO;
-		outev.ext.streaminf.streamid = 0;
-		outev.ext.streaminf.datakind = 0;
-		outev.ext.streaminf.langid[0] = 'a' + chp->pack;
-		outev.ext.streaminf.langid[1] = 'a' + chp->map;
-		outev.ext.streaminf.langid[2] = 'a' + chp->pack_sz;
-		chp->status_dirty = false;
+		struct arcan_event title = {
+			.ext.kind = ARCAN_EVENT(IDENT)
+		};
+		size_t count = COUNT_OF(title.ext.message.data);
+		snprintf(
+			(char*)title.ext.message.data, count,
+			"pack: %s (%zu bpp), map: %s",
+			pack_lut[chp->pack], (size_t) chp->pack_sz, rwstat_lut[chp->map]
+		);
+		ch->event(ch, &title);
+
+		outev.ext.kind = EVENT_EXTERNAL_MESSAGE;
+		snprintf(
+			(char*)title.ext.message.data, count,
+			"senseye_pack:%d,%d,%d", chp->pack, chp->map, chp->pack_sz);
 		ch->event(ch, &outev);
 	}
 
@@ -561,6 +590,11 @@ static size_t ch_left(struct rwstat_ch* ch)
 	return ch->priv->buf_sz - ch->priv->buf_ofs;
 }
 
+static size_t ch_base(struct rwstat_ch* ch)
+{
+	return ch->priv->base;
+}
+
 static void ch_resize(struct rwstat_ch* ch, size_t base)
 {
 /*
@@ -637,24 +671,124 @@ static void ch_damage(struct rwstat_ch* ch, uint8_t val, bool rand,
 }
 
 /*
- * Build one big table of input labels and effects
- *
+ * Build one big table of input labels and effects, returns true if event was
+ * consumed, also used to mutate events into the queue
  */
-static void map_tuple(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_TUPLE);}
-static void map_wrap(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_WRAP);}
-static void map_tacc(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_TUPLE_ACC);}
-static void map_hilb(struct rwstat_ch* ch){ch->switch_mapping(ch, MAP_HILBERT);}
-static void pack_intens(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_INTENS);}
-static void pack_tight(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_TIGHT);}
-static void pack_tnoal(struct rwstat_ch* ch){ch->switch_packing(ch, PACK_TNOALPHA);}
-static void alpha_full(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_FULL);}
-static void alpha_ptn(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_PTN);}
-static void alpha_dlt(struct rwstat_ch* ch){ch->switch_alpha(ch, RW_ALPHA_DELTA);}
-static void alpha_ent(struct rwstat_ch* ch){
-/*
- * BASE + block-size
- */
+static bool map_tuple(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_mapping(ch, MAP_TUPLE);
+	return true;
+}
+
+static bool map_wrap(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_mapping(ch, MAP_WRAP);
+	return true;
+}
+
+static bool map_tacc(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_mapping(ch, MAP_TUPLE_ACC);
+	return true;
+}
+
+static bool map_hilb(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_mapping(ch, MAP_HILBERT);
+	return true;
+}
+
+static bool pack_intens(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_packing(ch, PACK_INTENS);
+	return true;
+}
+
+static bool pack_tight(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_packing(ch, PACK_TIGHT);
+	return true;
+}
+
+static bool pack_tnoal(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_packing(ch, PACK_TNOALPHA);
+	return true;
+}
+
+static bool alpha_full(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_alpha(ch, RW_ALPHA_FULL);
+	return true;
+}
+
+static bool alpha_ptn(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_alpha(ch, RW_ALPHA_PTN);
+	return true;
+}
+
+static bool alpha_dlt(struct rwstat_ch* ch, arcan_event* ev)
+{
+	ch->switch_alpha(ch, RW_ALPHA_DELTA);
+	return true;
+}
+
+static bool alpha_ent(struct rwstat_ch* ch, arcan_event* ev)
+{
 	ch->switch_alpha(ch, RW_ALPHA_ENTBASE);
+	return true;
+}
+
+static bool step_fwd(struct rwstat_ch* ch, arcan_event* ev)
+{
+	*ev = (struct arcan_event){
+		.category = EVENT_TARGET,
+		.tgt = {
+			.kind = TARGET_COMMAND_STEPFRAME,
+			.ioevs[0].iv = 1
+		}
+	};
+
+	return false;
+}
+static bool step_rev(struct rwstat_ch* ch, arcan_event* ev)
+{
+	*ev = (struct arcan_event){
+		.category = EVENT_TARGET,
+		.tgt = {
+			.kind = TARGET_COMMAND_STEPFRAME,
+			.ioevs[0].iv = -1
+		}
+	};
+
+	return false;
+}
+
+static bool bigstep_fwd(struct rwstat_ch* ch, arcan_event* ev)
+{
+	*ev = (struct arcan_event){
+		.category = EVENT_TARGET,
+		.tgt = {
+			.kind = TARGET_COMMAND_STEPFRAME,
+			.ioevs[0].iv = 2
+		}
+	};
+
+	return false;
+}
+
+static bool bigstep_rev(struct rwstat_ch* ch, arcan_event* ev)
+{
+	*ev = (struct arcan_event){
+		.category = EVENT_TARGET,
+		.tgt = {
+			.kind = TARGET_COMMAND_STEPFRAME,
+			.ioevs[0].iv = -2
+		}
+	};
+
+	return false;
 }
 
 static struct {
@@ -662,7 +796,7 @@ static struct {
 	const char* descr;
 	uint16_t sym;
 	uint16_t modifiers;
-	void (*handler)(struct rwstat_ch*);
+	bool (*handler)(struct rwstat_ch*, arcan_event*);
 } lbl_tbl[] = {
 	{
 		.label = "MAP_WRAP",
@@ -712,19 +846,70 @@ static struct {
 		.sym = TUIK_F,
 		.handler = alpha_full,
 	},
+	{
+		.label = "STEP_FWD",
+		.descr = "Tell the sensor to incrementally sample new data",
+		.sym = TUIK_RIGHT,
+		.handler = step_fwd
+	},
+	{
+		.label = "BIGSTEP_FWD",
+		.descr = "Tell the sensor to sample a large batch of new data",
+		.sym = TUIK_DOWN,
+		.handler = bigstep_fwd
+	},
+	{
+		.label = "STEP_REV",
+		.descr = "Tell the sensor to rewind and resample data",
+		.sym = TUIK_LEFT,
+		.handler = step_rev
+	},
+	{
+		.label = "BIGSTEP_REV",
+		.descr = "Tell the sensor to rewind and resample a large batch of data",
+		.sym = TUIK_UP,
+		.handler = bigstep_rev
+	}
 };
 
 bool rwstat_consume_event(struct rwstat_ch* ch, struct arcan_event* ev)
 {
 	struct rwstat_ch_priv* chp = ch->priv;
-	if (ev->category == EVENT_IO && ev->io.datatype == EVENT_IDATATYPE_DIGITAL){
+	if (ev->category != EVENT_IO)
+		return false;
+
+	if (ev->io.datatype == EVENT_IDATATYPE_ANALOG ||
+		ev->io.datatype == EVENT_IDATATYPE_TOUCH)
+		return false;
+
+	bool active =
+		ev->io.datatype == EVENT_IDATATYPE_DIGITAL ?
+			ev->io.input.digital.active :
+			ev->io.input.translated.active;
+
+	if (!active)
+		return false;
+
+/* if it is tagged with the input intention */
+	if (ev->io.label[0]){
 		for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
 			if (strcmp(lbl_tbl[i].label, ev->io.label) == 0){
-				lbl_tbl[i].handler(ch);
-				return true;
+				return lbl_tbl[i].handler(ch, ev);
+			}
+		}
+		return false;
+	}
+
+/* otherwise, check against default symbol */
+	if (ev->io.datatype == EVENT_IDATATYPE_TRANSLATED){
+		for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+			if (lbl_tbl[i].sym == ev->io.input.translated.keysym &&
+				lbl_tbl[i].modifiers == ev->io.input.translated.modifiers){
+				return lbl_tbl[i].handler(ch, ev);
 			}
 		}
 	}
+
 	return false;
 }
 
@@ -860,6 +1045,7 @@ struct rwstat_ch* rwstat_addch(
 	res->resize = ch_resize;
 	res->add_pattern = ch_pattern;
 	res->left = ch_left;
+	res->base = ch_base;
 	res->row_size = ch_rowsz;
 	res->pack_sz = ch_packsz;
 	res->priv->map = map;

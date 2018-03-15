@@ -1,4 +1,4 @@
-/* (C)opyright, 2014-2015 Björn Ståhl
+/* (C)opyright, 2014-2018 Björn Ståhl
  * License: BSD 3-clause, see COPYING file in the senseye source repository.
  * Reference: senseye.arcan-fe.com
  * Description: This mainly takes care of some rwstat+event_decoding
@@ -136,7 +136,7 @@ bool senseye_connect(const char* key, FILE* log,
 	dcont->context = cont_getctx;
 
 	setenv("ARCAN_CONNPATH", key, 0);
-	dcont->priv->cont = arcan_shmif_open(SEGID_SENSOR, flags, darg);
+	dcont->priv->cont = arcan_shmif_open(SEGID_APPLICATION, flags, darg);
 	unsetenv("ARCAN_CONNPATH");
 
 	opts.args = *darg;
@@ -297,8 +297,15 @@ void senseye_register_input(
 	arcan_shmif_enqueue(c, &ev);
 }
 
-struct senseye_ch* senseye_open(struct senseye_cont* cont,
-	const char* const ident, size_t base)
+static size_t ch_size(struct senseye_ch* ch)
+{
+	size_t base = ch->in->base(ch->in);
+	base *= base;
+	return base;
+}
+
+struct senseye_ch* senseye_open(
+	struct senseye_cont* cont, const char* const ident, size_t base)
 {
 	if (!cont || !cont->priv)
 		return NULL;
@@ -311,7 +318,8 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 		.seek  = ch_seek,
 		.flush = ch_flush,
 		.queue = ch_queue,
-		.close = ch_close
+		.close = ch_close,
+		.size  = ch_size
 	}, *rv = NULL;
 
 	int tag = random();
@@ -321,7 +329,7 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 		.ext.segreq.width = base,
 		.ext.segreq.height = base,
 		.ext.segreq.id = tag,
-		.ext.segreq.kind = SEGID_SENSOR
+		.ext.segreq.kind = SEGID_APPLICATION
 	};
 	arcan_shmif_enqueue(&cpriv->cont, &sr);
 
@@ -348,25 +356,24 @@ struct senseye_ch* senseye_open(struct senseye_cont* cont,
 				goto fail;
 
 			rv->in_pr = cp;
-			cp->paused = true;
+			cp->paused = false;
 			cp->running = true;
 			cp->framecount = 0;
 			cp->cont = arcan_shmif_acquire(&cpriv->cont,
-				NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD | SHMIF_NOREGISTER);
+				NULL, SEGID_APPLICATION, SHMIF_DISABLE_GUARD | SHMIF_NOREGISTER);
 
 			if (!cp->cont.addr)
 				goto fail;
 
 			arcan_shmif_enqueue(&cp->cont, &(struct arcan_event){
 				.ext.kind = ARCAN_EVENT(REGISTER),
-				.ext.registr.kind = SEGID_SENSOR,
+				.ext.registr.kind = SEGID_APPLICATION,
 				.ext.registr.guid = {DATAWINDOW_GUID}
 			});
 
 			arcan_shmif_enqueue(&cp->cont, &(struct arcan_event){
 				.ext.kind = ARCAN_EVENT(VIEWPORT),
 				.ext.viewport.focus = 1,
-				.ext.viewport.anchor = 1,
 				.ext.viewport.edge = 3,
 			});
 

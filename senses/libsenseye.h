@@ -1,5 +1,5 @@
 /*
- * (C)opyright, 2014-2017 Björn Ståhl
+ * (C)opyright, 2014-2018 Björn Ståhl
  * License: BSD 3-clause, see the COPYING file in the senseye source repo.
  * Reference: senseye.arcan-fe.com
  *
@@ -19,7 +19,7 @@
  * processed data coming from the sensor via the UI. These are used to add
  * a high-level view of the data, and as such require more interaction and
  * rendering work. It is thus recommended to use in conjunction with 'TUI'
- * which is a text-oriented UI library as part of Arcan SHMIF.
+ * which is a text-oriented UI library that is part of Arcan SHMIF.
  *
  * Look at the source code for 'sense_example' for a skeleton of a working
  * sensor, and 'xlt_example' for a skeleton of a working translator.
@@ -55,6 +55,12 @@ struct senseye_ch {
 /* Flush: enough data has been provided that internal tracking, statistics,
  * etc. can be computed and synchronized (expensive). */
 	void (*flush)(struct senseye_ch*);
+
+/* Step: direction and size (large/small) */
+	void (*step)(struct senseye_ch*, bool fwd, bool small);
+
+/* Return the number of bytes currently consumed in the window */
+	size_t (*size)(struct senseye_ch*);
 
 /* little need to manipulate these manually, but provided for advanced use */
 	off_t (*seek)(struct senseye_ch*, long long);

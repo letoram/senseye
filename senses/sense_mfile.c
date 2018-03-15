@@ -470,7 +470,7 @@ int main(int argc, char* argv[])
 
 	if (NULL == getenv("ARCAN_CONNPATH"))
 		setenv("ARCAN_CONNPATH", "senseye", 0);
-	cont = arcan_shmif_open(SEGID_SENSOR, SHMIF_CONNECT_LOOP, &aarr);
+	cont = arcan_shmif_open(SEGID_APPLICATION, SHMIF_CONNECT_LOOP, &aarr);
 	unsetenv("ARCAN_CONNPATH");
 	resize_base(&cont, base, n_ent, border);
 
@@ -527,7 +527,7 @@ int main(int argc, char* argv[])
 			break;
 			case TARGET_COMMAND_NEWSEGMENT:
 				diffcont = arcan_shmif_acquire(&cont,
-					NULL, SEGID_SENSOR, SHMIF_DISABLE_GUARD);
+					NULL, SEGID_APPLICATION, SHMIF_DISABLE_GUARD);
 				ev.ext.kind = ARCAN_EVENT(IDENT);
 				ev.category = EVENT_EXTERNAL;
 				snprintf((char*)ev.ext.message.data, sizeof(ev.ext.message.data)/

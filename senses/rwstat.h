@@ -60,6 +60,7 @@ struct rwstat_ch {
  * of frames synched (likely only 1 or 0).
  */
 	size_t (*data)(struct rwstat_ch*, uint8_t* buf, size_t buf_sz, int* fs);
+	size_t (*base)(struct rwstat_ch*);
 
 /* get the number of bytes left until a full frame is filled given the
  * current packing / mapping sizes */

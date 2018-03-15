@@ -45,6 +45,7 @@ local histwnd_menu = {
 
 local
 function build_histogram(wnd)
+	print("build new histogram");
 	if (valid_vid(wnd.external, TYPE_FRAMESERVER)) then
 		target_verbose(wnd.external, true);
 	end
@@ -121,18 +122,6 @@ function build_histogram(wnd)
 	);
 	show_image({vid});
 end
-
-local histogram_menu = {
-{
-	name = "full",
-	label = "Full",
-	kind = "action",
-	description = "Histogram that match the size of the storage or the window",
-	handler = function()
-		return build_histogram(active_display().selected);
-	end,
-}
-};
 
 return {
 	name = "histogram",

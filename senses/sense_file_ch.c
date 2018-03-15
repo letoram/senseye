@@ -3,6 +3,7 @@
  * though used / written for the file-sense structure, it should be trivially
  * re-usable by other implementations.
  */
+#include <arcan_tuisym.h>
 
 struct fsense_thdata {
 	struct senseye_ch* ch;
@@ -69,15 +70,106 @@ static void set_position(struct fsense_thdata* th, size_t pos, size_t align)
 			th->ofs = fix_ofset(th->ofs - (th->ofs % align), th->sz, th->wrap);
 }
 
-static void register_bindings(struct arcan_shmif_cont* cont)
+static void step_pixel(struct fsense_thdata* th, struct rwstat_ch* ch)
 {
-/* rwstat provides most basic bindings, reserved for future use */
+	th->small_step = ch->row_size(ch) / ch->context(ch)->w;
 }
 
-static void process_label(struct fsense_thdata* thd,
-	struct rwstat_ch* ch, const char* lbl)
+static void step_byte(struct fsense_thdata* th, struct rwstat_ch* ch)
+{
+	th->small_step = 1;
+}
+
+static void step_row(struct fsense_thdata* th, struct rwstat_ch* ch)
+{
+	th->small_step = ch->row_size(ch);
+}
+
+static void step_halfpage(struct fsense_thdata* th, struct rwstat_ch* ch)
+{
+	th->large_step = 1;
+}
+
+static void step_page(struct fsense_thdata* th, struct rwstat_ch* ch)
+{
+	th->large_step = 0;
+}
+
+static struct {
+	const char* label;
+	const char* descr;
+	uint16_t sym;
+	uint16_t modifiers;
+	void (*handler)(struct fsense_thdata* th, struct rwstat_ch*);
+} lbl_tbl[] = {
+	{
+		.label = "STEP_PIXEL",
+		.descr = "Set small step size to 'one pixel' (packing- format dependent)",
+		.sym = TUIK_1,
+		.handler = step_pixel,
+	},
+	{
+		.label = "STEP_BYTE",
+		.descr = "Set small step size to 'one byte'",
+		.sym = TUIK_2,
+		.handler = step_byte,
+	},
+	{
+		.label = "STEP_ROW",
+		.descr = "Set small step size to 'one row'",
+		.sym = TUIK_3,
+		.handler = step_row,
+	},
+	{
+		.label = "STEP_HALFPAGE",
+		.descr = "Set large step size to 'half a page'",
+		.sym = TUIK_4,
+		.handler = step_halfpage,
+	},
+	{
+		.label = "STEP_PAGE",
+		.descr = "Set large step size to 'full page'",
+		.sym = TUIK_5,
+		.handler = step_page
+	},
+};
+
+static void register_bindings(struct arcan_shmif_cont* cont)
+{
+	for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+		senseye_register_input(cont, lbl_tbl[i].label,
+			lbl_tbl[i].descr, lbl_tbl[i].sym, lbl_tbl[i].modifiers);
+	}
+}
+
+static void process_label(
+	struct fsense_thdata* thd, struct rwstat_ch* ch, arcan_event* ev)
 {
 /* rwstat provides most basic bindings, reserved for future use */
+	if (ev->io.datatype == EVENT_IDATATYPE_ANALOG)
+		return;
+
+	if (!ev->io.label[0])
+		return;
+
+/* if it is tagged with the input intention */
+	for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+		if (strcmp(lbl_tbl[i].label, ev->io.label) == 0){
+			lbl_tbl[i].handler(thd, ch);
+			return;
+		}
+	}
+
+/* otherwise, check against default symbol */
+	if (ev->io.datatype == EVENT_IDATATYPE_TRANSLATED){
+		for (size_t i = 0; i < COUNT_OF(lbl_tbl); i++){
+			if (lbl_tbl[i].sym == ev->io.input.translated.keysym &&
+				lbl_tbl[i].modifiers == ev->io.input.translated.modifiers){
+				lbl_tbl[i].handler(thd, ch);
+				return;
+			}
+		}
+	}
 }
 
 static bool process_cmd(
@@ -164,8 +256,10 @@ void* data_window_loop(void* th_data)
 /* parent controlled offset */
 		if ( (fds[0].revents & POLLIN) ){
 			size_t lofs;
-			read(fds[0].fd, &lofs, sizeof(size_t));
-			refresh_data(thd, lofs);
+			if (sizeof(lofs) == read(fds[0].fd, &lofs, sizeof(lofs))){
+				thd->ofs = FIXOFS(lofs);
+				refresh_data(thd, thd->ofs);
+			}
 		}
 
 /* flush data window event queue */
@@ -177,7 +271,7 @@ void* data_window_loop(void* th_data)
 				continue;
 
 			if (ev.category == EVENT_IO)
-				process_label(thd, ch, ev.io.label);
+				process_label(thd, ch, &ev);
 
 			if (ev.category == EVENT_TARGET)
 				process_cmd(thd, ch, &ev.tgt);

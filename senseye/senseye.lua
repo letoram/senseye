@@ -25,7 +25,6 @@ local function scan()
 			error_function("failed to open/parse " .. v);
 		else
 			local okstate, msg = pcall(fun);
-			print(okstate, msg, type(okstate));
 			if (not okstate) then
 				error_function(
 							string.format("runtime error loading tool %s : %s", v, msg)
