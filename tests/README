@@ -1,4 +1,0 @@
-Example files in here for testing out sensors and representations
-test.bin - mix of some rather common files, may alert antivirus programs :-)
-sequence.bin - predictable increments, to test packing / unpacking
-ascii.bin - known repeatable sequence in groups of 3 + english text
